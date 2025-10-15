@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kristallachsen-Rechner für Hämatit</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <div class="container">
+        <h1>Kristallachsen-Rechner</h1>
+
+        <div class="main-grid">
+            <!-- Bereich 1: Kristall-Definition -->
+            <div class="card full-width">
+                <h2>1. Kristall-Definition im Laborsystem</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center mb-4">
+                    <div class="input-group">
+                        <label for="preset-select">Vordefinierte Schnittebene</label>
+                        <select id="preset-select"></select>
+                    </div>
+                </div>
+                 <p class="text-sm text-gray-500 mt-2 mb-4">Wählen Sie einen vordefinierten Schnitt, um die Achsen automatisch auszufüllen, oder geben Sie eigene Werte ein und berechnen die letzte Achse.</p>
+                <div class="definition-container">
+                    <div class="axis-definition">
+                        <div class="lab-axis-label"><strong>Labor X ||</strong></div>
+                        <div class="miller-bravais-input">
+                            <input type="number" id="x_h" placeholder="h" aria-label="h-Index für Labor X">
+                            <input type="number" id="x_k" placeholder="k" aria-label="k-Index für Labor X">
+                            <input type="number" id="x_i" placeholder="i" readonly class="readonly" tabindex="-1" aria-label="i-Index für Labor X">
+                            <input type="number" id="x_l" placeholder="l" aria-label="l-Index für Labor X">
+                        </div>
+                        <div class="lab-axis-label"><strong>Labor Y ||</strong></div>
+                        <div class="miller-bravais-input">
+                            <input type="number" id="y_h" placeholder="h" aria-label="h-Index für Labor Y">
+                            <input type="number" id="y_k" placeholder="k" aria-label="k-Index für Labor Y">
+                            <input type="number" id="y_i" placeholder="i" readonly class="readonly" tabindex="-1" aria-label="i-Index für Labor Y">
+                            <input type="number" id="y_l" placeholder="l" aria-label="l-Index für Labor Y">
+                        </div>
+                        <div class="lab-axis-label"><strong>Labor Z ||</strong></div>
+                        <div class="miller-bravais-input">
+                            <input type="number" id="z_h" placeholder="h" aria-label="h-Index für Labor Z">
+                            <input type="number" id="z_k" placeholder="k" aria-label="k-Index für Labor Z">
+                            <input type="number" id="z_i" placeholder="i" readonly class="readonly" tabindex="-1" aria-label="i-Index für Labor Z">
+                            <input type="number" id="z_l" placeholder="l" aria-label="l-Index für Labor Z">
+                        </div>
+                    </div>
+                    <div class="definition-actions">
+                        <button id="calculate-last-axis-btn">Letzte Achse berechnen</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bereich 2: Labor-System -->
+            <div class="card" id="lab-system">
+                <h2>2. Richtung im Laborsystem</h2>
+                <div class="input-group">
+                    <label>Kartesische Koordinaten (x, y, z)</label>
+                    <div class="vector-input">
+                        <input type="number" step="any" id="lab_x" placeholder="x" aria-label="Labor x-Koordinate">
+                        <input type="number" step="any" id="lab_y" placeholder="y" aria-label="Labor y-Koordinate">
+                        <input type="number" step="any" id="lab_z" placeholder="z" aria-label="Labor z-Koordinate">
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label>Kugelkoordinaten (sphärisch)</label>
+                    <div class="angle-input">
+                        <input type="number" step="any" id="lab_theta" placeholder="θ (Polar)" aria-label="Theta (Polarwinkel)">
+                        <input type="number" step="any" id="lab_phi" placeholder="φ (Azimut)" aria-label="Phi (Azimutwinkel)">
+                    </div>
+                     <p class="text-xs text-gray-500 mt-2" style="font-size: 12px; color: #666; grid-column: 1 / -1;">
+                        <b>θ:</b> Winkel zur z-Achse (0°-180°).<br>
+                        <b>φ:</b> Winkel in xy-Ebene (0°-360°).
+                    </p>
+                </div>
+            </div>
+
+            <!-- Transformations-Knöpfe -->
+            <div class="transformation-buttons">
+                <button id="transform-to-crystal-btn" title="Zum Kristallsystem transformieren">&rArr;</button>
+                <button id="transform-to-lab-btn" title="Zum Laborsystem transformieren">&lArr;</button>
+            </div>
+
+            <!-- Bereich 3: Kristall-System -->
+            <div class="card" id="crystal-system">
+                <h2>3. Richtung im Kristallsystem</h2>
+                <div class="input-group">
+                    <label>Miller-Bravais-Indizes [h k i l]</label>
+                    <div class="miller-bravais-input">
+                        <input type="number" step="any" id="crystal_h" placeholder="h" aria-label="Kristall h-Index">
+                        <input type="number" step="any" id="crystal_k" placeholder="k" aria-label="Kristall k-Index">
+                        <input type="number" step="any" id="crystal_i" placeholder="i" readonly class="readonly" tabindex="-1" aria-label="Kristall i-Index">
+                        <input type="number" step="any" id="crystal_l" placeholder="l" aria-label="Kristall l-Index">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script src="script.js"></script>
+
+</body>
+</html>
