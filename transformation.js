@@ -43,8 +43,9 @@ export function cartesianToMillerBravais(cart) {
 export function millerBravaisPlaneToDirection(plane) {
     const [h, k, i, l] = plane;
     const c_a_ratio = C_LATTICE / A_LATTICE;
-    // Formula for hexagonal systems: [h, k, i, l * (2/3) * (a/c)^2]
-    const w = l * (2/3) * (1 / (c_a_ratio * c_a_ratio));
+    // Formula for hexagonal systems to convert a plane (h,k,i,l) to a direction [u,v,t,w]
+    // w = l * (3/2) * (a/c)^2 = l * (3/2) * (1 / (c/a)^2)
+    const w = l * (3/2) * (1 / (c_a_ratio * c_a_ratio));
     return [h, k, i, w];
 }
 
