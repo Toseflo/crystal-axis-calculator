@@ -53,6 +53,21 @@ export function millerBravaisPlaneToDirection(plane) {
 }
 
 /**
+ * Converts a Miller-Bravais direction [u, v, t, w] to plane indices (h, k, i, l).
+ * This is the inverse of `millerBravaisPlaneToDirection` for the w/l component.
+ * @param {number[]} dir - Miller-Bravais direction [u, v, t, w].
+ * @returns {number[]} Plane indices [h, k, i, l] (may be non-integer; normalize later if needed).
+ */
+export function millerBravaisDirectionToPlane(dir) {
+    const [u, v, t, w] = dir;
+    const c_a_ratio = C_LATTICE / A_LATTICE;
+    // Invert w = l * (3/2) * (1 / (c/a)^2)
+    // => l = w * (2/3) * (c/a)^2
+    const l = w * (2/3) * (c_a_ratio * c_a_ratio);
+    return [u, v, t, l];
+}
+
+/**
  * Transforms a cartesian vector from the lab system to the crystal system.
  * @param {number[]} labVector - The vector [x, y, z] in the lab system.
  * @param {number[][]} transformationMatrix - The 3x3 matrix to transform from crystal to lab.

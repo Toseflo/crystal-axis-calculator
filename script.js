@@ -2,6 +2,7 @@ import {
     millerBravaisToCartesian,
     cartesianToMillerBravais,
     millerBravaisPlaneToDirection,
+    millerBravaisDirectionToPlane,
     labToCrystal,
     crystalToLab,
     normalize,
@@ -383,12 +384,24 @@ document.addEventListener('DOMContentLoaded', () => {
         // Normalize result for display
         const normalized_v3_mb = normalizeMillerBravais(v3_mb);
 
-        // The result is always a direction, so we set the mode accordingly
+        // Respect the toggle mode of the missing axis: if it's set to 'plane', convert direction -> plane
         const toggle = modeToggles[v3_name];
-        toggle.dataset.mode = 'direction';
-        toggle.querySelector('span').textContent = 'Direction';
+        const currentMode = toggle.dataset.mode;
 
-        setMbVectorToInputs(inputsDef[v3_name], normalized_v3_mb);
+        if (currentMode === 'plane') {
+            // Convert the computed direction MB to plane MB
+            const planeMbRaw = millerBravaisDirectionToPlane(v3_mb);
+            const normalizedPlaneMb = normalizeMillerBravais(planeMbRaw);
+            // Ensure the UI mode remains 'plane'
+            toggle.dataset.mode = 'plane';
+            toggle.querySelector('span').textContent = 'Plane';
+            setMbVectorToInputs(inputsDef[v3_name], normalizedPlaneMb);
+        } else {
+            // Keep as direction
+            toggle.dataset.mode = 'direction';
+            toggle.querySelector('span').textContent = 'Direction';
+            setMbVectorToInputs(inputsDef[v3_name], normalized_v3_mb);
+        }
 
         // Recompute the i-index and notify listeners by dispatching input events
         // so dependent UI/state updates run as if the user typed the values.
