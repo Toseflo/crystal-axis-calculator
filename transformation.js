@@ -12,9 +12,12 @@ const C_LATTICE = 1.365 * 2; // c/a ratio for Hematite is ~2.73
  */
 export function millerBravaisToCartesian(mb) {
     const [h, k, _, l] = mb;
-    // The formula for a hexagonal system where a1 is along x and a2 is at 120 degrees.
-    const x = A_LATTICE * (h - k / 2);
-    const y = A_LATTICE * (k * Math.sqrt(3) / 2);
+    // Use basis a1 = (1,0), a2 = (-1/2, sqrt(3)/2) which gives the common
+    // conversion used in many crystallography references.
+    // x = (3/2) * a * h
+    // y = (sqrt(3)/2) * a * (h + 2*k)
+    const x = A_LATTICE * (3 / 2) * h;
+    const y = A_LATTICE * (Math.sqrt(3) / 2) * (h + 2 * k);
     const z = C_LATTICE * l;
     return [x, y, z];
 }
@@ -26,9 +29,9 @@ export function millerBravaisToCartesian(mb) {
  */
 export function cartesianToMillerBravais(cart) {
     const [x, y, z] = cart;
-    const k = (2 * y) / (A_LATTICE * Math.sqrt(3));
-    // h must be calculated using the value of k.
-    const h = x / A_LATTICE + k / 2;
+    // inverse of the above conversion
+    const h = (2 * x) / (3 * A_LATTICE);
+    const k = ((2 * y) / (A_LATTICE * Math.sqrt(3)) - h) / 2;
     const l = z / C_LATTICE;
     const i = -(h + k);
     return [h, k, i, l];

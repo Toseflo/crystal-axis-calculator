@@ -9,7 +9,7 @@
     "a-cut (11-20)": {
         "axes": {
             "x": {"type": "direction", "value": [0, 0, 0, 1]},
-            "y": {"type": "direction", "value": [-1, 1, 0, 0]},
+            "y": {"type": "direction", "value": [1, -1, 0, 0]},
             "z": {"type": "direction", "value": [1, 1, -2, 0]}
         }
     },
@@ -20,10 +20,10 @@
             "z": {"type": "plane", "value": [1, -1, 0, 2]}
         }
     },
-    "e-cut (10-10)": {
+    "m-cut (10-10)": {
         "axes": {
             "x": {"type": "direction", "value": [0, 0, 0, 1]},
-            "y": {"type": "direction", "value": [-1, 2, -1, 0]},
+            "y": {"type": "direction", "value": [1, -2, 1, 0]},
             "z": {"type": "direction", "value": [1, 0, -1, 0]}
         }
     }
