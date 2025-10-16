@@ -210,6 +210,30 @@ document.addEventListener('DOMContentLoaded', () => {
         inputsLab.phi.value = (phiRad * 180 / Math.PI).toFixed(2);
     };
 
+    // --- PRESET / CUSTOM HANDLING ---
+    // Switch preset dropdown to 'custom' when the user modifies inputs (only on real user events)
+    const setPresetToCustom = () => {
+        if (!presetSelect) return;
+        if (presetSelect.value === 'custom') return;
+        // Add a 'custom' option if it doesn't exist
+        let opt = Array.from(presetSelect.options).find(o => o.value === 'custom');
+        if (!opt) {
+            opt = document.createElement('option');
+            opt.value = 'custom';
+            opt.textContent = 'Custom';
+            presetSelect.appendChild(opt);
+        }
+        presetSelect.value = 'custom';
+    };
+
+    // Handler to attach to inputs: only mark custom on user-initiated events (isTrusted === true)
+    const userChangeHandler = (e) => {
+        // e may be undefined when called programmatically; ensure we only react to trusted user events
+        if (e && e.isTrusted) {
+            setPresetToCustom();
+        }
+    };
+
     // --- CORE LOGIC ---
 
     // Builds the transformation matrix M (transforms from crystal-cartesian to lab)
@@ -341,6 +365,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
         [inputsLab.x, inputsLab.y, inputsLab.z].forEach(el => el.addEventListener('input', updatePreciseLabFromCartesianInputs));
         [inputsLab.theta, inputsLab.phi].forEach(el => el.addEventListener('input', updatePreciseLabFromAngleInputs));
+
+        // Attach user-change listeners to mark preset as custom when user edits any input
+        // Inputs in the crystal definition (lab axes)
+        ['x', 'y', 'z'].forEach(axis => {
+            [inputsDef[axis].h, inputsDef[axis].k, inputsDef[axis].l].forEach(el => el.addEventListener('input', userChangeHandler));
+        });
+        // Inputs in the crystal direction fields
+        [inputsCrystal.h, inputsCrystal.k, inputsCrystal.l].forEach(el => el.addEventListener('input', userChangeHandler));
+        // Inputs in the lab fields (cartesian and spherical)
+        [inputsLab.x, inputsLab.y, inputsLab.z, inputsLab.theta, inputsLab.phi].forEach(el => el.addEventListener('input', userChangeHandler));
 
 
         // Load default preset if available
