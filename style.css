@@ -69,7 +69,7 @@ select {
 }
 
 input.w-full {
-     width: 100%;
+    width: 100%;
 }
 
 input:disabled, input.readonly {
@@ -86,7 +86,7 @@ input:disabled, input.readonly {
     gap: 0.75rem;
 }
 
-/* Bereich 1: Kristalldefinition */
+/* Section 1: Crystal definition */
 .definition-container {
     display: grid;
     grid-template-columns: 1fr auto;
@@ -125,7 +125,7 @@ input:disabled, input.readonly {
     text-align: right;
 }
 
-/* Transformations-Knöpfe */
+/* Transformation buttons */
 .transformation-buttons {
     display: flex;
     flex-direction: column;
