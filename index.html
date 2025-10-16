@@ -14,15 +14,13 @@
     <div class="main-grid">
         <!-- Section 1: Crystal definition -->
         <div class="card full-width">
-            <h2>1. Crystal definition in lab frame</h2>
+            <h2>Crystal definition in lab frame</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center mb-4">
                 <div class="input-group">
                     <label for="preset-select">Predefined cut / preset</label>
                     <select id="preset-select"></select>
                 </div>
             </div>
-            <p class="text-sm text-gray-500 mt-2 mb-4">Choose a preset to auto-fill the axes, or enter custom values and
-                compute the missing axis.</p>
             <div class="definition-container">
                 <div class="axis-definition">
                     <div class="lab-axis-label">
@@ -72,40 +70,61 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Special axis displays: c-axis and [11-20] placed under input fields -->
+            <h2 class="special-axes-title">Special crystal axes in lab frame</h2>
+             <div class="special-axes">
+                 <div class="special-axis-card">
+                     <div class="special-axis-title"><span class="axis-icon">↑</span> <strong>c-axis (0001)</strong> — Lab frame</div>
+                     <div class="special-axis-values">
+                         <div>Cartesian: <span id="caxis_cart">-</span></div>
+                         <div>θ: <span id="caxis_theta">-</span>°</div>
+                         <div>φ: <span id="caxis_phi">-</span>°</div>
+                     </div>
+                 </div>
+                 <div class="special-axis-card">
+                     <div class="special-axis-title"><span class="axis-icon">↦</span> <strong>AFM weak axis (11-20)</strong> — Lab frame</div>
+                     <div class="special-axis-values">
+                         <div>Cartesian: <span id="a1120_cart">-</span></div>
+                         <div>θ: <span id="a1120_theta">-</span>°</div>
+                         <div>φ: <span id="a1120_phi">-</span>°</div>
+                     </div>
+                 </div>
+             </div>
         </div>
 
         <!-- Section 2: Crystal system -->
-        <div class="card" id="crystal-system">
-            <h2>2. Direction in crystal frame</h2>
-            <div class="input-group">
-                <label>Miller-Bravais indices [h k i l]</label>
-                <div class="miller-bravais-input">
-                    <input type="number" step="any" id="crystal_h" placeholder="h" aria-label="crystal h index">
-                    <input type="number" step="any" id="crystal_k" placeholder="k" aria-label="crystal k index">
-                    <input type="number" step="any" id="crystal_i" placeholder="i" readonly class="readonly"
-                           tabindex="-1" aria-label="crystal i index">
-                    <input type="number" step="any" id="crystal_l" placeholder="l" aria-label="crystal l index">
-                </div>
-            </div>
-        </div>
+         <div class="card" id="crystal-system">
+            <h2>Direction in crystal frame</h2>
+             <div class="input-group">
+                 <label>Miller-Bravais indices [h k i l]</label>
+                 <div class="miller-bravais-input">
+                     <input type="number" step="any" id="crystal_h" placeholder="h" aria-label="crystal h index">
+                     <input type="number" step="any" id="crystal_k" placeholder="k" aria-label="crystal k index">
+                     <input type="number" step="any" id="crystal_i" placeholder="i" readonly class="readonly"
+                            tabindex="-1" aria-label="crystal i index">
+                     <input type="number" step="any" id="crystal_l" placeholder="l" aria-label="crystal l index">
+                 </div>
+             </div>
+         </div>
 
-        <!-- Transformation buttons -->
-        <div class="transformation-buttons">
-            <button id="transform-to-lab-btn" title="Transform to lab frame">&rArr;</button>
-            <button id="transform-to-crystal-btn" title="Transform to crystal frame">&lArr;</button>
-        </div>
+         <!-- Transformation buttons -->
+         <div class="transformation-buttons">
+             <button id="transform-to-lab-btn" title="Transform to lab frame">&rArr;</button>
+             <button id="transform-to-crystal-btn" title="Transform to crystal frame">&lArr;</button>
+         </div>
 
-        <!-- Section 3: Lab system -->
-        <div class="card" id="lab-system">
-            <h2>3. Direction in lab frame</h2>
-            <div class="input-group">
-                <label>Cartesian coordinates (x, y, z)</label>
-                <div class="vector-input">
-                    <input type="number" step="any" id="lab_x" placeholder="x" aria-label="lab x coordinate">
-                    <input type="number" step="any" id="lab_y" placeholder="y" aria-label="lab y coordinate">
-                    <input type="number" step="any" id="lab_z" placeholder="z" aria-label="lab z coordinate">
-                </div>
-            </div>
+         <!-- Section 3: Lab system -->
+         <div class="card" id="lab-system">
+            <h2>Direction in lab frame</h2>
+             <div class="input-group">
+                 <label>Cartesian coordinates (x, y, z)</label>
+                 <div class="vector-input">
+                     <input type="number" step="any" id="lab_x" placeholder="x" aria-label="lab x coordinate">
+                     <input type="number" step="any" id="lab_y" placeholder="y" aria-label="lab y coordinate">
+                     <input type="number" step="any" id="lab_z" placeholder="z" aria-label="lab z coordinate">
+                 </div>
+             </div>
             <div class="input-group">
                 <label>Spherical coordinates</label>
                 <div class="angle-input">

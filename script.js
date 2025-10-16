@@ -165,6 +165,7 @@ document.addEventListener('DOMContentLoaded', () => {
             preciseLabVector = [0, 0, 0];
             updateCrystalInputs();
             updateLabInputs();
+            updateSpecialAxesDisplay();
         }
     };
 
@@ -236,6 +237,60 @@ document.addEventListener('DOMContentLoaded', () => {
 
         inputsLab.theta.value = (thetaRad * 180 / Math.PI).toFixed(2);
         inputsLab.phi.value = (phiRad * 180 / Math.PI).toFixed(2);
+    };
+
+    // --- NEW: Special axes display (c-axis and [11-20]) ---
+    const formatVec = (v) => `(${v[0].toFixed(4)}, ${v[1].toFixed(4)}, ${v[2].toFixed(4)})`;
+
+    const calcAnglesForVec = (v) => {
+        const x = v[0], y = v[1], z = v[2];
+        const r = Math.sqrt(x * x + y * y + z * z);
+        if (r === 0) return {theta: '-', phi: '-'};
+        const theta = Math.acos(z / r) * 180 / Math.PI;
+        let phi = Math.atan2(y, x) * 180 / Math.PI;
+        if (phi < 0) phi += 360;
+        // Round to 2 decimals and if rounded phi equals 360 -> show 0 instead
+        let thetaRounded = Math.round(theta * 100) / 100;
+        let phiRounded = Math.round(phi * 100) / 100;
+        if (Math.abs(phiRounded - 360) < 1e-9) phiRounded = 0;
+        return {theta: thetaRounded.toFixed(2), phi: phiRounded.toFixed(2)};
+    };
+
+    const updateSpecialAxesDisplay = () => {
+        // Build current transformation matrix
+        const M = getTransformationMatrix();
+
+        // c-axis in MB: [0,0,0,1]
+        const c_mb = [0, 0, 0, 1];
+        const c_cart_crystal = millerBravaisToCartesian(c_mb);
+        const c_cart_lab = crystalToLab(c_cart_crystal, M);
+        // normalize for display
+        const c_cart_lab_norm = normalize(c_cart_lab);
+        const c_display = formatVec(c_cart_lab_norm);
+        const c_angles = calcAnglesForVec(c_cart_lab_norm);
+
+        const caxisCartEl = document.getElementById('caxis_cart');
+        const caxisThetaEl = document.getElementById('caxis_theta');
+        const caxisPhiEl = document.getElementById('caxis_phi');
+        if (caxisCartEl) caxisCartEl.textContent = c_display;
+        if (caxisThetaEl) caxisThetaEl.textContent = c_angles.theta;
+        if (caxisPhiEl) caxisPhiEl.textContent = c_angles.phi;
+
+        // [11-20] direction MB: [1,1,-2,0]
+        const a_mb = [1, 1, -2, 0];
+        const a_cart_crystal = millerBravaisToCartesian(a_mb);
+        const a_cart_lab = crystalToLab(a_cart_crystal, M);
+        // normalize for display
+        const a_cart_lab_norm = normalize(a_cart_lab);
+        const a_display = formatVec(a_cart_lab_norm);
+        const a_angles = calcAnglesForVec(a_cart_lab_norm);
+
+        const aCartEl = document.getElementById('a1120_cart');
+        const aThetaEl = document.getElementById('a1120_theta');
+        const aPhiEl = document.getElementById('a1120_phi');
+        if (aCartEl) aCartEl.textContent = a_display;
+        if (aThetaEl) aThetaEl.textContent = a_angles.theta;
+        if (aPhiEl) aPhiEl.textContent = a_angles.phi;
     };
 
     // --- PRESET / CUSTOM HANDLING ---
@@ -372,6 +427,7 @@ document.addEventListener('DOMContentLoaded', () => {
             button.dataset.mode = newMode;
             button.querySelector('span').textContent = newMode.charAt(0).toUpperCase() + newMode.slice(1);
             setPresetToCustom();
+            updateSpecialAxesDisplay();
         });
     });
 
@@ -380,12 +436,15 @@ document.addEventListener('DOMContentLoaded', () => {
         inputsDef[axis].h.addEventListener('input', (e) => {
             updateI(inputsDef[axis].h, inputsDef[axis].k, inputsDef[axis].i);
             userChangeHandler(e);
+            updateSpecialAxesDisplay();
         });
         inputsDef[axis].k.addEventListener('input', (e) => {
             updateI(inputsDef[axis].h, inputsDef[axis].k, inputsDef[axis].i);
             userChangeHandler(e);
+            updateSpecialAxesDisplay();
         });
         inputsDef[axis].l.addEventListener('input', userChangeHandler);
+        inputsDef[axis].l.addEventListener('input', updateSpecialAxesDisplay);
     });
 
     // Attach listeners to crystal inputs
@@ -399,6 +458,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const crystalCartesian = millerBravaisToCartesian(preciseCrystalVector);
         preciseLabVector = crystalToLab(crystalCartesian, M);
         updateLabInputs();
+        updateSpecialAxesDisplay();
     });
 
     transformToCrystalBtn.addEventListener('click', () => {
@@ -407,6 +467,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const crystalCartesian = labToCrystal(preciseLabVector, M);
         preciseCrystalVector = cartesianToMillerBravais(crystalCartesian);
         updateCrystalInputs();
+        updateSpecialAxesDisplay();
     });
 
     // Attach listeners for lab input changes
@@ -417,4 +478,7 @@ document.addEventListener('DOMContentLoaded', () => {
     inputsLab.phi.addEventListener('input', updatePreciseLabFromAngleInputs);
 
     calculateLastAxisBtn.addEventListener('click', handleCalculateLastAxis);
+    // Update special axes when the calculate button completes
+    calculateLastAxisBtn.addEventListener('click', updateSpecialAxesDisplay);
+
 });
