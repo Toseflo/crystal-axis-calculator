@@ -9,7 +9,7 @@
 <body class="bg-gray-50 text-gray-800">
 
 <div class="container">
-    <h1>Crystal Axis Calculator</h1>
+    <h1>Hematite Crystal Axis Calculator</h1>
 
     <div class="main-grid">
         <!-- Section 1: Crystal definition -->
@@ -25,7 +25,12 @@
                 compute the missing axis.</p>
             <div class="definition-container">
                 <div class="axis-definition">
-                    <div class="lab-axis-label"><strong>Lab X ||</strong></div>
+                    <div class="lab-axis-label">
+                        <strong>Lab X ||</strong>
+                        <button class="toggle-mode-btn" id="x-mode-toggle" data-mode="direction">
+                            <span>Direction</span><span class="toggle-icon">⇄</span>
+                        </button>
+                    </div>
                     <div class="miller-bravais-input">
                         <input type="number" id="x_h" placeholder="h" aria-label="h index for Lab X">
                         <input type="number" id="x_k" placeholder="k" aria-label="k index for Lab X">
@@ -33,7 +38,12 @@
                                aria-label="i index for Lab X">
                         <input type="number" id="x_l" placeholder="l" aria-label="l index for Lab X">
                     </div>
-                    <div class="lab-axis-label"><strong>Lab Y ||</strong></div>
+                    <div class="lab-axis-label">
+                        <strong>Lab Y ||</strong>
+                        <button class="toggle-mode-btn" id="y-mode-toggle" data-mode="direction">
+                            <span>Direction</span><span class="toggle-icon">⇄</span>
+                        </button>
+                    </div>
                     <div class="miller-bravais-input">
                         <input type="number" id="y_h" placeholder="h" aria-label="h index for Lab Y">
                         <input type="number" id="y_k" placeholder="k" aria-label="k index for Lab Y">
@@ -41,7 +51,12 @@
                                aria-label="i index for Lab Y">
                         <input type="number" id="y_l" placeholder="l" aria-label="l index for Lab Y">
                     </div>
-                    <div class="lab-axis-label"><strong>Lab Z ||</strong></div>
+                    <div class="lab-axis-label">
+                        <strong>Lab Z ||</strong>
+                        <button class="toggle-mode-btn" id="z-mode-toggle" data-mode="direction">
+                            <span>Direction</span><span class="toggle-icon">⇄</span>
+                        </button>
+                    </div>
                     <div class="miller-bravais-input">
                         <input type="number" id="z_h" placeholder="h" aria-label="h index for Lab Z">
                         <input type="number" id="z_k" placeholder="k" aria-label="k index for Lab Z">
@@ -50,8 +65,11 @@
                         <input type="number" id="z_l" placeholder="l" aria-label="l index for Lab Z">
                     </div>
                 </div>
-                <div class="definition-actions">
-                    <button id="calculate-last-axis-btn">Calculate missing axis</button>
+
+                <div class="computation-controls">
+                    <div class="flex justify-between items-center mb-4">
+                        <button id="calculate-last-axis-btn">Calculate missing axis</button>
+                    </div>
                 </div>
             </div>
         </div>

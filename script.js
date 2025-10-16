@@ -1,6 +1,7 @@
 import {
     millerBravaisToCartesian,
     cartesianToMillerBravais,
+    millerBravaisPlaneToDirection,
     labToCrystal,
     crystalToLab,
     normalize,
@@ -22,6 +23,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const calculateLastAxisBtn = document.getElementById('calculate-last-axis-btn');
     const transformToCrystalBtn = document.getElementById('transform-to-crystal-btn');
     const transformToLabBtn = document.getElementById('transform-to-lab-btn');
+
+    const modeToggles = {
+        x: document.getElementById('x-mode-toggle'),
+        y: document.getElementById('y-mode-toggle'),
+        z: document.getElementById('z-mode-toggle'),
+    };
 
     const inputsDef = {
         x: {
@@ -124,16 +131,31 @@ document.addEventListener('DOMContentLoaded', () => {
     // Fills definition fields for axes
     const populateDefinitionInputs = (axes) => {
         ['x', 'y', 'z'].forEach(axis => {
-            const [h, k, i, l] = axes[axis];
-            inputsDef[axis].h.value = h;
-            inputsDef[axis].k.value = k;
-            inputsDef[axis].i.value = i;
-            inputsDef[axis].l.value = l;
+            if (axes[axis]) {
+                const {type, value} = axes[axis];
+                const [h, k, i, l] = value;
+                inputsDef[axis].h.value = h;
+                inputsDef[axis].k.value = k;
+                inputsDef[axis].i.value = i;
+                inputsDef[axis].l.value = l;
+
+                // Update toggle button state
+                const toggle = modeToggles[axis];
+                toggle.dataset.mode = type;
+                toggle.querySelector('span').textContent = type.charAt(0).toUpperCase() + type.slice(1);
+            } else {
+                // Clear inputs if axis is not defined in preset
+                Object.values(inputsDef[axis]).forEach(input => input.value = '');
+                const toggle = modeToggles[axis];
+                toggle.dataset.mode = 'direction';
+                toggle.querySelector('span').textContent = 'Direction';
+            }
         });
     };
 
     // Loads a preset into the UI
     const loadPreset = (presetName) => {
+        if (presetName === 'custom') return;
         const preset = presets[presetName];
         if (preset) {
             populateDefinitionInputs(preset.axes);
@@ -146,14 +168,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // Reads a Miller-Bravais vector from a group of inputs
-    const getMbVectorFromInputs = (inputs) => {
-        return [
+    // Reads a Miller-Bravais vector from a group of inputs, considering the mode
+    const getMbVectorFromInputs = (inputs, axis) => {
+        let mb = [
             parseFloat(inputs.h.value) || 0,
             parseFloat(inputs.k.value) || 0,
             parseFloat(inputs.i.value) || 0,
             parseFloat(inputs.l.value) || 0
         ];
+
+        const mode = modeToggles[axis].dataset.mode;
+        if (mode === 'plane') {
+            return millerBravaisPlaneToDirection(mb);
+        }
+        return mb;
     };
 
     // Writes a Miller-Bravais vector into a group of inputs
@@ -238,9 +266,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Builds the transformation matrix M (transforms from crystal-cartesian to lab)
     const getTransformationMatrix = () => {
-        const v_x_mb = getMbVectorFromInputs(inputsDef.x);
-        const v_y_mb = getMbVectorFromInputs(inputsDef.y);
-        const v_z_mb = getMbVectorFromInputs(inputsDef.z);
+        const v_x_mb = getMbVectorFromInputs(inputsDef.x, 'x');
+        const v_y_mb = getMbVectorFromInputs(inputsDef.y, 'y');
+        const v_z_mb = getMbVectorFromInputs(inputsDef.z, 'z');
 
         const v_x_cart = millerBravaisToCartesian(v_x_mb);
         const v_y_cart = millerBravaisToCartesian(v_y_mb);
@@ -262,9 +290,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const handleCalculateLastAxis = () => {
         const vectors = {
-            x: {mb: getMbVectorFromInputs(inputsDef.x), isSet: getMbVectorFromInputs(inputsDef.x).some(v => v !== 0)},
-            y: {mb: getMbVectorFromInputs(inputsDef.y), isSet: getMbVectorFromInputs(inputsDef.y).some(v => v !== 0)},
-            z: {mb: getMbVectorFromInputs(inputsDef.z), isSet: getMbVectorFromInputs(inputsDef.z).some(v => v !== 0)},
+            x: {
+                isSet: [inputsDef.x.h.value, inputsDef.x.k.value, inputsDef.x.l.value].some(v => v !== ''),
+                mb: getMbVectorFromInputs(inputsDef.x, 'x')
+            },
+            y: {
+                isSet: [inputsDef.y.h.value, inputsDef.y.k.value, inputsDef.y.l.value].some(v => v !== ''),
+                mb: getMbVectorFromInputs(inputsDef.y, 'y')
+            },
+            z: {
+                isSet: [inputsDef.z.h.value, inputsDef.z.k.value, inputsDef.z.l.value].some(v => v !== ''),
+                mb: getMbVectorFromInputs(inputsDef.z, 'z')
+            },
         };
 
         const definedAxes = Object.keys(vectors).filter(ax => vectors[ax].isSet);
@@ -290,6 +327,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const v3_mb = cartesianToMillerBravais(v3_cart);
         // Normalize result for display
         const normalized_v3_mb = normalizeMillerBravais(v3_mb);
+
+        // The result is always a direction, so we set the mode accordingly
+        const toggle = modeToggles[v3_name];
+        toggle.dataset.mode = 'direction';
+        toggle.querySelector('span').textContent = 'Direction';
+
         setMbVectorToInputs(inputsDef[v3_name], normalized_v3_mb);
 
         // Recompute the i-index and notify listeners by dispatching input events
@@ -300,91 +343,78 @@ document.addEventListener('DOMContentLoaded', () => {
         inputsDef[v3_name].k.dispatchEvent(new Event('input', { bubbles: true }));
     };
 
-    const handleTransformToCrystal = () => {
-        const M = getTransformationMatrix();
-        // compute using precise state
-        const v_cryst_cart = labToCrystal(preciseLabVector, M);
-        preciseCrystalVector = cartesianToMillerBravais(v_cryst_cart);
-        // update display
-        updateCrystalInputs();
-    };
+    // --- EVENT LISTENERS ---
 
-    const handleTransformToLab = () => {
-        const M = getTransformationMatrix();
-        // compute using precise state
-        const v_cryst_cart = millerBravaisToCartesian(preciseCrystalVector);
-        preciseLabVector = crystalToLab(v_cryst_cart, M);
-        // update display
-        updateLabInputs();
-    };
-
-    // --- INITIALIZATION ---
-    const init = async () => {
-        // Load presets from JSON
-        try {
-            const response = await fetch('presets.json');
-            presets = await response.json();
-        } catch (error) {
-            console.error('Error loading presets:', error);
-            alert('Error: Could not load predefined cuts/presets.');
-            return;
-        }
-
-        // Load presets into dropdown
-        Object.keys(presets).forEach(name => {
-            const option = document.createElement('option');
-            option.value = name;
-            option.textContent = name;
-            presetSelect.appendChild(option);
+    // Initial population of presets
+    fetch('presets.json')
+        .then(response => response.json())
+        .then(data => {
+            presets = data;
+            const presetNames = Object.keys(presets);
+            presetNames.forEach(name => {
+                const option = document.createElement('option');
+                option.value = name;
+                option.textContent = name;
+                presetSelect.appendChild(option);
+            });
+            if (presetNames.length > 0) {
+                presetSelect.value = presetNames[0];
+                loadPreset(presetNames[0]);
+            }
         });
 
-        // Event Listeners
-        presetSelect.addEventListener('change', (e) => loadPreset(e.target.value));
-        calculateLastAxisBtn.addEventListener('click', handleCalculateLastAxis);
-        transformToCrystalBtn.addEventListener('click', handleTransformToCrystal);
-        transformToLabBtn.addEventListener('click', handleTransformToLab);
+    presetSelect.addEventListener('change', (e) => loadPreset(e.target.value));
 
-        // Listener for i-index
-        ['x', 'y', 'z'].forEach(axis => {
-            inputsDef[axis].h.addEventListener('input', () => updateI(inputsDef[axis].h, inputsDef[axis].k, inputsDef[axis].i));
-            inputsDef[axis].k.addEventListener('input', () => updateI(inputsDef[axis].h, inputsDef[axis].k, inputsDef[axis].i));
+    Object.values(modeToggles).forEach(button => {
+        button.addEventListener('click', () => {
+            const currentMode = button.dataset.mode;
+            const newMode = currentMode === 'direction' ? 'plane' : 'direction';
+            button.dataset.mode = newMode;
+            button.querySelector('span').textContent = newMode.charAt(0).toUpperCase() + newMode.slice(1);
+            setPresetToCustom();
         });
-        inputsCrystal.h.addEventListener('input', () => updateI(inputsCrystal.h, inputsCrystal.k, inputsCrystal.i));
-        inputsCrystal.k.addEventListener('input', () => updateI(inputsCrystal.h, inputsCrystal.k, inputsCrystal.i));
+    });
 
-        // Listener that updates the precise state on input
-        inputsCrystal.h.addEventListener('input', () => {
-            updateI(inputsCrystal.h, inputsCrystal.k, inputsCrystal.i);
-            updatePreciseCrystalFromInputs();
+    // Attach listeners to definition inputs
+    ['x', 'y', 'z'].forEach(axis => {
+        inputsDef[axis].h.addEventListener('input', (e) => {
+            updateI(inputsDef[axis].h, inputsDef[axis].k, inputsDef[axis].i);
+            userChangeHandler(e);
         });
-        inputsCrystal.k.addEventListener('input', () => {
-            updateI(inputsCrystal.h, inputsCrystal.k, inputsCrystal.i);
-            updatePreciseCrystalFromInputs();
+        inputsDef[axis].k.addEventListener('input', (e) => {
+            updateI(inputsDef[axis].h, inputsDef[axis].k, inputsDef[axis].i);
+            userChangeHandler(e);
         });
-        inputsCrystal.l.addEventListener('input', updatePreciseCrystalFromInputs);
+        inputsDef[axis].l.addEventListener('input', userChangeHandler);
+    });
 
-        [inputsLab.x, inputsLab.y, inputsLab.z].forEach(el => el.addEventListener('input', updatePreciseLabFromCartesianInputs));
-        [inputsLab.theta, inputsLab.phi].forEach(el => el.addEventListener('input', updatePreciseLabFromAngleInputs));
+    // Attach listeners to crystal inputs
+    inputsCrystal.h.addEventListener('input', () => updateI(inputsCrystal.h, inputsCrystal.k, inputsCrystal.i));
+    inputsCrystal.k.addEventListener('input', () => updateI(inputsCrystal.h, inputsCrystal.k, inputsCrystal.i));
 
-        // Attach user-change listeners to mark preset as custom when user edits any input
-        // Inputs in the crystal definition (lab axes)
-        ['x', 'y', 'z'].forEach(axis => {
-            [inputsDef[axis].h, inputsDef[axis].k, inputsDef[axis].l].forEach(el => el.addEventListener('input', userChangeHandler));
-        });
-        // Inputs in the crystal direction fields
-        [inputsCrystal.h, inputsCrystal.k, inputsCrystal.l].forEach(el => el.addEventListener('input', userChangeHandler));
-        // Inputs in the lab fields (cartesian and spherical)
-        [inputsLab.x, inputsLab.y, inputsLab.z, inputsLab.theta, inputsLab.phi].forEach(el => el.addEventListener('input', userChangeHandler));
-
-
-        // Load default preset if available
-        if (Object.keys(presets).length > 0) {
-            loadPreset(Object.keys(presets)[0]);
-        }
-        // Initialize precise vectors with start values from HTML
+    // Attach listeners for transformations
+    transformToLabBtn.addEventListener('click', () => {
         updatePreciseCrystalFromInputs();
-        updatePreciseLabFromCartesianInputs();
-    };
+        const M = getTransformationMatrix();
+        const crystalCartesian = millerBravaisToCartesian(preciseCrystalVector);
+        preciseLabVector = crystalToLab(crystalCartesian, M);
+        updateLabInputs();
+    });
 
-    init();
+    transformToCrystalBtn.addEventListener('click', () => {
+        updatePreciseLabFromCartesianInputs();
+        const M = getTransformationMatrix();
+        const crystalCartesian = labToCrystal(preciseLabVector, M);
+        preciseCrystalVector = cartesianToMillerBravais(crystalCartesian);
+        updateCrystalInputs();
+    });
+
+    // Attach listeners for lab input changes
+    inputsLab.x.addEventListener('input', updatePreciseLabFromCartesianInputs);
+    inputsLab.y.addEventListener('input', updatePreciseLabFromCartesianInputs);
+    inputsLab.z.addEventListener('input', updatePreciseLabFromCartesianInputs);
+    inputsLab.theta.addEventListener('input', updatePreciseLabFromAngleInputs);
+    inputsLab.phi.addEventListener('input', updatePreciseLabFromAngleInputs);
+
+    calculateLastAxisBtn.addEventListener('click', handleCalculateLastAxis);
 });

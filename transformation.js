@@ -35,6 +35,20 @@ export function cartesianToMillerBravais(cart) {
 }
 
 /**
+ * Converts Miller-Bravais plane indices (h, k, i, l) to a Miller-Bravais direction [u, v, t, w]
+ * that is normal to the plane.
+ * @param {number[]} plane - Miller-Bravais plane indices (h, k, i, l).
+ * @returns {number[]} Miller-Bravais direction indices [u, v, t, w].
+ */
+export function millerBravaisPlaneToDirection(plane) {
+    const [h, k, i, l] = plane;
+    const c_a_ratio = C_LATTICE / A_LATTICE;
+    // Formula for hexagonal systems: [h, k, i, l * (2/3) * (a/c)^2]
+    const w = l * (2/3) * (1 / (c_a_ratio * c_a_ratio));
+    return [h, k, i, w];
+}
+
+/**
  * Transforms a cartesian vector from the lab system to the crystal system.
  * @param {number[]} labVector - The vector [x, y, z] in the lab system.
  * @param {number[][]} transformationMatrix - The 3x3 matrix to transform from crystal to lab.
