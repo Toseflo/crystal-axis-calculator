@@ -1,7 +1,6 @@
 // --- LATTICE CONSTANTS ---
-// These are needed for the transformations.
-const A_LATTICE = 1.0;
-const C_LATTICE = 1.365 * 2; // c/a ratio for Hematite is ~2.73
+const A_LATTICE = 5.038;
+const C_LATTICE = 13.772;
 
 /**
  * Converts Miller-Bravais direction indices [h, k, i, l] to a cartesian vector [x, y, z]
