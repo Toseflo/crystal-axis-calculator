@@ -17,10 +17,14 @@ import {
     solveTargetAngles,
     solveSweepLandmarksForFixedPsi,
     computeMountingPresetPsiS,
-    hardwareAnglesFromWavePerspective,
-    hardwareAnglesFromSubPerspective,
-    hardwareAnglesFromCrystalPerspective,
+    millerBravaisDirectionToCrystal,
+    crystalToMillerBravaisDirection,
     millerBravaisPlaneToCrystalNormal,
+    crystalNormalToMillerBravaisPlane,
+    formatMillerBravaisLatex,
+    scaleMillerBravaisInts,
+    cross3,
+    normalize3,
     matVec3,
     generatePythonSnippet,
     wrapDeg360
@@ -724,13 +728,23 @@ function bindUIEvents() {
         });
     });
 
-    // Right Column Selectors (Vector Table Frame & 3x3 Matrix Frame)
+    // Drawer 3-Tab Switcher (Tabellen & Umrechner)
+    document.querySelectorAll('#drawerTabs .drawer-tab').forEach((tab) => {
+        tab.addEventListener('click', () => {
+            const target = tab.dataset.dtab;
+            document.querySelectorAll('#drawerTabs .drawer-tab').forEach((t) => {
+                t.classList.toggle('active', t === tab);
+            });
+            document.querySelectorAll('.drawer-panel[data-dpanel]').forEach((panel) => {
+                panel.classList.toggle('hidden', panel.dataset.dpanel !== target);
+            });
+        });
+    });
+
+    // Vector Table Frame & 3x3 Matrix Frame Selectors
     document.getElementById('selectVectorTableFrame').addEventListener('change', recomputeAndRender);
     document.getElementById('selectMatFrom').addEventListener('change', recomputeAndRender);
     document.getElementById('selectMatTo').addEventListener('change', recomputeAndRender);
-    ['customVecX', 'customVecY', 'customVecZ'].forEach((id) => {
-        document.getElementById(id).addEventListener('input', recomputeAndRender);
-    });
 
     // Copy 3x3 Matrix as LaTeX
     document.getElementById('btnCopyMatrixLatex').addEventListener('click', () => {
@@ -739,8 +753,8 @@ function bindUIEvents() {
         const toF = document.getElementById('selectMatTo').value;
         const R = st.matrices.getRotationMatrix(toF, fromF);
         const rows = R.map((r) => r.map((v) => v.toFixed(4)).join(' & ')).join(' \\\\\n  ');
-        const tex = `R_{\\text{${toF}}\\leftarrow\\text{${fromF}}} = \\begin{pmatrix}\n  ${rows}\n\\end{pmatrix}`;
-        navigator.clipboard.writeText(tex);
+        const texStr = `R_{\\text{${toF}}\\leftarrow\\text{${fromF}}} = \\begin{pmatrix}\n  ${rows}\n\\end{pmatrix}`;
+        navigator.clipboard.writeText(texStr);
         const btn = document.getElementById('btnCopyMatrixLatex');
         const old = btn.innerHTML;
         btn.textContent = 'Kopiert';
@@ -758,103 +772,188 @@ function bindUIEvents() {
         });
     });
 
-    // Bidirectional Angle Translator Inputs
-    bindAngleTranslatorEvents();
+    // Bidirectional Crystal [uvtw] <-> Sample/Lab Converter & Cross-Product Axis Tool
+    bindCrystalConverterEvents();
 
     // Modals: SVG Generator & Python Snippet
     bindModals();
 }
 
-function bindAngleTranslatorEvents() {
-    const applyTranslatedVectorSub = (uSub, hwFallback) => {
-        const s = getActiveSetup();
-        const lockPsi = document.getElementById('chkLockPsiInTranslator').checked;
-        if (lockPsi) {
-            // Keep manual sample mounting psi_S fixed; find best magnet angle phi_M!
-            const st = evaluateSetup(s);
-            const uLab = matVec3(st.matrices.R_Lab_Sub, uSub);
-            if (Math.hypot(uLab[0], uLab[1]) > 1e-9) {
-                s.phiMDeg = Number(wrapDeg360(Math.atan2(uLab[1], uLab[0]) * RAD2DEG).toFixed(2));
-            }
-        } else {
-            s.mountMode = hwFallback.mountMode;
-            s.psiSDeg = Number(hwFallback.psiSDeg.toFixed(2));
-            s.phiMDeg = Number(hwFallback.phiMDeg.toFixed(2));
+let convCrystalMode = 'direction'; // 'direction' | 'plane'
+
+function bindCrystalConverterEvents() {
+    const hIn = document.getElementById('convMB_h');
+    const kIn = document.getElementById('convMB_k');
+    const iIn = document.getElementById('convMB_i');
+    const lIn = document.getElementById('convMB_l');
+    const targetFrameSel = document.getElementById('selectConvTargetFrame');
+    const xIn = document.getElementById('convCartX');
+    const yIn = document.getElementById('convCartY');
+    const zIn = document.getElementById('convCartZ');
+    const thIn = document.getElementById('convSphTheta');
+    const phIn = document.getElementById('convSphPhi');
+
+    const updateMBPreview = () => {
+        if (!hIn || !kIn || !iIn || !lIn) return;
+        const h = parseFloat(hIn.value) || 0;
+        const k = parseFloat(kIn.value) || 0;
+        const l = parseFloat(lIn.value) || 0;
+        const i = -(h + k);
+        iIn.value = Number.isInteger(i) ? i : i.toFixed(2);
+        const badge = document.getElementById('convMBFormatted');
+        if (badge) {
+            badge.innerHTML = tex(formatMillerBravaisLatex([h, k, i, l], convCrystalMode === 'plane'));
         }
-        syncControlsFromSetup();
-        recomputeAndRender();
     };
 
-    // 1. Wave Perspective (phi_B,k and beta_OOP)
-    const onWaveTransChange = () => {
-        const s = getActiveSetup();
-        const phiW = parseFloat(document.getElementById('transPhiWave').value) || 0;
-        const elev = parseFloat(document.getElementById('transElevSub').value) || 0;
-        const hw = hardwareAnglesFromWavePerspective(s, phiW, elev, true);
-        const stTmp = evaluateSetup({ ...s, ...hw });
-        applyTranslatedVectorSub(stTmp.vectors.bHat.Sub, hw);
-    };
-    document.getElementById('transPhiWave').addEventListener('change', onWaveTransChange);
-    document.getElementById('transElevSub').addEventListener('change', onWaveTransChange);
-
-    // 2. Substrate Perspective (phi_B,Sub and theta_B,n)
-    const onSubTransChange = () => {
-        const s = getActiveSetup();
-        const phiSub = parseFloat(document.getElementById('transPhiSub').value) || 0;
-        const thetaBN = parseFloat(document.getElementById('transThetaBN').value) || 90;
-        const hw = hardwareAnglesFromSubPerspective(s, phiSub, thetaBN, true);
-        const stTmp = evaluateSetup({ ...s, ...hw });
-        applyTranslatedVectorSub(stTmp.vectors.bHat.Sub, hw);
-    };
-    document.getElementById('transPhiSub').addEventListener('change', onSubTransChange);
-    document.getElementById('transThetaBN').addEventListener('change', onSubTransChange);
-
-    // 3. Crystal / Easy-Plane Perspective (phi_easy(m), phi_easy(l), theta_B,c)
-    const applyCrystalAzimuth = (phiEasyMDeg) => {
-        const s = getActiveSetup();
-        const thetaBC = parseFloat(document.getElementById('transThetaBC').value) || 90;
-        const lockPsi = document.getElementById('chkLockPsiInTranslator').checked;
-        if (lockPsi) {
-            // Exact analytical solver for phi_M so that B_perp_c (i.e. m_hat) points along phiEasyMDeg at fixed psi_S!
-            const st = evaluateSetup(s);
-            const azRad = phiEasyMDeg * DEG2RAD;
-            const uNorm = [Math.cos(azRad), Math.sin(azRad), 0];
-            const vPerpCryst = [-Math.sin(azRad), Math.cos(azRad), 0];
-            const vPerpLab = matVec3(st.matrices.R_Lab_Sub, matVec3(st.matrices.R_Sub_from.Cryst, vPerpCryst));
-            const uEasyLab = matVec3(st.matrices.R_Lab_Sub, matVec3(st.matrices.R_Sub_from.Cryst, uNorm));
-            if (Math.hypot(vPerpLab[0], vPerpLab[1]) > 1e-9) {
-                const c1 = wrapDeg360(Math.atan2(-vPerpLab[0], vPerpLab[1]) * RAD2DEG);
-                const c2 = wrapDeg360(c1 + 180);
-                const r1 = c1 * DEG2RAD;
-                const dot1 = Math.cos(r1) * uEasyLab[0] + Math.sin(r1) * uEasyLab[1];
-                s.phiMDeg = Number((dot1 >= 0 ? c1 : c2).toFixed(2));
-                syncControlsFromSetup();
-                recomputeAndRender();
-                return;
-            }
+    const syncAnglesFromCart = () => {
+        const x = parseFloat(xIn.value) || 0;
+        const y = parseFloat(yIn.value) || 0;
+        const z = parseFloat(zIn.value) || 0;
+        const r = Math.hypot(x, y, z);
+        if (r < 1e-9) {
+            thIn.value = '0.00';
+            phIn.value = '0.00';
+            return;
         }
-        const hw = hardwareAnglesFromCrystalPerspective(s, phiEasyMDeg, thetaBC, true);
-        const stTmp = evaluateSetup({ ...s, ...hw });
-        applyTranslatedVectorSub(stTmp.vectors.bHat.Sub, hw);
+        const theta = Math.acos(Math.max(-1, Math.min(1, z / r))) * RAD2DEG;
+        let phi = wrapDeg360(Math.atan2(y, x) * RAD2DEG);
+        if (Math.abs(phi - 360) < 1e-4) phi = 0;
+        thIn.value = theta.toFixed(2);
+        phIn.value = phi.toFixed(2);
     };
 
-    document.getElementById('transPhiEasyM').addEventListener('change', (e) => {
-        const phiM = parseFloat(e.target.value) || 0;
-        applyCrystalAzimuth(phiM);
+    const syncCartFromAngles = () => {
+        const thetaRad = (parseFloat(thIn.value) || 0) * DEG2RAD;
+        const phiRad = (parseFloat(phIn.value) || 0) * DEG2RAD;
+        const x = Math.sin(thetaRad) * Math.cos(phiRad);
+        const y = Math.sin(thetaRad) * Math.sin(phiRad);
+        const z = Math.cos(thetaRad);
+        xIn.value = x.toFixed(4);
+        yIn.value = y.toFixed(4);
+        zIn.value = z.toFixed(4);
+    };
+
+    const convertCrystalToFrame = () => {
+        if (!hIn) return;
+        updateMBPreview();
+        const h = parseFloat(hIn.value) || 0;
+        const k = parseFloat(kIn.value) || 0;
+        const l = parseFloat(lIn.value) || 0;
+        const mb = [h, k, -(h + k), l];
+
+        const vCryst = convCrystalMode === 'plane'
+            ? millerBravaisPlaneToCrystalNormal(mb)
+            : millerBravaisDirectionToCrystal(mb);
+
+        const st = evaluateSetup(getActiveSetup());
+        const targetF = targetFrameSel ? targetFrameSel.value : 'Sub';
+        const R = st.matrices.getRotationMatrix(targetF, 'Cryst');
+        const vTarget = normalize3(matVec3(R, vCryst));
+
+        xIn.value = vTarget[0].toFixed(4);
+        yIn.value = vTarget[1].toFixed(4);
+        zIn.value = vTarget[2].toFixed(4);
+        syncAnglesFromCart();
+    };
+
+    const convertFrameToCrystal = () => {
+        if (!xIn) return;
+        const x = parseFloat(xIn.value) || 0;
+        const y = parseFloat(yIn.value) || 0;
+        const z = parseFloat(zIn.value) || 0;
+        const vTarget = normalize3([x, y, z]);
+
+        const st = evaluateSetup(getActiveSetup());
+        const targetF = targetFrameSel ? targetFrameSel.value : 'Sub';
+        const R = st.matrices.getRotationMatrix('Cryst', targetF);
+        const vCryst = matVec3(R, vTarget);
+
+        const rawMB = convCrystalMode === 'plane'
+            ? crystalNormalToMillerBravaisPlane(vCryst)
+            : crystalToMillerBravaisDirection(vCryst);
+        const ints = scaleMillerBravaisInts(rawMB);
+
+        hIn.value = ints[0];
+        kIn.value = ints[1];
+        iIn.value = ints[2];
+        lIn.value = ints[3];
+        updateMBPreview();
+    };
+
+    document.querySelectorAll('#convCrystalModeGroup .seg-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('#convCrystalModeGroup .seg-btn').forEach((b) => b.classList.remove('active'));
+            btn.classList.add('active');
+            convCrystalMode = btn.dataset.cmode;
+            const isPlane = convCrystalMode === 'plane';
+            document.getElementById('lblConvH').textContent = isPlane ? 'h' : 'u';
+            document.getElementById('lblConvK').textContent = isPlane ? 'k' : 'v';
+            document.getElementById('lblConvI').textContent = isPlane ? 'i = −(h+k)' : 't = −(u+v)';
+            document.getElementById('lblConvL').textContent = isPlane ? 'l' : 'w';
+            updateMBPreview();
+        });
     });
-    document.getElementById('transPhiEasyL').addEventListener('change', (e) => {
-        const phiL = parseFloat(e.target.value) || 0;
-        // Since l_hat = m_hat x e_c = (m_m, -m_a, 0), phi_easy(m) = phi_easy(l) + 90°
-        applyCrystalAzimuth(wrapDeg360(phiL + 90));
+
+    if (hIn && kIn && lIn) {
+        [hIn, kIn, lIn].forEach((el) => el.addEventListener('input', updateMBPreview));
+    }
+    if (xIn && yIn && zIn) {
+        [xIn, yIn, zIn].forEach((el) => el.addEventListener('input', syncAnglesFromCart));
+    }
+    if (thIn && phIn) {
+        [thIn, phIn].forEach((el) => el.addEventListener('input', syncCartFromAngles));
+    }
+    if (targetFrameSel) {
+        targetFrameSel.addEventListener('change', convertCrystalToFrame);
+    }
+
+    const btnToFrame = document.getElementById('btnConvToFrame');
+    const btnToCrystal = document.getElementById('btnConvToCrystal');
+    if (btnToFrame) btnToFrame.addEventListener('click', convertCrystalToFrame);
+    if (btnToCrystal) btnToCrystal.addEventListener('click', convertFrameToCrystal);
+
+    // Sub-Tool: Orthogonal 3rd Crystal Axis Calculator (1 x 2)
+    const updateCrossAxisTool = () => {
+        const c1h = document.getElementById('cross1_h');
+        if (!c1h) return;
+        const h1 = parseFloat(c1h.value) || 0;
+        const k1 = parseFloat(document.getElementById('cross1_k').value) || 0;
+        const l1 = parseFloat(document.getElementById('cross1_l').value) || 0;
+        const i1 = -(h1 + k1);
+        document.getElementById('cross1_i').value = i1;
+        const m1 = document.getElementById('crossMode1').value;
+
+        const h2 = parseFloat(document.getElementById('cross2_h').value) || 0;
+        const k2 = parseFloat(document.getElementById('cross2_k').value) || 0;
+        const l2 = parseFloat(document.getElementById('cross2_l').value) || 0;
+        const i2 = -(h2 + k2);
+        document.getElementById('cross2_i').value = i2;
+        const m2 = document.getElementById('crossMode2').value;
+
+        const v1 = m1 === 'plane'
+            ? millerBravaisPlaneToCrystalNormal([h1, k1, i1, l1])
+            : millerBravaisDirectionToCrystal([h1, k1, i1, l1]);
+        const v2 = m2 === 'plane'
+            ? millerBravaisPlaneToCrystalNormal([h2, k2, i2, l2])
+            : millerBravaisDirectionToCrystal([h2, k2, i2, l2]);
+
+        const v3 = normalize3(cross3(v1, v2));
+        const dirMB = crystalToMillerBravaisDirection(v3);
+        const planeMB = crystalNormalToMillerBravaisPlane(v3);
+
+        document.getElementById('crossResDir').innerHTML = tex(formatMillerBravaisLatex(dirMB, false));
+        document.getElementById('crossResPlane').innerHTML = tex(formatMillerBravaisLatex(planeMB, true));
+    };
+
+    ['cross1_h', 'cross1_k', 'cross1_l', 'cross2_h', 'cross2_k', 'cross2_l', 'crossMode1', 'crossMode2'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', updateCrossAxisTool);
+        if (el) el.addEventListener('change', updateCrossAxisTool);
     });
-    document.getElementById('transThetaBC').addEventListener('change', () => {
-        const phiM = parseFloat(document.getElementById('transPhiEasyM').value) || 0;
-        const s = getActiveSetup();
-        const thetaBC = parseFloat(document.getElementById('transThetaBC').value) || 90;
-        const hw = hardwareAnglesFromCrystalPerspective(s, phiM, thetaBC, true);
-        const stTmp = evaluateSetup({ ...s, ...hw });
-        applyTranslatedVectorSub(stTmp.vectors.bHat.Sub, hw);
-    });
+
+    updateMBPreview();
+    updateCrossAxisTool();
 }
 
 function applySavedPreset(presetId) {
@@ -1212,13 +1311,15 @@ function updateCompareTable(stateA, stateB) {
 
 function updateVectorTable(activeState) {
     const frame = document.getElementById('selectVectorTableFrame').value;
-    const meta = FRAME_METADATA[frame] || FRAME_METADATA.Wave;
+    const meta = FRAME_METADATA[frame] || FRAME_METADATA.Sub;
     const headerRow = document.getElementById('vectorTableHeaderRow');
     headerRow.innerHTML = `
-        <th>Richtung</th>
+        <th>Größe / Achse</th>
         <th>${meta.axesShort[0]}</th>
         <th>${meta.axesShort[1]}</th>
         <th>${meta.axesShort[2]}</th>
+        <th>θ (zu ${meta.axesShort[2]})</th>
+        <th>φ (in ${meta.axesShort[0]}–${meta.axesShort[1]})</th>
         <th>Kristall [uvtw]</th>
     `;
 
@@ -1226,12 +1327,14 @@ function updateVectorTable(activeState) {
     const mb = activeState.millerBravais;
 
     const entries = [
-        { name: `Magnetfeld ${tex('\\hat{b}')}`, color: VECTOR_COLORS.B, vec: v.bHat[frame], mb: tex(mb.B.latex) },
-        { name: `FM-Moment ${tex('\\hat{m}')}`, color: VECTOR_COLORS.m, vec: v.mHat[frame], mb: tex(mb.m.latex) },
+        { name: `Magnetfeld ${tex('\\mathbf{B}')}`, color: VECTOR_COLORS.B, vec: v.bHat[frame], mb: tex(mb.B.latex) },
+        { name: `Magnetisierung ${tex('\\hat{m}')}`, color: VECTOR_COLORS.m, vec: v.mHat[frame], mb: tex(mb.m.latex) },
         { name: `Néel-Vektor ${tex('\\hat{l}')}`, color: VECTOR_COLORS.l, vec: v.lHat[frame], mb: tex(mb.l.latex) },
         { name: `Welle ${tex('\\hat{k}')}`, color: VECTOR_COLORS.k, vec: v.kHat[frame], mb: tex(mb.k.latex) },
         { name: `Quer zur Welle ${tex('\\hat{t}')}`, color: VECTOR_COLORS.t, vec: v.tHat[frame], mb: tex(mb.t.latex) },
         { name: `Sample-Normale ${tex('\\hat{n}')}`, color: VECTOR_COLORS.n, vec: v.nHat[frame], mb: tex(mb.zsDir.latex) },
+        { name: `Kristall ${tex('a')}-Achse (Easy-Axis)`, color: VECTOR_COLORS.ea, vec: v.eaHat[frame], mb: tex('[11\\bar{2}0]') },
+        { name: `Kristall ${tex('m')}-Achse`, color: VECTOR_COLORS.em, vec: v.emHat[frame], mb: tex('[1\\bar{1}00]') },
         { name: `Kristall ${tex('c')}-Achse`, color: VECTOR_COLORS.ec, vec: v.ecHat[frame], mb: tex('[0001]') }
     ];
 
@@ -1240,17 +1343,29 @@ function updateVectorTable(activeState) {
         return (val >= 0 ? '+' : '') + val.toFixed(4);
     };
 
+    const calcSph = (vec) => {
+        const r = Math.hypot(vec[0], vec[1], vec[2]);
+        if (r < 1e-9) return { th: '–', ph: '–' };
+        const th = Math.acos(Math.max(-1, Math.min(1, vec[2] / r))) * RAD2DEG;
+        let ph = wrapDeg360(Math.atan2(vec[1], vec[0]) * RAD2DEG);
+        if (Math.abs(ph - 360) < 1e-3) ph = 0;
+        return { th: `${th.toFixed(1)}°`, ph: `${ph.toFixed(1)}°` };
+    };
+
     document.getElementById('vectorTableBody').innerHTML = entries
-        .map(
-            (e) => `
+        .map((e) => {
+            const sph = calcSph(e.vec);
+            return `
         <tr>
             <td><span style="color:${e.color}">●</span> ${e.name}</td>
             <td>${fmtComp(e.vec[0])}</td>
             <td>${fmtComp(e.vec[1])}</td>
             <td>${fmtComp(e.vec[2])}</td>
+            <td>${sph.th}</td>
+            <td>${sph.ph}</td>
             <td>${e.mb}</td>
-        </tr>`
-        )
+        </tr>`;
+        })
         .join('');
 }
 
@@ -1267,12 +1382,6 @@ function updateMatrixInspector(activeState) {
         }
     }
     document.getElementById('matrixDisplayGrid').innerHTML = cells.join('');
-
-    const vx = parseFloat(document.getElementById('customVecX').value) || 0;
-    const vy = parseFloat(document.getElementById('customVecY').value) || 0;
-    const vz = parseFloat(document.getElementById('customVecZ').value) || 0;
-    const out = matVec3(R, [vx, vy, vz]);
-    document.getElementById('customVecResult').textContent = `(${out.map((c) => c.toFixed(4)).join(', ')})`;
 }
 
 function updateInverseSolver(activeState) {

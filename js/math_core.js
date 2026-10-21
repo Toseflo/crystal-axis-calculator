@@ -340,6 +340,11 @@ function _gcdInt(a, b) {
     return x;
 }
 
+export function scaleMillerBravaisInts(indices) {
+    const { finalVals } = _scaleMillerBravais(indices);
+    return finalVals || [0, 0, 0, 0];
+}
+
 function _scaleMillerBravais(indices) {
     const maxAbs = Math.max(...indices.map(Math.abs));
     if (maxAbs < 1e-9) return { finalVals: null, useInts: true };

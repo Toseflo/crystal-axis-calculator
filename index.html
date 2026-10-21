@@ -587,98 +587,56 @@
             </section>
 
             <!-- ============================================================
-                 EXPERT DRAWER (Collapsed by default to prevent sensory overload!)
+                 TABELLEN & UMRECHNER (Clean 3-Tab Drawer, collapsed by default)
                  ============================================================ -->
             <details class="expert-drawer" id="expertDrawer">
                 <summary class="expert-drawer-summary">
                     <span>
-                        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
-                        <strong>Experten-Werkzeuge &amp; Rohdaten aufklappen</strong> (Winkel-Übersetzer, 5-System-Vektortabelle &amp; 3×3-Rotationsmatrizen)
+                        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+                        <strong>Tabellen &amp; Umrechner</strong> (Vektortabelle, Kristall-Umrechner <span data-tex="[uvtw]">[uvtw]</span> &amp; 3×3-Rotationsmatrix)
                     </span>
-                    <span class="drawer-hint">Für Auswertung &amp; tieferes Nachrechnen ▾</span>
+                    <span class="drawer-hint">Aufklappen ▾</span>
                 </summary>
 
-                <div class="expert-drawer-grid">
-                    <!-- 1. Bidirectional Angle Perspective Converter -->
-                    <section class="data-section">
+                <div class="drawer-body">
+                    <!-- Clean 3-Tab Bar so only ONE tool is shown at a time -->
+                    <div class="drawer-tabs" id="drawerTabs" role="tablist">
+                        <button type="button" class="drawer-tab active" data-dtab="vectors">
+                            1. Richtungen &amp; Vektortabelle
+                        </button>
+                        <button type="button" class="drawer-tab" data-dtab="converter">
+                            2. Kristall-Umrechner <span data-tex="[uvtw] \leftrightarrow (x,y,z)">[uvtw] ⇄ (x,y,z)</span>
+                        </button>
+                        <button type="button" class="drawer-tab" data-dtab="matrix">
+                            3. 3×3-Rotationsmatrix
+                        </button>
+                    </div>
+
+                    <!-- TAB 1: Vektortabelle (mit (x,y,z), (θ,φ) und [uvtw] inkl. a-, m-, c-Achse) -->
+                    <section class="data-section drawer-panel" data-dpanel="vectors">
                         <div class="section-header-compact">
-                            <h2>
-                                <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m17 1 4 4-4 4"/><path d="M3 9V7a2 2 0 0 1 2-2h16"/><path d="m7 23-4-4 4-4"/><path d="M21 15v2a2 2 0 0 1-2 2H3"/></svg>
-                                Bidirektionaler Winkel-Übersetzer
-                            </h2>
-                            <label class="chk-pill" title="Wenn aktiv, bleibt der manuelle Einbauwinkel ψ_S fest und es wird nur der beste Magnetwinkel φ_M gesucht">
-                                <input type="checkbox" id="chkLockPsiInTranslator" checked />
-                                <span>ψ<sub>S</sub> fest lassen (nur φ<sub>M</sub> drehen)</span>
+                            <h2>Alle wichtigen Vektoren &amp; Kristallachsen im gewählten System</h2>
+                            <label class="inline-select-label">
+                                Bezugssystem:
+                                <select id="selectVectorTableFrame" class="select-xs">
+                                    <option value="Sub" selected>Sample-System (0°-Kante x, 90°-Kante y, Normale z)</option>
+                                    <option value="Wave">Wellen-System (längs k̂, quer t̂, Normale n̂)</option>
+                                    <option value="Cryst">Kristall-System (a-Achse, m-Achse, c-Achse)</option>
+                                    <option value="Lab">Labor-System (Magnet-Ebene X, Y, Vertikale Z)</option>
+                                </select>
                             </label>
-                        </div>
-                        <p class="translator-hint">Gib einen Wunschwinkel in einem beliebigen System ein – der Rechner stellt den Magneten (bzw. ψ<sub>S</sub> + φ<sub>M</sub>) passend ein:</p>
-
-                        <div class="angle-translator-grid">
-                            <div class="trans-box">
-                                <div class="trans-title">1. Wellen-Sicht (ℱ<sub>Wave</sub>: relativ zu k̂)</div>
-                                <div class="trans-row">
-                                    <label>φ<sub>B,k̂</sub> (In-Plane zu k̂):</label>
-                                    <div class="num-unit"><input type="number" id="transPhiWave" step="1" value="0" /><span>°</span></div>
-                                </div>
-                                <div class="trans-row">
-                                    <label>β<sub>OOP</sub> (aus Probenebene):</label>
-                                    <div class="num-unit"><input type="number" id="transElevSub" step="1" value="0" /><span>°</span></div>
-                                </div>
-                            </div>
-
-                            <div class="trans-box">
-                                <div class="trans-title">2. Proben-Sicht (ℱ<sub>Sub</sub>: relativ zu x̂<sub>s</sub>, n̂)</div>
-                                <div class="trans-row">
-                                    <label>φ<sub>B,Sub</sub> (In-Plane zu x̂<sub>s</sub>):</label>
-                                    <div class="num-unit"><input type="number" id="transPhiSub" step="1" value="0" /><span>°</span></div>
-                                </div>
-                                <div class="trans-row">
-                                    <label>θ<sub>B,n̂</sub> = ∠(B, n̂):</label>
-                                    <div class="num-unit"><input type="number" id="transThetaBN" step="1" value="90" /><span>°</span></div>
-                                </div>
-                            </div>
-
-                            <div class="trans-box trans-box-wide">
-                                <div class="trans-title">3. Kristall &amp; (0001) Easy-Plane-Sicht (ℱ<sub>Cryst</sub>: relativ zu [112̄0], [0001])</div>
-                                <div class="trans-row-3col">
-                                    <div>
-                                        <label>φ<sub>easy</sub>(m̂):</label>
-                                        <div class="num-unit"><input type="number" id="transPhiEasyM" step="1" value="0" /><span>°</span></div>
-                                    </div>
-                                    <div>
-                                        <label>φ<sub>easy</sub>(l̂):</label>
-                                        <div class="num-unit"><input type="number" id="transPhiEasyL" step="1" value="270" /><span>°</span></div>
-                                    </div>
-                                    <div>
-                                        <label>θ<sub>B,c</sub> = ∠(B, c):</label>
-                                        <div class="num-unit"><input type="number" id="transThetaBC" step="1" value="90" /><span>°</span></div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-
-                    <!-- 2. Vectors in all 5 Coordinate Systems -->
-                    <section class="data-section">
-                        <div class="section-header-compact">
-                            <h2>Einheitsvektoren im gewählten Bezugssystem</h2>
-                            <select id="selectVectorTableFrame" class="select-xs">
-                                <option value="Wave">in ℱ_Wave (k̂, t̂, n̂)</option>
-                                <option value="Sub">in ℱ_Sub (x̂_s, ŷ_s, ẑ_s)</option>
-                                <option value="Cryst">in ℱ_Cryst (ê_a, ê_m, ê_c)</option>
-                                <option value="Lab">in ℱ_Lab (X̂_L, Ŷ_L, Ẑ_L)</option>
-                                <option value="Mount">in ℱ_Mount (x̂_m, ŷ_m, ẑ_m)</option>
-                            </select>
                         </div>
 
                         <div class="table-scroll">
                             <table class="data-table vector-table">
                                 <thead>
                                     <tr id="vectorTableHeaderRow">
-                                        <th>Vektor</th>
-                                        <th>k̂</th>
-                                        <th>t̂</th>
-                                        <th>n̂</th>
+                                        <th>Größe / Achse</th>
+                                        <th>x</th>
+                                        <th>y</th>
+                                        <th>z</th>
+                                        <th>θ (zu z)</th>
+                                        <th>φ (in xy)</th>
                                         <th>Kristall [uvtw]</th>
                                     </tr>
                                 </thead>
@@ -687,47 +645,167 @@
                         </div>
                     </section>
 
-                    <!-- 3. Interactive 3x3 Rotation Matrix Inspector -->
-                    <section class="data-section">
+                    <!-- TAB 2: Bidirektionaler Kristall-Umrechner [uvtw] / (hkil) <-> Sample / Labor + 3. Achse berechnen -->
+                    <section class="data-section drawer-panel hidden" data-dpanel="converter">
+                        <div class="converter-2col-grid">
+                            <!-- Left Box: Crystal [uvtw] or (hkil) -->
+                            <div class="converter-card">
+                                <div class="converter-card-header">
+                                    <h3>Im Kristallgitter</h3>
+                                    <div class="segmented-control seg-xs" id="convCrystalModeGroup">
+                                        <button type="button" class="seg-btn active" data-cmode="direction">Richtung <span data-tex="[uvtw]">[uvtw]</span></button>
+                                        <button type="button" class="seg-btn" data-cmode="plane">Ebene <span data-tex="(hkil)">(hkil)</span></button>
+                                    </div>
+                                </div>
+                                <div class="mb-4input-row">
+                                    <div class="mb-field">
+                                        <label id="lblConvH">u</label>
+                                        <input type="number" id="convMB_h" value="1" step="1" />
+                                    </div>
+                                    <div class="mb-field">
+                                        <label id="lblConvK">v</label>
+                                        <input type="number" id="convMB_k" value="1" step="1" />
+                                    </div>
+                                    <div class="mb-field">
+                                        <label id="lblConvI">t = −(u+v)</label>
+                                        <input type="number" id="convMB_i" value="-2" disabled />
+                                    </div>
+                                    <div class="mb-field">
+                                        <label id="lblConvL">w</label>
+                                        <input type="number" id="convMB_l" value="0" step="1" />
+                                    </div>
+                                </div>
+                                <div class="calm-inline-status">
+                                    <span>Gekürzte Schreibweise: <strong id="convMBFormatted">[112̄0]</strong></span>
+                                </div>
+                            </div>
+
+                            <!-- Center Transfer Buttons -->
+                            <div class="converter-arrows-col">
+                                <button type="button" class="btn btn-sm btn-primary" id="btnConvToFrame" title="Von Kristall-Indizes in das gewählte Sample-/Labor-System umrechnen">
+                                    In System umrechnen →
+                                </button>
+                                <button type="button" class="btn btn-sm btn-secondary" id="btnConvToCrystal" title="Vom Sample-/Labor-System zurück in ganzzahlige Kristall-Indizes umrechnen">
+                                    ← In Kristall-Indizes
+                                </button>
+                            </div>
+
+                            <!-- Right Box: Sample or Lab Cartesian (x,y,z) & Spherical (theta, phi) -->
+                            <div class="converter-card">
+                                <div class="converter-card-header">
+                                    <h3>Im Ziel-System</h3>
+                                    <select id="selectConvTargetFrame" class="select-xs">
+                                        <option value="Sub" selected>Sample-System (x, y, z)</option>
+                                        <option value="Lab">Labor-System (X, Y, Z)</option>
+                                        <option value="Wave">Wellen-System (k̂, t̂, n̂)</option>
+                                    </select>
+                                </div>
+
+                                <label class="field-label" style="margin-top:0;">Kartesische Koordinaten (Einheitsvektor):</label>
+                                <div class="xyz-3input-row">
+                                    <div class="mb-field">
+                                        <label>x</label>
+                                        <input type="number" id="convCartX" value="1.0000" step="0.05" />
+                                    </div>
+                                    <div class="mb-field">
+                                        <label>y</label>
+                                        <input type="number" id="convCartY" value="0.0000" step="0.05" />
+                                    </div>
+                                    <div class="mb-field">
+                                        <label>z</label>
+                                        <input type="number" id="convCartZ" value="0.0000" step="0.05" />
+                                    </div>
+                                </div>
+
+                                <label class="field-label">Kugelkoordinaten (θ zur z-Achse, φ in der xy-Ebene):</label>
+                                <div class="xyz-2input-row">
+                                    <div class="mb-field">
+                                        <label>Polarwinkel θ (0°…180°)</label>
+                                        <input type="number" id="convSphTheta" value="90.00" step="1" />
+                                    </div>
+                                    <div class="mb-field">
+                                        <label>Azimut φ (0°…360°)</label>
+                                        <input type="number" id="convSphPhi" value="0.00" step="1" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Sub-Tool: Missing 3rd Orthogonal Crystal Axis Calculator (from original GitHub app) -->
+                        <details class="sub-details" style="margin-top: 12px;">
+                            <summary>Senkrechte 3. Kristallachse aus 2 bekannten Achsen berechnen (Kreuzprodukt)</summary>
+                            <div class="sub-details-body">
+                                <div class="cross-axis-grid">
+                                    <div class="cross-axis-box">
+                                        <div class="cross-axis-top">
+                                            <strong>1. Kristallachse</strong>
+                                            <select id="crossMode1" class="select-xs">
+                                                <option value="direction" selected>Richtung [uvtw]</option>
+                                                <option value="plane">Ebene (hkil)</option>
+                                            </select>
+                                        </div>
+                                        <div class="mb-4input-row">
+                                            <input type="number" id="cross1_h" value="1" step="1" />
+                                            <input type="number" id="cross1_k" value="1" step="1" />
+                                            <input type="number" id="cross1_i" value="-2" disabled />
+                                            <input type="number" id="cross1_l" value="0" step="1" />
+                                        </div>
+                                    </div>
+
+                                    <div class="cross-axis-box">
+                                        <div class="cross-axis-top">
+                                            <strong>2. Kristallachse</strong>
+                                            <select id="crossMode2" class="select-xs">
+                                                <option value="direction">Richtung [uvtw]</option>
+                                                <option value="plane" selected>Ebene (hkil)</option>
+                                            </select>
+                                        </div>
+                                        <div class="mb-4input-row">
+                                            <input type="number" id="cross2_h" value="1" step="1" />
+                                            <input type="number" id="cross2_k" value="-1" step="1" />
+                                            <input type="number" id="cross2_i" value="0" disabled />
+                                            <input type="number" id="cross2_l" value="2" step="1" />
+                                        </div>
+                                    </div>
+
+                                    <div class="cross-axis-result-box">
+                                        <strong>Senkrechte 3. Achse (1 × 2):</strong>
+                                        <div class="cross-res-line">Als Richtung <span data-tex="[uvtw]">[uvtw]</span>: <strong id="crossResDir">[1̄101]</strong></div>
+                                        <div class="cross-res-line">Als Ebene <span data-tex="(hkil)">(hkil)</span>: <strong id="crossResPlane">(1̄105)</strong></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </details>
+                    </section>
+
+                    <!-- TAB 3: 3x3 Rotation Matrix -->
+                    <section class="data-section drawer-panel hidden" data-dpanel="matrix">
                         <div class="section-header-compact">
-                            <h2>3×3-Rotationsmatrix R<sub>Ziel ← Start</sub></h2>
-                            <button type="button" id="btnCopyMatrixLatex" class="btn btn-xs btn-ghost">LaTeX kopieren</button>
+                            <h2>3×3-Rotationsmatrix <span data-tex="R_{\text{Ziel} \leftarrow \text{Start}}">R_Ziel←Start</span></h2>
+                            <button type="button" id="btnCopyMatrixLatex" class="btn btn-xs btn-secondary">Als LaTeX kopieren</button>
                         </div>
 
                         <div class="matrix-selector-row">
-                            <label>Start:
+                            <label>Start-System:
                                 <select id="selectMatFrom" class="select-xs">
-                                    <option value="Lab">ℱ_Lab</option>
-                                    <option value="Mount">ℱ_Mount</option>
-                                    <option value="Sub" selected>ℱ_Sub</option>
-                                    <option value="Wave">ℱ_Wave</option>
-                                    <option value="Cryst">ℱ_Cryst</option>
+                                    <option value="Sub" selected>Sample-System</option>
+                                    <option value="Wave">Wellen-System</option>
+                                    <option value="Cryst">Kristall-System</option>
+                                    <option value="Lab">Labor-System</option>
                                 </select>
                             </label>
                             <span class="arrow-sep">→</span>
-                            <label>Ziel:
+                            <label>Ziel-System:
                                 <select id="selectMatTo" class="select-xs">
-                                    <option value="Lab">ℱ_Lab</option>
-                                    <option value="Mount">ℱ_Mount</option>
-                                    <option value="Sub">ℱ_Sub</option>
-                                    <option value="Wave">ℱ_Wave</option>
-                                    <option value="Cryst" selected>ℱ_Cryst</option>
+                                    <option value="Sub">Sample-System</option>
+                                    <option value="Wave">Wellen-System</option>
+                                    <option value="Cryst" selected>Kristall-System</option>
+                                    <option value="Lab">Labor-System</option>
                                 </select>
                             </label>
                         </div>
 
                         <div id="matrixDisplayGrid" class="matrix-grid"></div>
-
-                        <div class="custom-vec-transformer">
-                            <div class="custom-vec-title">Eigenen Vektor v<sub>Start</sub> transformieren:</div>
-                            <div class="custom-vec-inputs">
-                                <input type="number" id="customVecX" value="1" step="0.1" />
-                                <input type="number" id="customVecY" value="0" step="0.1" />
-                                <input type="number" id="customVecZ" value="0" step="0.1" />
-                                <span class="arrow-sep">⇒</span>
-                                <code id="customVecResult">(0.000, 1.000, 0.000)</code>
-                            </div>
-                        </div>
                     </section>
                 </div>
             </details>
