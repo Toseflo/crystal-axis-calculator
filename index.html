@@ -1,148 +1,837 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="de">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Crystal Axis Calculator for Hematite</title>
-    <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hämatit (α-Fe₂O₃) Kristall-, Spinwellen- (CPW) &amp; SAW- (IDT) Geometrie-Rechner</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+    <link rel="stylesheet" href="style.css" />
 </head>
-<body class="bg-gray-50 text-gray-800">
-
-<div class="container">
-    <h1>Hematite Crystal Axis Calculator</h1>
-
-    <div class="main-grid">
-        <!-- Section 1: Crystal definition -->
-        <div class="card full-width">
-            <h2>Crystal definition in lab frame</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center mb-4">
-                <div class="input-group">
-                    <label for="preset-select">Predefined cut / preset</label>
-                    <select id="preset-select"></select>
-                </div>
-            </div>
-            <div class="definition-container">
-                <div class="axis-definition">
-                    <div class="lab-axis-label">
-                        <strong>Lab X ||</strong>
-                        <button class="toggle-mode-btn" id="x-mode-toggle" data-mode="direction">
-                            <span>Direction</span><span class="toggle-icon">⇄</span>
+<body>
+    <!-- ====================================================================
+         MAIN 2-COLUMN WORKSPACE (Starts directly at top without header bar!)
+         ==================================================================== -->
+    <main class="workspace-2col">
+        <!-- ================================================================
+             LEFT COLUMN: Guided Setup Workflow
+             ================================================================ -->
+        <aside class="workflow-sidebar">
+            <!-- Saveable & Deletable Preset Manager + Compact Utility Actions -->
+            <div class="setup-switcher-card">
+                <div class="preset-manager-header">
+                    <span class="preset-dropdown-label">Vorlagen:</span>
+                    <div class="preset-manager-actions">
+                        <button type="button" id="btnOpenSavePreset" class="btn btn-xs btn-secondary" title="Aktuelle Einstellung als eigene Vorlage speichern">
+                            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                            Speichern
                         </button>
-                    </div>
-                    <div class="miller-bravais-input">
-                        <input type="number" id="x_h" placeholder="h" aria-label="h index for Lab X">
-                        <input type="number" id="x_k" placeholder="k" aria-label="k index for Lab X">
-                        <input type="number" id="x_i" placeholder="i" readonly class="readonly" tabindex="-1"
-                               aria-label="i index for Lab X">
-                        <input type="number" id="x_l" placeholder="l" aria-label="l index for Lab X">
-                    </div>
-                    <div class="lab-axis-label">
-                        <strong>Lab Y ||</strong>
-                        <button class="toggle-mode-btn" id="y-mode-toggle" data-mode="direction">
-                            <span>Direction</span><span class="toggle-icon">⇄</span>
+                        <button type="button" id="btnDeletePreset" class="btn btn-xs btn-ghost preset-delete-btn" title="Ausgewählte Vorlage löschen">
+                            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14z"/></svg>
+                            Löschen
                         </button>
-                    </div>
-                    <div class="miller-bravais-input">
-                        <input type="number" id="y_h" placeholder="h" aria-label="h index for Lab Y">
-                        <input type="number" id="y_k" placeholder="k" aria-label="k index for Lab Y">
-                        <input type="number" id="y_i" placeholder="i" readonly class="readonly" tabindex="-1"
-                               aria-label="i index for Lab Y">
-                        <input type="number" id="y_l" placeholder="l" aria-label="l index for Lab Y">
-                    </div>
-                    <div class="lab-axis-label">
-                        <strong>Lab Z ||</strong>
-                        <button class="toggle-mode-btn" id="z-mode-toggle" data-mode="direction">
-                            <span>Direction</span><span class="toggle-icon">⇄</span>
+                        <button type="button" id="btnToggleCompare" class="btn btn-xs btn-outline" title="Zwei Setups (A vs. B) vergleichen">
+                            <span class="dot-indicator"></span> A/B
                         </button>
-                    </div>
-                    <div class="miller-bravais-input">
-                        <input type="number" id="z_h" placeholder="h" aria-label="h index for Lab Z">
-                        <input type="number" id="z_k" placeholder="k" aria-label="k index for Lab Z">
-                        <input type="number" id="z_i" placeholder="i" readonly class="readonly" tabindex="-1"
-                               aria-label="i index for Lab Z">
-                        <input type="number" id="z_l" placeholder="l" aria-label="l index for Lab Z">
                     </div>
                 </div>
+                <div class="preset-dropdown-row">
+                    <select id="selectScenarioPreset" class="select-input"></select>
+                </div>
+                <div id="savePresetRow" class="save-preset-row hidden">
+                    <input type="text" id="inputPresetName" class="input-text" placeholder="Vorlagen-Name (z.B. Probe 1 – c-cut)..." />
+                    <button type="button" id="btnConfirmSavePreset" class="btn btn-xs btn-primary">Speichern</button>
+                    <button type="button" id="btnCancelSavePreset" class="btn btn-xs btn-ghost" title="Abbrechen">
+                        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    </button>
+                </div>
 
-                <div class="computation-controls">
-                    <div class="flex justify-between items-center mb-4">
-                        <button id="calculate-last-axis-btn">Calculate missing axis</button>
+                <!-- Only visible when A/B compare is active -->
+                <div id="compareSetupBox" class="compare-setup-box hidden">
+                    <div class="setup-tabs">
+                        <button id="tabSetupA" class="setup-tab active" data-setup="A">
+                            <span class="badge-a">A</span> <span id="lblTabA">Setup A</span>
+                        </button>
+                        <button id="tabSetupB" class="setup-tab" data-setup="B">
+                            <span class="badge-b">B</span> <span id="lblTabB">Setup B</span>
+                        </button>
+                    </div>
+                    <div class="setup-name-row">
+                        <input type="text" id="inputSetupName" class="input-text" value="c-cut (0001)" placeholder="Name des Setups..." />
+                        <button id="btnCopyAtoB" class="btn btn-xs btn-ghost" title="Parameter von A nach B kopieren">A → B</button>
                     </div>
                 </div>
             </div>
 
-            <!-- Special axis displays: c-axis and [11-20] placed under input fields -->
-            <h2 class="special-axes-title">Special crystal axes in lab frame</h2>
-             <div class="special-axes">
-                 <div class="special-axis-card">
-                     <div class="special-axis-title"><span class="axis-icon">↑</span> <strong>c-axis (0001)</strong> — Lab frame</div>
-                     <div class="special-axis-values">
-                         <div>Cartesian: <span id="caxis_cart">-</span></div>
-                         <div>θ: <span id="caxis_theta">-</span>°</div>
-                         <div>φ: <span id="caxis_phi">-</span>°</div>
-                     </div>
-                 </div>
-                 <div class="special-axis-card">
-                     <div class="special-axis-title"><span class="axis-icon">↦</span> <strong>AFM easy axis (11-20)</strong> — Lab frame</div>
-                     <div class="special-axis-values">
-                         <div>Cartesian: <span id="a1120_cart">-</span></div>
-                         <div>θ: <span id="a1120_theta">-</span>°</div>
-                         <div>φ: <span id="a1120_phi">-</span>°</div>
-                     </div>
-                 </div>
-             </div>
-        </div>
+            <!-- ============================================================
+                 STEP 1: SAMPLE & KRISTALLSCHNITT (inkl. permanente 0°-Bezugskante)
+                 ============================================================ -->
+            <div class="step-card step-card-active" id="stepCard1">
+                <button type="button" class="step-card-header" data-toggle-step="1">
+                    <span class="step-num">1</span>
+                    <div class="step-header-text">
+                        <h2>Sample &amp; Kristallschnitt</h2>
+                        <span class="step-summary" id="summaryStep1">c-cut · 0°-Kante [1120]</span>
+                    </div>
+                    <span class="step-chevron">▾</span>
+                </button>
 
-        <!-- Section 2: Crystal system -->
-         <div class="card" id="crystal-system">
-            <h2>Direction in crystal frame</h2>
-             <div class="input-group">
-                 <label>Miller-Bravais indices [h, k, i, l]</label>
-                 <div class="miller-bravais-input">
-                     <input type="number" step="any" id="crystal_h" placeholder="h" aria-label="crystal h index">
-                     <input type="number" step="any" id="crystal_k" placeholder="k" aria-label="crystal k index">
-                     <input type="number" step="any" id="crystal_i" placeholder="i" readonly class="readonly"
-                            tabindex="-1" aria-label="crystal i index">
-                     <input type="number" step="any" id="crystal_l" placeholder="l" aria-label="crystal l index">
-                 </div>
-             </div>
-         </div>
+                <div class="step-card-body">
+                    <label class="field-label" style="margin-top: 0;">1. Kristallschnitt (Cut) des Samples:</label>
+                    <div class="cut-preset-grid" id="cutPresetGrid">
+                        <button type="button" class="cut-btn active" data-cut="c-cut">
+                            <strong>c-cut <span data-tex="(0001)">(0001)</span></strong>
+                            <small>Easy-Plane flach (0°)</small>
+                        </button>
+                        <button type="button" class="cut-btn" data-cut="a-cut">
+                            <strong>a-cut <span data-tex="(11\bar{2}0)">(11-20)</span></strong>
+                            <small>Easy-Plane senkrecht (90°)</small>
+                        </button>
+                        <button type="button" class="cut-btn" data-cut="m-cut">
+                            <strong>m-cut <span data-tex="(10\bar{1}0)">(10-10)</span></strong>
+                            <small>Easy-Plane senkrecht (90°)</small>
+                        </button>
+                        <button type="button" class="cut-btn" data-cut="r-cut">
+                            <strong>r-cut <span data-tex="(1\bar{1}02)">(1-102)</span></strong>
+                            <small>Um 57.6° schräg verkippt</small>
+                        </button>
+                        <button type="button" class="cut-btn cut-btn-wide" data-cut="custom">
+                            <strong>Eigener Schnittwinkel / <span data-tex="(hkil)">(hkil)</span></strong>
+                        </button>
+                    </div>
 
-         <!-- Transformation buttons -->
-         <div class="transformation-buttons">
-             <button id="transform-to-lab-btn" title="Transform to lab frame">&rArr;</button>
-             <button id="transform-to-crystal-btn" title="Transform to crystal frame">&lArr;</button>
-         </div>
+                    <div id="cutDescriptionBox" class="info-callout hidden"></div>
 
-         <!-- Section 3: Lab system -->
-         <div class="card" id="lab-system">
-            <h2>Direction in lab frame</h2>
-             <div class="input-group">
-                 <label>Cartesian coordinates (x, y, z)</label>
-                 <div class="vector-input">
-                     <input type="number" step="any" id="lab_x" placeholder="x" aria-label="lab x coordinate">
-                     <input type="number" step="any" id="lab_y" placeholder="y" aria-label="lab y coordinate">
-                     <input type="number" step="any" id="lab_z" placeholder="z" aria-label="lab z coordinate">
-                 </div>
-             </div>
-            <div class="input-group">
-                <label>Spherical coordinates (θ, φ)</label>
-                <div class="angle-input">
-                    <input type="number" step="any" id="lab_theta" placeholder="θ (polar)"
-                           aria-label="theta polar angle">
-                    <input type="number" step="any" id="lab_phi" placeholder="φ (azimuth)"
-                           aria-label="phi azimuth angle">
+                    <!-- Custom Cut Controls -->
+                    <div id="customCutPanel" class="custom-cut-panel hidden">
+                        <div class="slider-block">
+                            <div class="slider-header">
+                                <label for="sliderThetaCut">Verkippung <span data-tex="\theta_{\text{cut}}">θ_cut</span> zur Sample-Normale</label>
+                                <div class="num-unit"><input type="number" id="numThetaCut" min="0" max="180" step="0.1" value="57.61" /><span>°</span></div>
+                            </div>
+                            <input type="range" id="sliderThetaCut" min="0" max="180" step="0.1" value="57.61" />
+                        </div>
+                        <div class="slider-block">
+                            <div class="slider-header">
+                                <label for="sliderPhiCut">Kristall-Azimut <span data-tex="\phi_{\text{cut}}">φ_cut</span></label>
+                                <div class="num-unit"><input type="number" id="numPhiCut" min="0" max="360" step="0.5" value="90" /><span>°</span></div>
+                            </div>
+                            <input type="range" id="sliderPhiCut" min="0" max="360" step="0.5" value="90" />
+                        </div>
+                        <div class="hkil-apply-row">
+                            <span data-tex="(h\,k\,i\,l):">(hkil):</span>
+                            <input type="number" id="hkilH" value="1" step="1" />
+                            <input type="number" id="hkilK" value="-1" step="1" />
+                            <input type="number" id="hkilI" value="0" disabled />
+                            <input type="number" id="hkilL" value="2" step="1" />
+                            <button type="button" id="btnApplyHKIL" class="btn btn-xs btn-secondary">Setzen</button>
+                        </div>
+                    </div>
+
+                    <!-- 2. 0°-Bezugskante des Samples (Permanent angezeigt in Abschnitt 1!) -->
+                    <label class="field-label">2. 0°-Bezugskante des Samples (<strong id="summaryEdge0">[1120]</strong>):</label>
+                    <div class="edge-preset-grid" id="edgePresetGrid">
+                        <button type="button" class="edge-preset-card active" id="btnEdgePreset0" data-alpha="0">
+                            <strong id="lblEdgePreset0Title">0° ∥ a-Achse [112̄0]</strong>
+                            <small id="lblEdgePreset0Sub">90°-Kante ∥ m-Achse [11̄00]</small>
+                        </button>
+                        <button type="button" class="edge-preset-card" id="btnEdgePreset90" data-alpha="90">
+                            <strong id="lblEdgePreset90Title">0° ∥ m-Achse [11̄00]</strong>
+                            <small id="lblEdgePreset90Sub">90°-Kante ∥ a-Achse [1̄1̄20]</small>
+                        </button>
+                    </div>
+
+                    <div class="slider-block" style="margin-bottom: 10px;">
+                        <div class="slider-header">
+                            <label for="sliderAlphaFlat">Oder 0°-Kante frei drehen (<span data-tex="\alpha_{\text{flat}}">α_flat</span>)</label>
+                            <div class="num-unit"><input type="number" id="numAlphaFlat" min="-180" max="180" step="0.5" value="0" /><span>°</span></div>
+                        </div>
+                        <input type="range" id="sliderAlphaFlat" min="-180" max="180" step="0.5" value="0" />
+                    </div>
+
+                    <div class="mini-crystal-badges">
+                        <div class="crystal-badge-item">
+                            <small class="badge-label">0°-Kante (rechts)</small>
+                            <strong id="badgeSubXs">[1120]</strong>
+                            <span id="liveChipEdge0" class="hidden"></span>
+                        </div>
+                        <div class="crystal-badge-item">
+                            <small class="badge-label">90°-Kante (oben)</small>
+                            <strong id="badgeSubYs">[1100]</strong>
+                            <span id="liveChipEdge90" class="hidden"></span>
+                        </div>
+                        <div class="crystal-badge-item">
+                            <small class="badge-label">Oberfläche</small>
+                            <strong id="badgeSubZs">(0001)</strong>
+                        </div>
+                    </div>
+                    <!-- Keep hidden wave badges for compatibility -->
+                    <span id="badgeWaveK" class="hidden"></span>
+                    <span id="badgeWaveT" class="hidden"></span>
+                    <span id="badgeAngleKC" class="hidden"></span>
                 </div>
-                <p class="text-xs text-gray-500 mt-2" style="font-size: 12px; color: #666; grid-column: 1 / -1;">
-                    <b>θ:</b> Angle to the z axis (0°-180°).<br>
-                    <b>φ:</b> Angle in the xy plane (0°-360°).
-                </p>
+            </div>
+
+            <!-- ============================================================
+                 STEP 2: STRUKTUR & WELLE k_hat (Eigene Karte in der Seitenleiste!)
+                 ============================================================ -->
+            <div class="step-card" id="stepCardDev">
+                <button type="button" class="step-card-header" data-toggle-step="dev">
+                    <span class="step-num">2</span>
+                    <div class="step-header-text">
+                        <h2>Struktur &amp; Welle <span data-tex="\hat{k}">k̂</span></h2>
+                        <span class="step-summary" id="summaryStepDev">CPW · 0° ([1120])</span>
+                    </div>
+                    <span class="step-chevron">▾</span>
+                </button>
+
+                <div class="step-card-body">
+                    <label class="field-label" style="margin-top: 0;">1. Struktur auf dem Sample:</label>
+                    <div class="segmented-control">
+                        <button type="button" id="btnDevCPW" class="seg-btn active" data-dev="CPW">
+                            <strong>CPW (Spinwelle)</strong>
+                        </button>
+                        <button type="button" id="btnDevIDT" class="seg-btn" data-dev="IDT">
+                            <strong>IDT (SAW)</strong>
+                        </button>
+                    </div>
+
+                    <div class="slider-block" style="margin-bottom: 4px;">
+                        <div class="slider-header">
+                            <label for="sliderThetaDev">2. Drehwinkel der Welle <span data-tex="\hat{k}">k̂</span> auf dem Sample</label>
+                            <div class="num-unit"><input type="number" id="numThetaDev" min="-180" max="180" step="0.5" value="0" /><span>°</span></div>
+                        </div>
+                        <input type="range" id="sliderThetaDev" min="-180" max="180" step="0.5" value="0" />
+
+                        <div class="quick-chips" data-target="ThetaDev" id="deviceQuickAngleChips">
+                            <button type="button" data-val="0">0°</button>
+                            <button type="button" data-val="30">30°</button>
+                            <button type="button" data-val="45">45°</button>
+                            <button type="button" data-val="60">60°</button>
+                            <button type="button" data-val="90">90°</button>
+                        </div>
+
+                        <div class="calm-inline-status" id="deviceMillerLiveBox">
+                            <span>Welle <span data-tex="\hat{k}">k̂</span>: <strong id="liveDevMillerK">[1120]</strong></span>
+                            <span class="status-sep">·</span>
+                            <span>Leiter/Finger: <strong id="liveDevMillerT">[1100]</strong></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============================================================
+                 STEP 3: EINBAU IN DEN MAGNETEN
+                 ============================================================ -->
+            <div class="step-card" id="stepCard2">
+                <button type="button" class="step-card-header" data-toggle-step="2">
+                    <span class="step-num">3</span>
+                    <div class="step-header-text">
+                        <h2>Sample-Einbau im Magneten</h2>
+                        <span class="step-summary" id="summaryStep2">Horizontal (IP) · ψ_S = 0.0°</span>
+                    </div>
+                    <span class="step-chevron">▾</span>
+                </button>
+
+                <div class="step-card-body">
+                    <label class="field-label" style="margin-top: 0;">1. Sample-Halterung:</label>
+                    <div class="segmented-control">
+                        <button type="button" id="btnMountIP" class="seg-btn active" data-mount="IP">
+                            <strong>Horizontal (In-Plane)</strong>
+                            <small>Sample liegt flach im Feld</small>
+                        </button>
+                        <button type="button" id="btnMountOOP" class="seg-btn" data-mount="OOP">
+                            <strong>Vertikal (Out-of-Plane)</strong>
+                            <small>Sample steht aufrecht</small>
+                        </button>
+                    </div>
+
+                    <div class="slider-block compact-top" style="margin-bottom: 4px;">
+                        <div class="slider-header">
+                            <label for="sliderPsiS">2. Einbau-Drehwinkel <span data-tex="\psi_S">ψ_S</span> auf dem Halter</label>
+                            <div class="num-unit"><input type="number" id="numPsiS" min="0" max="360" step="0.5" value="0" /><span>°</span></div>
+                        </div>
+                        <input type="range" id="sliderPsiS" min="0" max="360" step="0.5" value="0" />
+
+                        <div class="quick-chips" data-target="PsiS">
+                            <button type="button" data-val="0">0°</button>
+                            <button type="button" data-val="45">45°</button>
+                            <button type="button" data-val="90">90°</button>
+                            <button type="button" data-val="180">180°</button>
+                            <button type="button" data-val="270">270°</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============================================================
+                 STEP 4: LIVE-MESSUNG (Magnetwinkel phi_M drehen)
+                 ============================================================ -->
+            <div class="step-card step-card-active step-card-live" id="stepCard3">
+                <button type="button" class="step-card-header" data-toggle-step="3">
+                    <span class="step-num step-num-live">4</span>
+                    <div class="step-header-text">
+                        <h2>Magnetfeld drehen (Messung)</h2>
+                        <span class="step-summary" id="summaryStep3">0.0° · 0.5 T</span>
+                    </div>
+                    <span class="step-chevron">▾</span>
+                </button>
+
+                <div class="step-card-body">
+                    <div class="live-phi-highlight">
+                        <div class="slider-header">
+                            <label for="sliderPhiM"><strong>Magnetwinkel <span data-tex="\phi_M">φ_M</span></strong></label>
+                            <div class="num-unit num-unit-lg"><input type="number" id="numPhiM" min="0" max="360" step="0.5" value="0" /><span>°</span></div>
+                        </div>
+                        <input type="range" id="sliderPhiM" min="0" max="360" step="0.5" value="0" class="range-lg" />
+                        <div class="quick-chips" data-target="PhiM">
+                            <button type="button" data-val="0">0°</button>
+                            <button type="button" data-val="45">45°</button>
+                            <button type="button" data-val="90">90°</button>
+                            <button type="button" data-val="180">180°</button>
+                            <button type="button" data-val="270">270°</button>
+                        </div>
+                    </div>
+
+                    <div class="smart-jumps-label">Wichtige Stellungen per Klick anfahren:</div>
+                    <div class="smart-jumps-grid" id="smartMagnetJumps"></div>
+
+                    <div class="control-row-compact">
+                        <label for="numB0">Magnetfeld-Stärke <span data-tex="B_0">B₀</span>:</label>
+                        <div class="num-unit"><input type="number" id="numB0" min="0.001" max="20" step="0.05" value="0.50" /><span>T</span></div>
+                    </div>
+
+                    <!-- Collapsible Modular Inverse Target Solver inside Step 3 -->
+                    <details class="sub-details solver-details">
+                        <summary>
+                            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+                            Ziel-Finder: Winkel für Wunschrichtung berechnen
+                        </summary>
+                        <div class="sub-details-body solver-modular-body">
+                            <!-- Hidden select kept for compatibility -->
+                            <select id="selectTargetPreset" class="hidden"></select>
+
+                            <!-- Step A: Category Picker -->
+                            <div class="solver-step-block">
+                                <span class="solver-step-label">1. Worauf bezieht sich dein Ziel?</span>
+                                <div class="solver-cat-tabs" id="solverCatTabs">
+                                    <button type="button" class="solver-cat-tab active" data-solver-cat="sample">
+                                        Auf dem Sample
+                                    </button>
+                                    <button type="button" class="solver-cat-tab" data-solver-cat="easy">
+                                        Easy-Plane &amp; Spins
+                                    </button>
+                                    <button type="button" class="solver-cat-tab" data-solver-cat="crystal">
+                                        Kristallachsen
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Step B: Target Cards for each Category -->
+                            <div class="solver-step-block">
+                                <span class="solver-step-label">2. Gewünschte Ausrichtung wählen:</span>
+
+                                <!-- Category 1: Auf dem Sample -->
+                                <div class="solver-target-grid" data-solver-panel="sample">
+                                    <button type="button" class="solver-target-card active" data-target-id="B_parallel_k">
+                                        <strong>Feld <span data-tex="\parallel +\hat{k}">∥ +k̂</span></strong>
+                                        <small>Längs zur Welle (BVW)</small>
+                                    </button>
+                                    <button type="button" class="solver-target-card" data-target-id="B_parallel_t">
+                                        <strong>Feld <span data-tex="\perp \hat{k}">⊥ k̂</span> (im Sample)</strong>
+                                        <small>Quer zur Welle / längs Leiter (DE)</small>
+                                    </button>
+                                    <button type="button" class="solver-target-card" data-target-id="B_parallel_n">
+                                        <strong>Feld <span data-tex="\perp">⊥</span> Sample</strong>
+                                        <small>Senkrecht (Out-of-Plane)</small>
+                                    </button>
+                                    <button type="button" class="solver-target-card" data-target-id="B_antiparallel_k">
+                                        <strong>Feld <span data-tex="\parallel -\hat{k}">∥ −k̂</span></strong>
+                                        <small>Entgegen der Welle</small>
+                                    </button>
+                                </div>
+
+                                <!-- Category 2: Easy-Plane & Spins -->
+                                <div class="solver-target-grid hidden" data-solver-panel="easy">
+                                    <button type="button" class="solver-target-card" data-target-id="m_align_k">
+                                        <strong>Moment <span data-tex="\hat{m} \parallel \hat{k}">m̂ ∥ k̂</span></strong>
+                                        <small>FM-Moment in Easy-Plane längs zur Welle</small>
+                                    </button>
+                                    <button type="button" class="solver-target-card" data-target-id="l_align_k">
+                                        <strong>Néel-Vektor <span data-tex="\hat{l} \parallel \hat{k}">l̂ ∥ k̂</span></strong>
+                                        <small>Néel-Vektor in Easy-Plane längs zur Welle</small>
+                                    </button>
+                                    <button type="button" class="solver-target-card solver-target-wide" data-target-id="B_easy_and_sample">
+                                        <strong>Flach im Sample &amp; in Easy-Plane</strong>
+                                        <small>Entlang der Schnittlinie beider Ebenen</small>
+                                    </button>
+                                </div>
+
+                                <!-- Category 3: Kristallachsen -->
+                                <div class="solver-target-grid hidden" data-solver-panel="crystal">
+                                    <button type="button" class="solver-target-card" data-target-id="B_parallel_ea">
+                                        <strong><span data-tex="a">a</span>-Achse <span data-tex="[11\bar{2}0]">[11-20]</span></strong>
+                                        <small>In der Easy-Plane (0°)</small>
+                                    </button>
+                                    <button type="button" class="solver-target-card" data-target-id="B_parallel_em">
+                                        <strong><span data-tex="m">m</span>-Achse <span data-tex="[1\bar{1}00]">[1-100]</span></strong>
+                                        <small>In der Easy-Plane (90°)</small>
+                                    </button>
+                                    <button type="button" class="solver-target-card" data-target-id="B_parallel_ec">
+                                        <strong><span data-tex="c">c</span>-Achse <span data-tex="[0001]">[0001]</span></strong>
+                                        <small>Senkrecht zur Easy-Plane</small>
+                                    </button>
+                                    <button type="button" class="solver-target-card" data-target-id="custom_mb">
+                                        <strong>Eigene <span data-tex="[uvtw]">[uvtw]</span></strong>
+                                        <small>Freie Kristallrichtung</small>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Optional Custom [uvtw] Input -->
+                            <div id="customTargetMBBox" class="hkil-apply-row hidden">
+                                <span data-tex="[u\,v\,t\,w]:">[uvtw]:</span>
+                                <input type="number" id="targetU" value="1" step="1" />
+                                <input type="number" id="targetV" value="1" step="1" />
+                                <input type="number" id="targetT" value="-2" disabled />
+                                <input type="number" id="targetW" value="0" step="1" />
+                            </div>
+
+                            <!-- Step C: Calculated Angle Solutions -->
+                            <div class="solver-step-block">
+                                <span class="solver-step-label">3. Berechnete Winkel zum Übernehmen:</span>
+                                <div id="solverResultsContainer" class="solver-results"></div>
+                            </div>
+                        </div>
+                    </details>
+                </div>
+            </div>
+
+            <!-- Compact Export Buttons at bottom of Sidebar -->
+            <div class="sidebar-export-row">
+                <button type="button" id="btnOpenSvgModal" class="btn btn-xs btn-secondary" title="Vektorgrafik (.svg) exportieren">
+                    <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+                    SVG-Export
+                </button>
+                <button type="button" id="btnOpenPythonModal" class="btn btn-xs btn-secondary" title="Setup als Python-Code kopieren">
+                    <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                    Python-Snippet
+                </button>
+            </div>
+        </aside>
+
+        <!-- ================================================================
+             RIGHT COLUMN: Focus Stage (Single 3D or Optional Dual 3D Side-by-Side)
+             ================================================================ -->
+        <section class="main-stage">
+            <div class="stage-and-options-grid">
+                <!-- Plot Canvases: Single 3D by default, or Dual 3D side-by-side when activated -->
+                <div id="stageContainer" class="stage-container mode-3d">
+                    <!-- Primary 3D Canvas Card -->
+                    <div class="stage-card card-3d" id="card3D">
+                        <div class="canvas-3d-viewport">
+                            <div class="canvas-top-right-controls">
+                                <button type="button" class="canvas-pill-btn" id="btnCamTop1" title="Zwischen 3D-Schrägansicht und exakter 2D-Draufsicht wechseln">
+                                    <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M8 12h8"/></svg>
+                                    Draufsicht (2D)
+                                </button>
+                                <button type="button" class="canvas-pill-btn" id="btnToggleDual3D" title="Zweite unabhängige 3D-Ansicht nebeneinander ein-/ausblenden">
+                                    <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16"/></svg>
+                                    <span id="lblToggleDual3D">+ 2. Ansicht daneben</span>
+                                </button>
+                            </div>
+                            <canvas id="canvas3D"></canvas>
+                            <div class="canvas-hint">Maus ziehen: Drehen · Mausrad: Zoom</div>
+                        </div>
+                        <div id="bar3DControls" class="frame-lock-bottom-bar">
+                            <div class="bottom-bar-group">
+                                <span class="toolbar-label" id="lblFrameLock1">Was soll im Bild stillstehen?</span>
+                                <div class="frame-pills-lg" id="frameLockPills">
+                                    <button type="button" class="frame-pill active" data-frame="Sub">
+                                        <strong>Sample</strong>
+                                    </button>
+                                    <button type="button" class="frame-pill" data-frame="Lab">
+                                        <strong>Labor-Magnet</strong>
+                                    </button>
+                                    <button type="button" class="frame-pill" data-frame="Wave">
+                                        <strong>Welle <span data-tex="\hat{k}">k̂</span></strong>
+                                    </button>
+                                    <button type="button" class="frame-pill" data-frame="Cryst">
+                                        <strong>Easy-Plane horizontal</strong>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Optional Secondary 3D Canvas Card (Side-by-Side) -->
+                    <div class="stage-card card-3d card-3d-secondary" id="card3DSecondary">
+                        <div class="canvas-3d-viewport">
+                            <div class="canvas-top-right-controls">
+                                <button type="button" class="canvas-pill-btn active" id="btnCamTop2" title="Zwischen 3D-Schrägansicht und exakter 2D-Draufsicht wechseln">
+                                    <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M8 12h8"/></svg>
+                                    Draufsicht (2D)
+                                </button>
+                                <button type="button" class="canvas-pill-btn canvas-pill-close" id="btnCloseDual3D" title="Zweite Ansicht schließen">
+                                    <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                                    Schließen
+                                </button>
+                            </div>
+                            <canvas id="canvas3DSecondary"></canvas>
+                            <div class="canvas-hint">Maus ziehen: Drehen · Mausrad: Zoom</div>
+                        </div>
+                        <div id="bar3DControls2" class="frame-lock-bottom-bar">
+                            <div class="bottom-bar-group">
+                                <span class="toolbar-label">Was soll in Ansicht 2 stillstehen?</span>
+                                <div class="frame-pills-lg" id="frameLockPills2">
+                                    <button type="button" class="frame-pill" data-frame="Sub">
+                                        <strong>Sample</strong>
+                                    </button>
+                                    <button type="button" class="frame-pill" data-frame="Lab">
+                                        <strong>Labor-Magnet</strong>
+                                    </button>
+                                    <button type="button" class="frame-pill" data-frame="Wave">
+                                        <strong>Welle <span data-tex="\hat{k}">k̂</span></strong>
+                                    </button>
+                                    <button type="button" class="frame-pill active" data-frame="Cryst">
+                                        <strong>Easy-Plane horizontal</strong>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Shared Display Toggles Bar directly underneath the 3D view(s) -->
+                <div class="shared-toggles-bar">
+                    <span class="toolbar-label">Zusätzliche Einblendungen (ein/aus):</span>
+                    <input type="checkbox" id="chkShowB" checked class="hidden" />
+                    <input type="checkbox" id="chkShowK" checked class="hidden" />
+                    <input type="checkbox" id="chkShowM" checked class="hidden" />
+                    <input type="checkbox" id="chkShowEasyPlane" checked class="hidden" />
+                    <input type="checkbox" id="chkShowL" checked class="hidden" />
+                    <input type="checkbox" id="chkShowCrystalAxes" class="hidden" />
+                    <input type="checkbox" id="chkShowLabMagnet" checked class="hidden" />
+
+                    <div class="frame-pills-lg" id="displayTogglePills">
+                        <button type="button" class="frame-pill toggle-pill active" data-opt-chk="chkShowEasyPlane">
+                            <strong>Easy-Plane <span data-tex="(0001)">(0001)</span></strong>
+                        </button>
+                        <button type="button" class="frame-pill toggle-pill active" data-opt-chk="chkShowL">
+                            <strong>Néel-Vektor <span data-tex="\hat{l}">l̂</span></strong>
+                        </button>
+                        <button type="button" class="frame-pill toggle-pill" data-opt-chk="chkShowCrystalAxes">
+                            <strong>Kristallachsen <span data-tex="a, m, c">a, m, c</span></strong>
+                        </button>
+                        <button type="button" class="frame-pill toggle-pill active" data-opt-chk="chkShowLabMagnet">
+                            <strong>Elektromagnet</strong>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Calm, Minimal 3-Tile Result Strip (only genuine calculated outputs, no repeated slider inputs) -->
+                <div class="core-results-strip" aria-label="Berechnete Winkel zur Welle">
+                    <div class="core-result-tile">
+                        <div class="core-result-top">
+                            <span class="legend-dot dot-cyan"></span>
+                            <span class="core-result-label">Magnetfeld <span data-tex="\mathbf{B}">B</span> zur Welle <span data-tex="\hat{k}">k̂</span></span>
+                            <strong class="core-result-val" id="valBSampleAngles">0.0°</strong>
+                        </div>
+                        <div class="core-result-sub" id="valBEasy">In Easy-Plane aktiv: 0.50 T (100%)</div>
+                        <div class="opt-compare hidden" id="cmpBSample"></div>
+                    </div>
+
+                    <div class="core-result-tile">
+                        <div class="core-result-top">
+                            <span class="legend-dot dot-rose"></span>
+                            <span class="core-result-label">Magnetisierung <span data-tex="\hat{m}">m̂</span> zur Welle <span data-tex="\hat{k}">k̂</span></span>
+                            <strong class="core-result-val" id="valAngleMK">0.0°</strong>
+                        </div>
+                        <div class="core-result-sub" id="valMDotK">CPW-Anregung: 100%</div>
+                        <div class="opt-compare hidden" id="cmpAngleMK"></div>
+                    </div>
+
+                    <div class="core-result-tile">
+                        <div class="core-result-top">
+                            <span class="legend-dot dot-emerald"></span>
+                            <span class="core-result-label">Néel-Vektor <span data-tex="\hat{l}">l̂</span> zur Welle <span data-tex="\hat{k}">k̂</span></span>
+                            <strong class="core-result-val" id="valAngleLK">90.0°</strong>
+                        </div>
+                        <div class="core-result-sub" id="valLDotK">90° zu m̂ in der Easy-Plane</div>
+                        <div class="opt-compare hidden" id="cmpAngleLK"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Side-by-Side Comparison Summary Table (Only shown when Compare A vs. B is active) -->
+            <section id="compareSummarySection" class="data-section hidden">
+                <div class="section-header-compact">
+                    <h2>Direktvergleich: Setup A vs. Setup B</h2>
+                </div>
+                <div class="table-scroll">
+                    <table class="data-table compare-table">
+                        <thead>
+                            <tr>
+                                <th>Größe</th>
+                                <th><span class="badge-a">A</span> Setup A</th>
+                                <th><span class="badge-b">B</span> Setup B</th>
+                                <th>Differenz Δ (B − A)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="compareTableBody"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- ============================================================
+                 EXPERT DRAWER (Collapsed by default to prevent sensory overload!)
+                 ============================================================ -->
+            <details class="expert-drawer" id="expertDrawer">
+                <summary class="expert-drawer-summary">
+                    <span>
+                        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+                        <strong>Experten-Werkzeuge &amp; Rohdaten aufklappen</strong> (Winkel-Übersetzer, 5-System-Vektortabelle &amp; 3×3-Rotationsmatrizen)
+                    </span>
+                    <span class="drawer-hint">Für Auswertung &amp; tieferes Nachrechnen ▾</span>
+                </summary>
+
+                <div class="expert-drawer-grid">
+                    <!-- 1. Bidirectional Angle Perspective Converter -->
+                    <section class="data-section">
+                        <div class="section-header-compact">
+                            <h2>
+                                <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m17 1 4 4-4 4"/><path d="M3 9V7a2 2 0 0 1 2-2h16"/><path d="m7 23-4-4 4-4"/><path d="M21 15v2a2 2 0 0 1-2 2H3"/></svg>
+                                Bidirektionaler Winkel-Übersetzer
+                            </h2>
+                            <label class="chk-pill" title="Wenn aktiv, bleibt der manuelle Einbauwinkel ψ_S fest und es wird nur der beste Magnetwinkel φ_M gesucht">
+                                <input type="checkbox" id="chkLockPsiInTranslator" checked />
+                                <span>ψ<sub>S</sub> fest lassen (nur φ<sub>M</sub> drehen)</span>
+                            </label>
+                        </div>
+                        <p class="translator-hint">Gib einen Wunschwinkel in einem beliebigen System ein – der Rechner stellt den Magneten (bzw. ψ<sub>S</sub> + φ<sub>M</sub>) passend ein:</p>
+
+                        <div class="angle-translator-grid">
+                            <div class="trans-box">
+                                <div class="trans-title">1. Wellen-Sicht (ℱ<sub>Wave</sub>: relativ zu k̂)</div>
+                                <div class="trans-row">
+                                    <label>φ<sub>B,k̂</sub> (In-Plane zu k̂):</label>
+                                    <div class="num-unit"><input type="number" id="transPhiWave" step="1" value="0" /><span>°</span></div>
+                                </div>
+                                <div class="trans-row">
+                                    <label>β<sub>OOP</sub> (aus Probenebene):</label>
+                                    <div class="num-unit"><input type="number" id="transElevSub" step="1" value="0" /><span>°</span></div>
+                                </div>
+                            </div>
+
+                            <div class="trans-box">
+                                <div class="trans-title">2. Proben-Sicht (ℱ<sub>Sub</sub>: relativ zu x̂<sub>s</sub>, n̂)</div>
+                                <div class="trans-row">
+                                    <label>φ<sub>B,Sub</sub> (In-Plane zu x̂<sub>s</sub>):</label>
+                                    <div class="num-unit"><input type="number" id="transPhiSub" step="1" value="0" /><span>°</span></div>
+                                </div>
+                                <div class="trans-row">
+                                    <label>θ<sub>B,n̂</sub> = ∠(B, n̂):</label>
+                                    <div class="num-unit"><input type="number" id="transThetaBN" step="1" value="90" /><span>°</span></div>
+                                </div>
+                            </div>
+
+                            <div class="trans-box trans-box-wide">
+                                <div class="trans-title">3. Kristall &amp; (0001) Easy-Plane-Sicht (ℱ<sub>Cryst</sub>: relativ zu [112̄0], [0001])</div>
+                                <div class="trans-row-3col">
+                                    <div>
+                                        <label>φ<sub>easy</sub>(m̂):</label>
+                                        <div class="num-unit"><input type="number" id="transPhiEasyM" step="1" value="0" /><span>°</span></div>
+                                    </div>
+                                    <div>
+                                        <label>φ<sub>easy</sub>(l̂):</label>
+                                        <div class="num-unit"><input type="number" id="transPhiEasyL" step="1" value="270" /><span>°</span></div>
+                                    </div>
+                                    <div>
+                                        <label>θ<sub>B,c</sub> = ∠(B, c):</label>
+                                        <div class="num-unit"><input type="number" id="transThetaBC" step="1" value="90" /><span>°</span></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- 2. Vectors in all 5 Coordinate Systems -->
+                    <section class="data-section">
+                        <div class="section-header-compact">
+                            <h2>Einheitsvektoren im gewählten Bezugssystem</h2>
+                            <select id="selectVectorTableFrame" class="select-xs">
+                                <option value="Wave">in ℱ_Wave (k̂, t̂, n̂)</option>
+                                <option value="Sub">in ℱ_Sub (x̂_s, ŷ_s, ẑ_s)</option>
+                                <option value="Cryst">in ℱ_Cryst (ê_a, ê_m, ê_c)</option>
+                                <option value="Lab">in ℱ_Lab (X̂_L, Ŷ_L, Ẑ_L)</option>
+                                <option value="Mount">in ℱ_Mount (x̂_m, ŷ_m, ẑ_m)</option>
+                            </select>
+                        </div>
+
+                        <div class="table-scroll">
+                            <table class="data-table vector-table">
+                                <thead>
+                                    <tr id="vectorTableHeaderRow">
+                                        <th>Vektor</th>
+                                        <th>k̂</th>
+                                        <th>t̂</th>
+                                        <th>n̂</th>
+                                        <th>Kristall [uvtw]</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="vectorTableBody"></tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <!-- 3. Interactive 3x3 Rotation Matrix Inspector -->
+                    <section class="data-section">
+                        <div class="section-header-compact">
+                            <h2>3×3-Rotationsmatrix R<sub>Ziel ← Start</sub></h2>
+                            <button type="button" id="btnCopyMatrixLatex" class="btn btn-xs btn-ghost">LaTeX kopieren</button>
+                        </div>
+
+                        <div class="matrix-selector-row">
+                            <label>Start:
+                                <select id="selectMatFrom" class="select-xs">
+                                    <option value="Lab">ℱ_Lab</option>
+                                    <option value="Mount">ℱ_Mount</option>
+                                    <option value="Sub" selected>ℱ_Sub</option>
+                                    <option value="Wave">ℱ_Wave</option>
+                                    <option value="Cryst">ℱ_Cryst</option>
+                                </select>
+                            </label>
+                            <span class="arrow-sep">→</span>
+                            <label>Ziel:
+                                <select id="selectMatTo" class="select-xs">
+                                    <option value="Lab">ℱ_Lab</option>
+                                    <option value="Mount">ℱ_Mount</option>
+                                    <option value="Sub">ℱ_Sub</option>
+                                    <option value="Wave">ℱ_Wave</option>
+                                    <option value="Cryst" selected>ℱ_Cryst</option>
+                                </select>
+                            </label>
+                        </div>
+
+                        <div id="matrixDisplayGrid" class="matrix-grid"></div>
+
+                        <div class="custom-vec-transformer">
+                            <div class="custom-vec-title">Eigenen Vektor v<sub>Start</sub> transformieren:</div>
+                            <div class="custom-vec-inputs">
+                                <input type="number" id="customVecX" value="1" step="0.1" />
+                                <input type="number" id="customVecY" value="0" step="0.1" />
+                                <input type="number" id="customVecZ" value="0" step="0.1" />
+                                <span class="arrow-sep">⇒</span>
+                                <code id="customVecResult">(0.000, 1.000, 0.000)</code>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </details>
+        </section>
+    </main>
+
+    <!-- ====================================================================
+         MODAL 1: Thesis SVG Schematic Generator & Live Preview
+         ==================================================================== -->
+    <div id="modalSvgExport" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+        <div class="modal-card modal-xl">
+            <div class="modal-header">
+                <div>
+                    <h2>
+                        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+                        Abschlussarbeit-SVG-Generator (Inkscape / LaTeX)
+                    </h2>
+                    <p>Erzeugt eine sauber nach Ebenen gruppierte Vektorgrafik (<code>.svg</code>) für Bachelor-, Master- und Doktorarbeiten.</p>
+                </div>
+                <button type="button" id="btnCloseSvgModal" class="btn-close">
+                    <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <div class="modal-body svg-modal-grid">
+                <div class="svg-options-col">
+                    <label class="field-label">Layout / Projektions-Modus:</label>
+                    <select id="svgOptLayout" class="select-input">
+                        <option value="combined">Kombi-Grafik (3D + 2D Sample + 2D Easy-Plane)</option>
+                        <option value="3d">Nur 3D-Schemazeichnung (aktuelles Bezugssystem)</option>
+                        <option value="2d_sample">Nur 2D-Sample-Ebene (Sample-Draufsicht mit IDT/CPW)</option>
+                        <option value="2d_easy">Nur 2D-Basalebene (0001) Easy-Plane</option>
+                    </select>
+
+                    <label class="field-label">3D-Bezugssystem (Frame Lock):</label>
+                    <select id="svgOptFrame" class="select-input">
+                        <option value="Sub">Sample fixiert</option>
+                        <option value="Wave">Wellenvektor k̂ fixiert</option>
+                        <option value="Cryst">Kristall / Easy-Plane fixiert</option>
+                        <option value="Lab">Labor-Magnet fixiert</option>
+                    </select>
+
+                    <label class="field-label">Sichtbare Ebenen im SVG:</label>
+                    <div class="svg-chk-list">
+                        <label><input type="checkbox" id="svgOptEasyPlane" checked /> (0001) Easy-Plane &amp; Schnittlinie</label>
+                        <label><input type="checkbox" id="svgOptMicro" checked /> IDT / CPW Mikrostruktur</label>
+                        <label><input type="checkbox" id="svgOptCrystalAxes" checked /> Kristallachsen (ê<sub>a</sub>, ê<sub>m</sub>, ê<sub>c</sub>)</label>
+                        <label><input type="checkbox" id="svgOptEquilibrium" checked /> Gleichgewicht (m̂ &amp; Néel-Vektor l̂)</label>
+                        <label><input type="checkbox" id="svgOptArcs" checked /> Winkelbögen</label>
+                        <label><input type="checkbox" id="svgOptLegend" checked /> Parameter-Legende unten</label>
+                        <label><input type="checkbox" id="svgOptLatex" /> LaTeX-Labels (<code>$\mathbf{B}$</code>, <code>$\hat{k}$</code> für Inkscape pdf_tex)</label>
+                        <label><input type="checkbox" id="svgOptTransparent" /> Transparenter Hintergrund</label>
+                    </div>
+
+                    <div class="modal-actions-stack">
+                        <button type="button" id="btnDownloadSvg" class="btn btn-primary btn-block">
+                            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            Als .svg Datei herunterladen
+                        </button>
+                        <button type="button" id="btnCopySvgCode" class="btn btn-secondary btn-block">
+                            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                            SVG-Quellcode kopieren
+                        </button>
+                    </div>
+                </div>
+                <div class="svg-preview-col">
+                    <div id="svgPreviewContainer" class="svg-preview-box"></div>
+                </div>
             </div>
         </div>
     </div>
-</div>
 
-<script type="module" src="script.js"></script>
+    <!-- ====================================================================
+         MODAL 2: Python Companion Snippet (hematite_coords.py)
+         ==================================================================== -->
+    <div id="modalPythonSnippet" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+        <div class="modal-card modal-lg">
+            <div class="modal-header">
+                <div>
+                    <h2>
+                        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                        Python-Begleitmodul (<code>hematite_coords.py</code>)
+                    </h2>
+                    <p>Exakt dieselben 3×3-Rotationsmatrizen, 5 Bezugssysteme und Magnet-Sweeps für deine Python-Auswerteskripte.</p>
+                </div>
+                <button type="button" id="btnClosePythonModal" class="btn-close">
+                    <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <pre id="pythonSnippetCode" class="code-block"></pre>
+                <div class="modal-footer-bar">
+                    <button type="button" id="btnCopyPythonSnippet" class="btn btn-primary">
+                        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        Python-Snippet kopieren
+                    </button>
+                    <a href="hematite_coords.py" download="hematite_coords.py" class="btn btn-secondary">
+                        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        hematite_coords.py herunterladen
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
 
+    <script type="module" src="js/app.js"></script>
 </body>
 </html>
