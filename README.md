@@ -6,19 +6,22 @@ Link zur Anwendung: [Hematite Crystal Calculator](https://toseflo.github.io/crys
 
 ## Überblick
 
+Das Setup steht links in vier Tabs (Probe · Struktur · Einbau · Ziel), jeder mit einer kurzen Zusammenfassung im Reiter. Das Magnetfeld $\phi_M$ (mit $B_0$) ist unten links immer sichtbar.
+
 - **Sample & Kristallschnitt**: Vorauswahl für `c-cut (0001)`, `a-cut (11-20)`, `m-cut (10-10)`, `r-cut (1-102)` oder beliebige Ebenen `(hkil)` inkl. frei wählbarer 0°-Bezugskante des Samples.
 - **Struktur & Welle**: Drehwinkel von CPW oder IDT auf dem Sample und direkte Anzeige der zugehörigen Miller-Bravais-Richtung von $\hat{k}$.
-- **Einbau & Messung im Magneten**: Horizontale (In-Plane) oder vertikale (Out-of-Plane) Halterung mit Einbauwinkel $\psi_S$ und drehbarem Magnetfeld $\phi_M$, inklusive Ziel-Finder für bestimmte Feld-, Easy-Plane- oder Kristallrichtungen.
+- **Einbau im Magneten**: Horizontale (In-Plane) oder vertikale (Out-of-Plane) Halterung mit Einbauwinkel $\psi_S$.
+- **Ziel**: Feld-, Easy-Plane- und Kristallrichtungen als Kacheln, jede mit dem passenden $\phi_M$ für den aktuellen Einbau; ein Klick dreht das Feld dorthin (≈ = nur näherungsweise, – = nicht erreichbar). Ist das Ziel mit diesem Einbau nicht exakt erreichbar, schlägt eine Zeile den nötigen Umbau vor und übernimmt ihn per „Anwenden“.
 - **3D-Ansicht** (Mitte, bleibt beim Scrollen stehen): frei drehbar, mit 2D-Draufsicht und optionaler zweiter Ansicht. „Was steht im Bild still?“ wählt das feste Bezugssystem (Probe, Magnet, Welle $\hat{k}$, Kristall); der Wechsel ist animiert, damit man sieht, wie die Systeme gegeneinander verdreht sind. Die Legende im Bild ist zugleich der Ein/Aus-Schalter der Ebenen.
 - **Aufbau erklären**: geführte Tour Kristall → Probe → Struktur → Einbau → Feld drehen, gebaut aus dem aktuellen Setup.
-- **Hervorhebung**: Fährt man mit der Maus über einen Begriff, eine Tabellenzeile oder einen Setup-Schritt, wird das zugehörige Objekt im 3D-Bild hervorgehoben (alles andere wird blass).
+- **Hervorhebung**: Fährt man mit der Maus über einen Begriff, eine Tabellenzeile oder einen Setup-Tab, wird das zugehörige Objekt im 3D-Bild hervorgehoben (alles andere wird blass).
 - **Übersicht** (rechts):
   - Ergebnis-Kacheln für $\angle(\mathbf{B},\hat{k})$, $\angle(\hat{m},\hat{k})$, $\angle(\hat{l},\hat{k})$ plus Spinwellen-Geometrie: Backward-Volume ($\hat{m}\parallel\hat{k}$), Damon-Eshbach ($\hat{m}\perp\hat{k}$, beide in der Probe), Forward-Volume ($\hat{m}\perp$ Probe), je ±10°. Beim CPW zeigt der Tooltip das Drehmoment beider Feldkomponenten auf $\hat{m}$: $h_x\parallel\hat{k}$ → $|\hat{k}\times\hat{m}|$, $h_z\perp$ Probe → $|\hat{n}\times\hat{m}|$.
   - „Kurz gesagt“: vier Zeilen zu Probe, Welle, Feld und Spins; die ausführliche Erklärung lässt sich aufklappen.
   - „Wo zeigt was hin?“: $\mathbf{B}$, $\hat{m}$, $\hat{l}$, $\hat{k}$ (auf Wunsch alle Achsen und Kanten) als Winkel $(\theta,\phi)$ oder $(x,y,z)$ im gewählten System plus $[uvtw]$.
-  - „Eigene Richtung“ (aufklappbar): beliebige Richtung $[uvtw]$, Ebenennormale $(hkil)$, Kreuzprodukt zweier Richtungen/Ebenen oder Winkel $(\theta,\phi)$ eingeben → wird eingezeichnet, eingeordnet, und per Klick dreht der Ziel-Finder das Feld dorthin. Mit „+ Merken“ landen mehrere Richtungen in einer Liste – jede als eigener farbiger Pfeil im 3D-Bild (fest im Kristall, folgt also jeder Änderung am Aufbau), per × wieder entfernbar.
+  - „Eigene Richtung“ (aufklappbar): beliebige Richtung $[uvtw]$, Ebenennormale $(hkil)$, Kreuzprodukt zweier Richtungen/Ebenen oder Winkel $(\theta,\phi)$ eingeben → wird eingezeichnet, eingeordnet, und per Klick dreht sich das Feld dorthin (Ziel-Tab). Mit „+ Merken“ landen mehrere Richtungen in einer Liste – jede als eigener farbiger Pfeil im 3D-Bild (fest im Kristall, folgt also jeder Änderung am Aufbau), per × wieder entfernbar.
 - **Teilen & Exportieren** (Karte rechts unten):
-  - **Link kopieren**: Das komplette Setup (inkl. Vergleich A/B und aktivem Tab), die Ansicht, das Ziel im Ziel-Finder und die gemerkten Richtungen stehen in der URL (z. B. `…&pins=1,0,-1,1;0,0,0,1`) und lassen sich an Kollegen weitergeben.
+  - **Link kopieren**: Das komplette Setup (inkl. Vergleich A/B und aktivem Tab), die Ansicht, das gewählte Ziel und die gemerkten Richtungen stehen in der URL (z. B. `…&pins=1,0,-1,1;0,0,0,1`) und lassen sich an Kollegen weitergeben.
   - **Notiz kopieren**: Setup als kurzer Text fürs Laborbuch (Probe, Halter, Struktur, Feld, Spins, Winkel, gemerkte Richtungen, Link); beim Vergleich A und B untereinander.
   - **Bild (PNG)**: Ansicht 1 so, wie sie gerade gedreht ist, mit Vorschau – Format (wie Ansicht, 16:9, 4:3, quadratisch), helle oder dunkle Farben, transparenter Hintergrund, Auflösung 1×/2×/4×; herunterladen oder direkt in die Zwischenablage (für PowerPoint/Teams).
   - **Grafik (SVG)**: saubere Vektorgrafik mit Vorschau und Optionen für die Abschlussarbeit (optional mit LaTeX-Labels für Inkscape → PDF+LaTeX). Auf Wunsch mit Feld-Sweep: gepunktete Spur von $\mathbf{B}$ und $\hat{m}$ für $\phi_M$ von Start bis Stopp, Pfeilspitze = Drehrichtung (eigene Inkscape-Ebene).

@@ -18,7 +18,6 @@ import {
     createDefaultSetup,
     evaluateSetup,
     solveTargetAngles,
-    solveSweepLandmarksForFixedPsi,
     computeMountingPresetPsiS,
     millerBravaisDirectionToCrystal,
     crystalToMillerBravaisDirection,
@@ -154,13 +153,7 @@ const DEFAULT_STARTER_PRESETS = [
     }
 ];
 
-// Which 3D objects a sidebar step / slider is "about" (used for hover emphasis)
-const STEP_EMPHASIS = {
-    stepCard1: ['sample', 'crystal', 'easy', 'nodes'],
-    stepCardDev: ['device', 'k', 't'],
-    stepCard2: ['sample', 'magnet', 'n'],
-    stepCard3: ['B', 'm', 'l', 'magnet']
-};
+// Which 3D objects a slider is "about" (highlighted while dragging)
 const SLIDER_EMPHASIS = {
     ThetaCut: ['sample', 'crystal', 'easy', 'nodes'],
     PhiCut: ['sample', 'crystal', 'easy', 'nodes'],
@@ -287,7 +280,6 @@ document.addEventListener('DOMContentLoaded', () => {
     renderStaticLatex();
     loadPresetsFromStorage();
     renderPresetDropdown();
-    populateTargetSelect();
     bindUIEvents();
     syncControlsFromSetup();
     syncLegend();
@@ -310,15 +302,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (sceneController2) sceneController2.render();
     });
 });
-
-function populateTargetSelect() {
-    const sel = document.getElementById('selectTargetPreset');
-    if (!sel) return;
-    sel.innerHTML = TARGET_PRESETS.map(
-        (t) => `<option value="${t.id}">${t.label}</option>`
-    ).join('');
-    sel.value = appState.targetId;
-}
 
 function syncControlsFromSetup() {
     const s = getActiveSetup();
@@ -416,15 +399,11 @@ function setEmphasis(keys) {
 }
 
 function emphasisKeysFor(target) {
-    const el = target.closest('[data-emph], .story-step-title, .step-card-header');
+    const el = target.closest('[data-emph], .story-step-title');
     if (!el) return null;
     if (el.dataset.emph) return el.dataset.emph.split(',');
-    if (el.classList.contains('story-step-title')) {
-        const group = el.closest('[data-emph-group]');
-        return group ? group.dataset.emphGroup.split(',') : null;
-    }
-    const card = el.closest('.step-card');
-    return card ? STEP_EMPHASIS[card.id] || null : null;
+    const group = el.closest('[data-emph-group]');
+    return group ? group.dataset.emphGroup.split(',') : null;
 }
 
 function bindEmphasisHover() {
@@ -465,23 +444,17 @@ function rerenderScenes() {
 }
 
 function bindUIEvents() {
-    // Stepper Cards Accordion Toggle (Setup Cards 1, Dev, 2 auto-collapse each other for a calm sidebar)
-    const setupCardIds = ['stepCard1', 'stepCardDev', 'stepCard2'];
-    document.querySelectorAll('.step-card-header[data-toggle-step]').forEach((hdr) => {
-        hdr.addEventListener('click', () => {
-            const card = hdr.closest('.step-card');
-            if (!card) return;
-            const willOpen = !card.classList.contains('step-card-active');
-            card.classList.toggle('step-card-active', willOpen);
-            if (willOpen && setupCardIds.includes(card.id)) {
-                setupCardIds.forEach((otherId) => {
-                    if (otherId !== card.id) {
-                        const otherCard = document.getElementById(otherId);
-                        if (otherCard) otherCard.classList.remove('step-card-active');
-                    }
-                });
-            }
-        });
+    // Setup tabs (Probe · Struktur · Einbau · Ziel); the magnet dock below them is always visible
+    document.querySelectorAll('#sideTabs .side-tab').forEach((tab) => {
+        tab.addEventListener('click', () => showSideTab(tab.dataset.sideTab));
+    });
+    document.getElementById('sideTabs').addEventListener('keydown', (e) => {
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+        const tabs = [...document.querySelectorAll('#sideTabs .side-tab')];
+        const i = tabs.findIndex((t) => t.classList.contains('active'));
+        const next = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+        showSideTab(next.dataset.sideTab);
+        next.focus();
     });
 
     // Optional Dual 3D View Toggle & Top-Down (2D) Camera Toggles inside the 3D viewports
@@ -718,15 +691,19 @@ function bindUIEvents() {
         recomputeAndRender();
     });
 
-    // Inverse Solver Controls (Modular Category Tabs + Target Cards)
-    document.querySelectorAll('#solverCatTabs .solver-cat-tab').forEach((tab) => {
-        tab.addEventListener('click', () => selectSolverCategory(tab.dataset.solverCat, true));
+    // Ziel: a chip selects the target and turns the magnet to it
+    document.querySelectorAll('.target-chip[data-target-id]').forEach((chip) => {
+        chip.addEventListener('click', () => driveFieldToTarget(chip.dataset.targetId));
     });
-    document.querySelectorAll('.solver-target-card[data-target-id]').forEach((card) => {
-        card.addEventListener('click', () => setSolverTarget(card.dataset.targetId));
-    });
-    document.getElementById('selectTargetPreset').addEventListener('change', (e) => {
-        setSolverTarget(e.target.value);
+    document.getElementById('targetRemount').addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-apply-mount]');
+        if (!btn) return;
+        const s = getActiveSetup();
+        s.mountMode = btn.dataset.applyMount;
+        s.psiSDeg = Number(parseFloat(btn.dataset.psi).toFixed(2));
+        s.phiMDeg = Number(parseFloat(btn.dataset.phi).toFixed(2));
+        syncControlsFromSetup();
+        recomputeAndRender();
     });
 
     const tU = document.getElementById('targetU');
@@ -821,32 +798,42 @@ function bindUIEvents() {
 }
 
 // ============================================================================
-// Target finder helpers
+// Setup tabs & target ("Ziel") helpers
 // ============================================================================
+
+function showSideTab(name) {
+    document.querySelectorAll('#sideTabs .side-tab').forEach((t) => {
+        const on = t.dataset.sideTab === name;
+        t.classList.toggle('active', on);
+        t.setAttribute('aria-selected', String(on));
+        t.tabIndex = on ? 0 : -1;
+    });
+    document.querySelectorAll('#sidePanels .side-panel').forEach((p) => {
+        p.hidden = p.dataset.sidePanel !== name;
+    });
+    document.getElementById('sidePanels').scrollTop = 0;
+}
 
 function setSolverTarget(targetId) {
     appState.targetId = targetId;
-    const selEl = document.getElementById('selectTargetPreset');
-    if (selEl) selEl.value = targetId;
-    document.querySelectorAll('.solver-target-card[data-target-id]').forEach((card) => {
-        card.classList.toggle('active', card.dataset.targetId === targetId);
+    document.querySelectorAll('.target-chip[data-target-id]').forEach((chip) => {
+        chip.classList.toggle('active', chip.dataset.targetId === targetId);
     });
     document.getElementById('customTargetMBBox').classList.toggle('hidden', targetId !== 'custom_mb');
     recomputeAndRender();
 }
 
-function selectSolverCategory(cat, pickTarget) {
-    document.querySelectorAll('#solverCatTabs .solver-cat-tab').forEach((t) => {
-        t.classList.toggle('active', t.dataset.solverCat === cat);
-    });
-    document.querySelectorAll('.solver-target-grid[data-solver-panel]').forEach((panel) => {
-        const isActivePanel = panel.dataset.solverPanel === cat;
-        panel.classList.toggle('hidden', !isActivePanel);
-        if (isActivePanel && pickTarget) {
-            const activeCard = panel.querySelector('.solver-target-card.active') || panel.querySelector('.solver-target-card');
-            if (activeCard && activeCard.dataset.targetId) setSolverTarget(activeCard.dataset.targetId);
-        }
-    });
+// Best φ_M for a target with the current mount (null if the field cannot get anywhere near it)
+function targetPhiForCurrentMount(targetId) {
+    const fixed = solveTargetAngles(getActiveSetup(), targetId, appState.customTargetUVTW).fixedPsiSweep;
+    return fixed.errorDeg > 89.9 ? null : fixed.bestPhiMDeg;
+}
+
+function driveFieldToTarget(targetId) {
+    const phi = targetPhiForCurrentMount(targetId);
+    if (phi !== null) getActiveSetup().phiMDeg = Number(phi.toFixed(2));
+    syncControlsFromSetup();
+    setSolverTarget(targetId);
 }
 
 // ============================================================================
@@ -1124,16 +1111,11 @@ function driveFieldToCustomDirection() {
     document.getElementById('targetT').value = uvtw[2];
     document.getElementById('targetW').value = uvtw[3];
 
-    selectSolverCategory('crystal', false);
-    setSolverTarget('custom_mb');
-
-    const stepCard3 = document.getElementById('stepCard3');
-    stepCard3.classList.add('step-card-active');
-    const details = stepCard3.querySelector('.solver-details');
-    details.open = true;
-    details.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    details.classList.add('flash');
-    setTimeout(() => details.classList.remove('flash'), 1200);
+    driveFieldToTarget('custom_mb');
+    showSideTab('ziel');
+    const chip = document.querySelector('.target-chip[data-target-id="custom_mb"]');
+    chip.classList.add('flash');
+    setTimeout(() => chip.classList.remove('flash'), 1200);
 }
 
 // ============================================================================
@@ -1260,9 +1242,6 @@ function applyUrlUiState() {
     ['targetU', 'targetV', 'targetT', 'targetW'].forEach((id, i) => {
         document.getElementById(id).value = t[i];
     });
-    const card = document.querySelector(`.solver-target-card[data-target-id="${appState.targetId}"]`);
-    const panel = card && card.closest('[data-solver-panel]');
-    if (panel) selectSolverCategory(panel.dataset.solverPanel, false);
     setSolverTarget(appState.targetId);
     if (appState.pinnedDirs.length) document.getElementById('customDirCard').open = true;
 }
@@ -1343,8 +1322,7 @@ function recomputeAndRender() {
     document.getElementById('badgeSubYs').innerHTML = tex(activeState.millerBravais.ys.latex);
     document.getElementById('badgeSubZs').innerHTML = tex(activeState.millerBravais.zsPlane.latex);
     updateDeviceMillerReadout(activeState);
-    updateMountingAndSmartJumps(activeState);
-    updateInverseSolver(activeState);
+    updateTargetChips(activeState);
 
     // The custom direction depends on the setup (it is drawn in Lab coordinates)
     updateCustomDirection(activeState);
@@ -1371,44 +1349,11 @@ function recomputeAndRender() {
 }
 
 function updateStepSummaries(activeState) {
+    // One short value per tab, so the tab bar doubles as a summary of the setup
     const s = activeState.setup;
-    const mb = activeState.millerBravais;
-    const sum1 = document.getElementById('summaryStep1');
-    const sumDev = document.getElementById('summaryStepDev');
-    const sum2 = document.getElementById('summaryStep2');
-    const sum3 = document.getElementById('summaryStep3');
-    if (sum1) sum1.innerHTML = `${s.cutPreset} · 0°-Kante ${tex(mb.xs.latex)}`;
-    if (sumDev) sumDev.innerHTML = `${s.deviceType} · ${s.thetaDevDeg.toFixed(0)}° (${tex(mb.k.latex)})`;
-    if (sum2) sum2.innerHTML = `${s.mountMode === 'OOP' ? 'Vertikal (OOP)' : 'Horizontal (IP)'} · ${tex(`\\psi_S = ${s.psiSDeg.toFixed(1)}^\\circ`)}`;
-    if (sum3) sum3.innerHTML = `${tex(`\\phi_M = ${s.phiMDeg.toFixed(1)}^\\circ`)} · ${s.b0Tesla} T`;
-}
-
-function updateMountingAndSmartJumps(activeState) {
-    const landmarks = solveSweepLandmarksForFixedPsi(activeState.setup);
-
-    const jumpItems = [
-        { label: `Feld ${tex('\\parallel')} Welle ${tex('\\hat{k}')}`, phi: landmarks.bParallelK.phiMDeg, emph: 'B,k' },
-        { label: `Feld ${tex('\\perp')} Welle ${tex('\\hat{k}')}`, phi: landmarks.bPerpK.phiMDeg, emph: 'B,k' },
-        { label: 'Feld in Easy-Plane', phi: landmarks.bInEasyPlane.phiM1, emph: 'B,easy' },
-        { label: `Moment ${tex('\\hat{m} \\parallel')} Welle ${tex('\\hat{k}')}`, phi: landmarks.mAlignK.phiMDeg, emph: 'm,k' }
-    ];
-
-    const jumpsContainer = document.getElementById('smartMagnetJumps');
-    jumpsContainer.innerHTML = jumpItems
-        .map((j) => `
-        <button type="button" class="smart-jump-btn" data-jump-phi="${j.phi}" data-emph="${j.emph}">
-            <span>${j.label}</span>
-            <code>${j.phi.toFixed(1)}°</code>
-        </button>`)
-        .join('');
-
-    jumpsContainer.querySelectorAll('button[data-jump-phi]').forEach((btn) => {
-        btn.addEventListener('click', () => {
-            getActiveSetup().phiMDeg = Number(parseFloat(btn.dataset.jumpPhi).toFixed(2));
-            syncControlsFromSetup();
-            recomputeAndRender();
-        });
-    });
+    document.getElementById('summaryStep1').textContent = s.cutPreset === 'custom' ? 'eigener Schnitt' : s.cutPreset;
+    document.getElementById('summaryStepDev').textContent = `${s.deviceType} ${fmtDeg(s.thetaDevDeg)}`;
+    document.getElementById('summaryStep2').textContent = `${s.mountMode} ${fmtDeg(s.psiSDeg)}`;
 }
 
 function updateDeviceMillerReadout(activeState) {
@@ -1642,59 +1587,50 @@ function updateVectorTable(activeState) {
 // Target finder results
 // ============================================================================
 
-function updateInverseSolver() {
-    const setup = getActiveSetup();
-    const sol = solveTargetAngles(setup, appState.targetId, appState.customTargetUVTW);
-    const container = document.getElementById('solverResultsContainer');
+const fmtDeg = (deg) => `${Number(deg.toFixed(1))}°`;
+const phiDistDeg = (a, b) => Math.abs((((a - b) % 360) + 540) % 360 - 180);
 
-    const oop1 = sol.oopSolutions[0];
-    const oop2 = sol.oopSolutions[1];
-    const ip1 = sol.ipSolutions[0];
-    const fixed = sol.fixedPsiSweep;
+// Each target chip shows the φ_M that reaches it with the current mount ("≈" = closest approach,
+// "–" = out of reach). Only for the selected, not exactly reachable target a remount is offered.
+function updateTargetChips(activeState) {
+    const setup = activeState.setup;
+    let selected = null;
 
-    container.innerHTML = `
-        <div class="solver-card">
-            <div class="solver-card-info">
-                <strong>1. Vertikal-Halterung (OOP – Exakte 3D-Lösung)</strong>
-                <div>${tex(`\\psi_S = ${oop1.psiSDeg.toFixed(2)}^\\circ`)} &nbsp;|&nbsp; ${tex(`\\phi_M = ${oop1.phiMDeg.toFixed(2)}^\\circ`)}</div>
-                <small>Alternativ (+180°): ${tex(`\\psi_S = ${oop2.psiSDeg.toFixed(1)}^\\circ,\\; \\phi_M = ${oop2.phiMDeg.toFixed(1)}^\\circ`)}</small>
-            </div>
-            <button type="button" class="btn btn-xs btn-primary" data-apply-mount="OOP" data-psi="${oop1.psiSDeg}" data-phi="${oop1.phiMDeg}">
-                Anwenden
-            </button>
-        </div>
-        <div class="solver-card">
-            <div class="solver-card-info">
-                <strong>2. Nur Magnet drehen (aktuelles ${tex(`\\psi_S = ${fixed.psiSDeg.toFixed(1)}^\\circ`)} fixiert)</strong>
-                <div>${tex(`\\phi_M = ${fixed.bestPhiMDeg.toFixed(2)}^\\circ`)} &nbsp;<small>(oder ${fixed.oppositePhiMDeg.toFixed(1)}°)</small></div>
-                <small>Restabweichung: ${fixed.errorDeg.toFixed(1)}° &nbsp;|&nbsp; Easy-Plane bei ${tex(`\\phi_M = ${fixed.easyCrossingPhiM1.toFixed(1)}^\\circ`)}</small>
-            </div>
-            <button type="button" class="btn btn-xs btn-secondary" data-apply-mount="${fixed.mountMode}" data-psi="${fixed.psiSDeg}" data-phi="${fixed.bestPhiMDeg}">
-                Magnet setzen
-            </button>
-        </div>
-        <div class="solver-card">
-            <div class="solver-card-info">
-                <strong>3. Horizontal-Halterung (IP – Beste In-Plane-Näherung)</strong>
-                <div>${tex(`\\psi_S = ${ip1.psiSDeg.toFixed(2)}^\\circ`)} &nbsp;|&nbsp; ${tex(`\\phi_M = ${ip1.phiMDeg.toFixed(2)}^\\circ`)}</div>
-                <small>${ip1.errorDeg < 0.05 ? 'Exakt in der Sample-Ebene erreichbar' : `Ziel liegt schräg zum Sample: min. Abweichung = ${ip1.errorDeg.toFixed(1)}°`}</small>
-            </div>
-            <button type="button" class="btn btn-xs btn-ghost" data-apply-mount="IP" data-psi="${ip1.psiSDeg}" data-phi="${ip1.phiMDeg}">
-                Anwenden
-            </button>
-        </div>
-    `;
+    document.querySelectorAll('.target-chip[data-target-id]').forEach((chip) => {
+        const sol = solveTargetAngles(setup, chip.dataset.targetId, appState.customTargetUVTW);
+        const { errorDeg, bestPhiMDeg } = sol.fixedPsiSweep;
+        const reachable = errorDeg <= 89.9;
+        const exact = errorDeg < 0.05;
+        const on = exact && phiDistDeg(setup.phiMDeg, bestPhiMDeg) < 0.05;
 
-    container.querySelectorAll('button[data-apply-mount]').forEach((btn) => {
-        btn.addEventListener('click', () => {
-            const s = getActiveSetup();
-            s.mountMode = btn.dataset.applyMount;
-            s.psiSDeg = Number(parseFloat(btn.dataset.psi).toFixed(2));
-            s.phiMDeg = Number(parseFloat(btn.dataset.phi).toFixed(2));
-            syncControlsFromSetup();
-            recomputeAndRender();
-        });
+        chip.classList.toggle('approx', reachable && !exact);
+        chip.classList.toggle('unreachable', !reachable);
+        chip.classList.toggle('on', on);
+        chip.querySelector('.target-phi').textContent = reachable ? `${exact ? '' : '≈ '}${fmtDeg(bestPhiMDeg)}` : '–';
+        chip.dataset.baseTitle ??= chip.title;
+        chip.title = exact ? chip.dataset.baseTitle : `${chip.dataset.baseTitle} · mit diesem Einbau ${reachable ? `nur bis ${fmtDeg(errorDeg)} genau` : 'nicht erreichbar'}`;
+
+        if (chip.dataset.targetId === appState.targetId) selected = { chip, sol, on, exact, reachable };
     });
+
+    document.getElementById('summaryStepZiel').innerHTML = selected
+        ? `${tex(selected.chip.dataset.sum)}${selected.on ? ' ✓' : ''}`
+        : '';
+
+    const box = document.getElementById('targetRemount');
+    box.hidden = !selected || selected.exact;
+    if (box.hidden) {
+        box.innerHTML = '';
+        return;
+    }
+    // In-plane targets are reached exactly by the flat (IP) mount, everything else by the vertical (OOP) one
+    const { sol, reachable } = selected;
+    const ip = sol.ipSolutions[0];
+    const alt = setup.mountMode === 'OOP' && ip.errorDeg < 0.05 ? ip : sol.oopSolutions[0];
+    const now = reachable ? `mit diesem Einbau nur bis Δ ${fmtDeg(sol.fixedPsiSweep.errorDeg)}` : 'mit diesem Einbau nicht erreichbar';
+    box.innerHTML = `
+        <span class="target-remount-text"><small>${now}</small><span>exakt mit Umbau: <strong>${alt.mountMode}</strong>, ${tex(`\\psi_S = ${Number(alt.psiSDeg.toFixed(1))}^\\circ`)}</span></span>
+        <button type="button" class="btn btn-xs btn-secondary" data-apply-mount="${alt.mountMode}" data-psi="${alt.psiSDeg}" data-phi="${alt.phiMDeg}">Anwenden</button>`;
 }
 
 // ============================================================================

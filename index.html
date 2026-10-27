@@ -67,20 +67,31 @@
             </div>
 
             <!-- ============================================================
-                 STEP 1: SAMPLE & KRISTALLSCHNITT (inkl. permanente 0°-Bezugskante)
+                 SETUP TABS: Probe · Struktur · Einbau · Ziel
+                 (the tab bar stays put, only the panel below changes)
                  ============================================================ -->
-            <div class="step-card step-card-active" id="stepCard1">
-                <button type="button" class="step-card-header" data-toggle-step="1">
-                    <span class="step-num">1</span>
-                    <div class="step-header-text">
-                        <h2>Sample &amp; Kristallschnitt</h2>
-                        <span class="step-summary" id="summaryStep1">c-cut · 0°-Kante [1120]</span>
-                    </div>
-                    <span class="step-chevron">▾</span>
+            <div class="side-tabs-card" id="sideTabsCard">
+                <nav class="side-tabs" role="tablist" id="sideTabs">
+                <button type="button" class="side-tab active" role="tab" id="sideTabProbe" data-side-tab="probe" aria-selected="true" data-emph="sample,crystal,easy,nodes">
+                    <span class="side-tab-title"><span class="side-tab-num">1</span>Probe</span>
+                    <span class="side-tab-sum" id="summaryStep1">c-cut</span>
                 </button>
-
-                <div class="step-card-body">
-                    <label class="field-label" style="margin-top: 0;">1. Kristallschnitt (Cut) des Samples:</label>
+                <button type="button" class="side-tab" role="tab" id="sideTabStruktur" data-side-tab="struktur" aria-selected="false" data-emph="device,k,t">
+                    <span class="side-tab-title"><span class="side-tab-num">2</span>Struktur</span>
+                    <span class="side-tab-sum" id="summaryStepDev">CPW 0°</span>
+                </button>
+                <button type="button" class="side-tab" role="tab" id="sideTabEinbau" data-side-tab="einbau" aria-selected="false" data-emph="sample,magnet,n">
+                    <span class="side-tab-title"><span class="side-tab-num">3</span>Einbau</span>
+                    <span class="side-tab-sum" id="summaryStep2">IP 0°</span>
+                </button>
+                <button type="button" class="side-tab" role="tab" id="sideTabZiel" data-side-tab="ziel" aria-selected="false" data-emph="B,k">
+                    <span class="side-tab-title"><span class="side-tab-num side-tab-num-target">◎</span>Ziel</span>
+                    <span class="side-tab-sum" id="summaryStepZiel"></span>
+                </button>
+                </nav>
+                <div class="side-panels" id="sidePanels">
+                <section class="side-panel" id="panelProbe" data-side-panel="probe" role="tabpanel" aria-labelledby="sideTabProbe">
+                    <label class="field-label">Kristallschnitt (Cut):</label>
                     <div class="cut-preset-grid" id="cutPresetGrid">
                         <button type="button" class="cut-btn active" data-cut="c-cut">
                             <strong>c-cut <span data-tex="(0001)">(0001)</span></strong>
@@ -132,7 +143,7 @@
                     </div>
 
                     <!-- 2. 0°-Bezugskante des Samples (Permanent angezeigt in Abschnitt 1!) -->
-                    <label class="field-label">2. 0°-Bezugskante des Samples (<strong id="summaryEdge0">[1120]</strong>):</label>
+                    <label class="field-label">0°-Bezugskante (<strong id="summaryEdge0">[1120]</strong>):</label>
                     <div class="edge-preset-grid" id="edgePresetGrid">
                         <button type="button" class="edge-preset-card active" id="btnEdgePreset0" data-alpha="0">
                             <strong id="lblEdgePreset0Title">0° ∥ a-Achse [112̄0]</strong>
@@ -172,24 +183,9 @@
                     <span id="badgeWaveK" class="hidden"></span>
                     <span id="badgeWaveT" class="hidden"></span>
                     <span id="badgeAngleKC" class="hidden"></span>
-                </div>
-            </div>
-
-            <!-- ============================================================
-                 STEP 2: STRUKTUR & WELLE k_hat (Eigene Karte in der Seitenleiste!)
-                 ============================================================ -->
-            <div class="step-card" id="stepCardDev">
-                <button type="button" class="step-card-header" data-toggle-step="dev">
-                    <span class="step-num">2</span>
-                    <div class="step-header-text">
-                        <h2>Struktur &amp; Welle <span data-tex="\hat{k}">k̂</span></h2>
-                        <span class="step-summary" id="summaryStepDev">CPW · 0° ([1120])</span>
-                    </div>
-                    <span class="step-chevron">▾</span>
-                </button>
-
-                <div class="step-card-body">
-                    <label class="field-label" style="margin-top: 0;">1. Struktur auf dem Sample:</label>
+                </section>
+                <section class="side-panel" id="panelStruktur" data-side-panel="struktur" role="tabpanel" aria-labelledby="sideTabStruktur" hidden>
+                    <label class="field-label">Struktur auf dem Sample:</label>
                     <div class="segmented-control">
                         <button type="button" id="btnDevCPW" class="seg-btn active" data-dev="CPW">
                             <strong>CPW (Spinwelle)</strong>
@@ -201,7 +197,7 @@
 
                     <div class="slider-block" style="margin-bottom: 4px;">
                         <div class="slider-header">
-                            <label for="sliderThetaDev">2. Drehwinkel der Welle <span data-tex="\hat{k}">k̂</span> auf dem Sample</label>
+                            <label for="sliderThetaDev">Richtung der Welle <span data-tex="\hat{k}">k̂</span> auf dem Sample</label>
                             <div class="num-unit"><input type="number" id="numThetaDev" min="-180" max="180" step="0.5" value="0" /><span>°</span></div>
                         </div>
                         <input type="range" id="sliderThetaDev" min="-180" max="180" step="0.5" value="0" />
@@ -220,24 +216,9 @@
                             <span>Leiter/Finger: <strong id="liveDevMillerT">[1100]</strong></span>
                         </div>
                     </div>
-                </div>
-            </div>
-
-            <!-- ============================================================
-                 STEP 3: EINBAU IN DEN MAGNETEN
-                 ============================================================ -->
-            <div class="step-card" id="stepCard2">
-                <button type="button" class="step-card-header" data-toggle-step="2">
-                    <span class="step-num">3</span>
-                    <div class="step-header-text">
-                        <h2>Sample-Einbau im Magneten</h2>
-                        <span class="step-summary" id="summaryStep2">Horizontal (IP) · ψ_S = 0.0°</span>
-                    </div>
-                    <span class="step-chevron">▾</span>
-                </button>
-
-                <div class="step-card-body">
-                    <label class="field-label" style="margin-top: 0;">1. Sample-Halterung:</label>
+                </section>
+                <section class="side-panel" id="panelEinbau" data-side-panel="einbau" role="tabpanel" aria-labelledby="sideTabEinbau" hidden>
+                    <label class="field-label">Halterung im Magneten:</label>
                     <div class="segmented-control">
                         <button type="button" id="btnMountIP" class="seg-btn active" data-mount="IP">
                             <strong>Horizontal (In-Plane)</strong>
@@ -251,7 +232,7 @@
 
                     <div class="slider-block compact-top" style="margin-bottom: 4px;">
                         <div class="slider-header">
-                            <label for="sliderPsiS">2. Einbau-Drehwinkel <span data-tex="\psi_S">ψ_S</span> auf dem Halter</label>
+                            <label for="sliderPsiS">Einbau-Drehwinkel <span data-tex="\psi_S">ψ_S</span> auf dem Halter</label>
                             <div class="num-unit"><input type="number" id="numPsiS" min="0" max="360" step="0.5" value="0" /><span>°</span></div>
                         </div>
                         <input type="range" id="sliderPsiS" min="0" max="360" step="0.5" value="0" />
@@ -264,151 +245,87 @@
                             <button type="button" data-val="270">270°</button>
                         </div>
                     </div>
+                </section>
+                <!-- ◎ Ziel: every chip shows the φ_M that realizes it with the current mount -->
+                <section class="side-panel" id="panelZiel" data-side-panel="ziel" role="tabpanel" aria-labelledby="sideTabZiel" hidden>
+                    <p class="panel-hint">Klick dreht den Magneten dorthin.</p>
+
+                    <div class="target-group-label">Welle &amp; Probe</div>
+                    <div class="target-grid">
+                        <button type="button" class="target-chip" data-target-id="B_parallel_k" data-emph="B,k" data-sum="\mathbf{B}\parallel +\hat{k}" title="Feld längs zur Welle">
+                            <span class="target-name" data-tex="\mathbf{B} \parallel +\hat{k}">B ∥ +k̂</span><span class="target-phi"></span>
+                        </button>
+                        <button type="button" class="target-chip" data-target-id="B_antiparallel_k" data-emph="B,k" data-sum="\mathbf{B}\parallel -\hat{k}" title="Feld entgegen der Welle">
+                            <span class="target-name" data-tex="\mathbf{B} \parallel -\hat{k}">B ∥ −k̂</span><span class="target-phi"></span>
+                        </button>
+                        <button type="button" class="target-chip" data-target-id="B_parallel_t" data-emph="B,t" data-sum="\mathbf{B}\parallel \hat{t}" title="Feld quer zur Welle, in der Probe (längs Leiter / Finger)">
+                            <span class="target-name" data-tex="\mathbf{B} \parallel \hat{t}">B ∥ t̂</span><span class="target-phi"></span>
+                        </button>
+                        <button type="button" class="target-chip" data-target-id="B_parallel_n" data-emph="B,n" data-sum="\mathbf{B}\parallel \hat{n}" title="Feld senkrecht zur Probe">
+                            <span class="target-name" data-tex="\mathbf{B} \parallel \hat{n}">B ∥ n̂</span><span class="target-phi"></span>
+                        </button>
+                    </div>
+
+                    <div class="target-group-label">Easy-Plane &amp; Spins</div>
+                    <div class="target-grid">
+                        <button type="button" class="target-chip" data-target-id="m_align_k" data-emph="m,k" data-sum="\hat{m}\parallel \hat{k}" title="FM-Moment in der Easy-Plane längs zur Welle">
+                            <span class="target-name" data-tex="\hat{m} \parallel \hat{k}">m̂ ∥ k̂</span><span class="target-phi"></span>
+                        </button>
+                        <button type="button" class="target-chip" data-target-id="l_align_k" data-emph="l,k" data-sum="\hat{l}\parallel \hat{k}" title="Néel-Vektor in der Easy-Plane längs zur Welle">
+                            <span class="target-name" data-tex="\hat{l} \parallel \hat{k}">l̂ ∥ k̂</span><span class="target-phi"></span>
+                        </button>
+                        <button type="button" class="target-chip target-chip-wide" data-target-id="B_easy_and_sample" data-emph="B,easy,nodes" data-sum="\mathbf{B}\in \text{Easy}\cap\text{Probe}" title="Feld flach in der Probe und in der Easy-Plane (Schnittlinie)">
+                            <span class="target-name">Flach in Probe &amp; Easy-Plane</span><span class="target-phi"></span>
+                        </button>
+                    </div>
+
+                    <div class="target-group-label">Feld <span data-tex="\parallel">∥</span> Kristallachse</div>
+                    <div class="target-grid">
+                        <button type="button" class="target-chip" data-target-id="B_parallel_ea" data-emph="B,crystal" data-sum="\mathbf{B}\parallel [11\bar{2}0]" title="a-Achse (in der Easy-Plane)">
+                            <span class="target-name"><span data-tex="[11\bar{2}0]">[11-20]</span> <small>a</small></span><span class="target-phi"></span>
+                        </button>
+                        <button type="button" class="target-chip" data-target-id="B_parallel_em" data-emph="B,crystal" data-sum="\mathbf{B}\parallel [1\bar{1}00]" title="m-Achse (in der Easy-Plane)">
+                            <span class="target-name"><span data-tex="[1\bar{1}00]">[1-100]</span> <small>m</small></span><span class="target-phi"></span>
+                        </button>
+                        <button type="button" class="target-chip" data-target-id="B_parallel_ec" data-emph="B,crystal" data-sum="\mathbf{B}\parallel [0001]" title="c-Achse (senkrecht zur Easy-Plane)">
+                            <span class="target-name"><span data-tex="[0001]">[0001]</span> <small>c</small></span><span class="target-phi"></span>
+                        </button>
+                        <button type="button" class="target-chip" data-target-id="custom_mb" data-emph="B,crystal" data-sum="\mathbf{B}\parallel [uvtw]" title="Freie Kristallrichtung">
+                            <span class="target-name"><span data-tex="[uvtw]">[uvtw]</span> <small>eigene</small></span><span class="target-phi"></span>
+                        </button>
+                    </div>
+
+                    <div id="customTargetMBBox" class="hkil-apply-row hidden">
+                        <span data-tex="[u\,v\,t\,w]:">[uvtw]:</span>
+                        <input type="number" id="targetU" value="1" step="1" />
+                        <input type="number" id="targetV" value="1" step="1" />
+                        <input type="number" id="targetT" value="-2" disabled />
+                        <input type="number" id="targetW" value="0" step="1" />
+                    </div>
+
+                    <!-- Only shown when the selected target is not exactly reachable with the current mount -->
+                    <div id="targetRemount" class="target-remount" hidden></div>
+                </section>
                 </div>
             </div>
 
-            <!-- ============================================================
-                 STEP 4: LIVE-MESSUNG (Magnetwinkel phi_M drehen)
-                 ============================================================ -->
-            <div class="step-card step-card-active step-card-live" id="stepCard3">
-                <button type="button" class="step-card-header" data-toggle-step="3">
-                    <span class="step-num step-num-live">4</span>
-                    <div class="step-header-text">
-                        <h2>Magnetfeld drehen (Messung)</h2>
-                        <span class="step-summary" id="summaryStep3">0.0° · 0.5 T</span>
-                    </div>
-                    <span class="step-chevron">▾</span>
-                </button>
-
-                <div class="step-card-body">
-                    <div class="live-phi-highlight">
-                        <div class="slider-header">
-                            <label for="sliderPhiM"><strong>Magnetwinkel <span data-tex="\phi_M">φ_M</span></strong></label>
-                            <div class="num-unit num-unit-lg"><input type="number" id="numPhiM" min="0" max="360" step="0.5" value="0" /><span>°</span></div>
-                        </div>
-                        <input type="range" id="sliderPhiM" min="0" max="360" step="0.5" value="0" class="range-lg" />
-                        <div class="quick-chips" data-target="PhiM">
-                            <button type="button" data-val="0">0°</button>
-                            <button type="button" data-val="45">45°</button>
-                            <button type="button" data-val="90">90°</button>
-                            <button type="button" data-val="180">180°</button>
-                            <button type="button" data-val="270">270°</button>
-                        </div>
-                    </div>
-
-                    <div class="smart-jumps-label">Wichtige Stellungen per Klick anfahren:</div>
-                    <div class="smart-jumps-grid" id="smartMagnetJumps"></div>
-
-                    <div class="control-row-compact">
-                        <label for="numB0">Magnetfeld-Stärke <span data-tex="B_0">B₀</span>:</label>
-                        <div class="num-unit"><input type="number" id="numB0" min="0.001" max="20" step="0.05" value="0.50" /><span>T</span></div>
-                    </div>
-
-                    <!-- Collapsible Modular Inverse Target Solver inside Step 3 -->
-                    <details class="sub-details solver-details">
-                        <summary>
-                            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
-                            Ziel-Finder: Winkel für Wunschrichtung berechnen
-                        </summary>
-                        <div class="sub-details-body solver-modular-body">
-                            <!-- Hidden select kept for compatibility -->
-                            <select id="selectTargetPreset" class="hidden"></select>
-
-                            <!-- Step A: Category Picker -->
-                            <div class="solver-step-block">
-                                <span class="solver-step-label">1. Worauf bezieht sich dein Ziel?</span>
-                                <div class="solver-cat-tabs" id="solverCatTabs">
-                                    <button type="button" class="solver-cat-tab active" data-solver-cat="sample">
-                                        Auf dem Sample
-                                    </button>
-                                    <button type="button" class="solver-cat-tab" data-solver-cat="easy">
-                                        Easy-Plane &amp; Spins
-                                    </button>
-                                    <button type="button" class="solver-cat-tab" data-solver-cat="crystal">
-                                        Kristallachsen
-                                    </button>
-                                </div>
-                            </div>
-
-                            <!-- Step B: Target Cards for each Category -->
-                            <div class="solver-step-block">
-                                <span class="solver-step-label">2. Gewünschte Ausrichtung wählen:</span>
-
-                                <!-- Category 1: Auf dem Sample -->
-                                <div class="solver-target-grid" data-solver-panel="sample">
-                                    <button type="button" class="solver-target-card active" data-target-id="B_parallel_k">
-                                        <strong>Feld <span data-tex="\parallel +\hat{k}">∥ +k̂</span></strong>
-                                        <small>Längs zur Welle (BVW)</small>
-                                    </button>
-                                    <button type="button" class="solver-target-card" data-target-id="B_parallel_t">
-                                        <strong>Feld <span data-tex="\perp \hat{k}">⊥ k̂</span> (im Sample)</strong>
-                                        <small>Quer zur Welle / längs Leiter (DE)</small>
-                                    </button>
-                                    <button type="button" class="solver-target-card" data-target-id="B_parallel_n">
-                                        <strong>Feld <span data-tex="\perp">⊥</span> Sample</strong>
-                                        <small>Senkrecht (Out-of-Plane)</small>
-                                    </button>
-                                    <button type="button" class="solver-target-card" data-target-id="B_antiparallel_k">
-                                        <strong>Feld <span data-tex="\parallel -\hat{k}">∥ −k̂</span></strong>
-                                        <small>Entgegen der Welle</small>
-                                    </button>
-                                </div>
-
-                                <!-- Category 2: Easy-Plane & Spins -->
-                                <div class="solver-target-grid hidden" data-solver-panel="easy">
-                                    <button type="button" class="solver-target-card" data-target-id="m_align_k">
-                                        <strong>Moment <span data-tex="\hat{m} \parallel \hat{k}">m̂ ∥ k̂</span></strong>
-                                        <small>FM-Moment in Easy-Plane längs zur Welle</small>
-                                    </button>
-                                    <button type="button" class="solver-target-card" data-target-id="l_align_k">
-                                        <strong>Néel-Vektor <span data-tex="\hat{l} \parallel \hat{k}">l̂ ∥ k̂</span></strong>
-                                        <small>Néel-Vektor in Easy-Plane längs zur Welle</small>
-                                    </button>
-                                    <button type="button" class="solver-target-card solver-target-wide" data-target-id="B_easy_and_sample">
-                                        <strong>Flach im Sample &amp; in Easy-Plane</strong>
-                                        <small>Entlang der Schnittlinie beider Ebenen</small>
-                                    </button>
-                                </div>
-
-                                <!-- Category 3: Kristallachsen -->
-                                <div class="solver-target-grid hidden" data-solver-panel="crystal">
-                                    <button type="button" class="solver-target-card" data-target-id="B_parallel_ea">
-                                        <strong><span data-tex="a">a</span>-Achse <span data-tex="[11\bar{2}0]">[11-20]</span></strong>
-                                        <small>In der Easy-Plane (0°)</small>
-                                    </button>
-                                    <button type="button" class="solver-target-card" data-target-id="B_parallel_em">
-                                        <strong><span data-tex="m">m</span>-Achse <span data-tex="[1\bar{1}00]">[1-100]</span></strong>
-                                        <small>In der Easy-Plane (90°)</small>
-                                    </button>
-                                    <button type="button" class="solver-target-card" data-target-id="B_parallel_ec">
-                                        <strong><span data-tex="c">c</span>-Achse <span data-tex="[0001]">[0001]</span></strong>
-                                        <small>Senkrecht zur Easy-Plane</small>
-                                    </button>
-                                    <button type="button" class="solver-target-card" data-target-id="custom_mb">
-                                        <strong>Eigene <span data-tex="[uvtw]">[uvtw]</span></strong>
-                                        <small>Freie Kristallrichtung</small>
-                                    </button>
-                                </div>
-                            </div>
-
-                            <!-- Optional Custom [uvtw] Input -->
-                            <div id="customTargetMBBox" class="hkil-apply-row hidden">
-                                <span data-tex="[u\,v\,t\,w]:">[uvtw]:</span>
-                                <input type="number" id="targetU" value="1" step="1" />
-                                <input type="number" id="targetV" value="1" step="1" />
-                                <input type="number" id="targetT" value="-2" disabled />
-                                <input type="number" id="targetW" value="0" step="1" />
-                            </div>
-
-                            <!-- Step C: Calculated Angle Solutions -->
-                            <div class="solver-step-block">
-                                <span class="solver-step-label">3. Berechnete Winkel zum Übernehmen:</span>
-                                <div id="solverResultsContainer" class="solver-results"></div>
-                            </div>
-                        </div>
-                    </details>
+            <!-- Magnetic field: always visible below the tabs (this is what one turns during a measurement) -->
+            <section class="magnet-dock" id="magnetDock">
+                <div class="magnet-dock-head">
+                    <label for="sliderPhiM" class="magnet-dock-title" data-emph="B,m,l,magnet">Magnetfeld <span data-tex="\phi_M">φ_M</span></label>
+                    <div class="num-unit num-unit-lg"><input type="number" id="numPhiM" min="0" max="360" step="0.5" value="0" /><span>°</span></div>
+                    <label for="numB0" class="magnet-dock-b0"><span data-tex="B_0">B₀</span></label>
+                    <div class="num-unit"><input type="number" id="numB0" min="0.001" max="20" step="0.05" value="0.50" /><span>T</span></div>
                 </div>
-            </div>
+                <input type="range" id="sliderPhiM" min="0" max="360" step="0.5" value="0" class="range-lg" />
+                <div class="quick-chips" data-target="PhiM">
+                    <button type="button" data-val="0">0°</button>
+                    <button type="button" data-val="45">45°</button>
+                    <button type="button" data-val="90">90°</button>
+                    <button type="button" data-val="180">180°</button>
+                    <button type="button" data-val="270">270°</button>
+                </div>
+            </section>
         </aside>
 
         <!-- ================================================================

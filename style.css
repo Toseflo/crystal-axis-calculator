@@ -309,12 +309,17 @@ code, pre, .num-unit input, .matrix-grid, .vector-table td, .compare-table td {
 }
 
 /* ==========================================================================
-   Left Sidebar: 3-Step Guided Workflow Cards
+   Left Sidebar: presets · setup tabs · magnet dock
+   Viewport-high and sticky, so neither the tab bar nor the magnet dock ever moves.
    ========================================================================== */
 .workflow-sidebar {
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 12px;
+    position: sticky;
+    top: 12px;
+    height: calc(100vh - 24px);
+    min-height: 560px;
 }
 
 .setup-switcher-card {
@@ -425,95 +430,128 @@ code, pre, .num-unit input, .matrix-grid, .vector-table td, .compare-table td {
     font-size: 12.5px;
 }
 
-/* Collapsible Step Cards */
-.step-card {
+/* Setup tabs: the tab bar stays put, only the panel below changes (it scrolls on its own) */
+.side-tabs-card {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
     background: var(--bg-panel);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-sm);
     overflow: hidden;
-    transition: border-color 0.2s ease;
 }
 
-.step-card.step-card-active {
-    border-color: rgba(56, 189, 248, 0.55);
-}
-
-.step-card.step-card-live {
-    border-left: 4px solid var(--accent-primary);
-}
-
-.step-card-header {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 14px;
+.side-tabs {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     background: var(--bg-card);
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.side-tab {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    min-width: 0;
+    padding: 9px 10px 7px;
+    background: none;
     border: none;
-    color: var(--text-primary);
+    border-bottom: 2px solid transparent;
+    color: var(--text-secondary);
     cursor: pointer;
     text-align: left;
+    transition: background 0.15s ease, color 0.15s ease;
 }
-.step-card-header:hover {
-    filter: brightness(1.06);
+.side-tab + .side-tab {
+    border-left: 1px solid var(--border-color);
+}
+.side-tab:hover {
+    color: var(--text-primary);
+    background: rgba(56, 189, 248, 0.06);
+}
+.side-tab.active {
+    color: var(--text-primary);
+    background: var(--bg-panel);
+    border-bottom-color: var(--accent-primary);
+}
+.side-tab:focus-visible {
+    outline: 2px solid var(--border-highlight);
+    outline-offset: -2px;
 }
 
-.step-num {
-    width: 26px;
-    height: 26px;
+.side-tab-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    font-weight: 700;
+}
+
+.side-tab-num {
+    width: 18px;
+    height: 18px;
     border-radius: 50%;
     background: var(--bg-input);
     border: 1px solid var(--border-color);
-    color: var(--text-primary);
-    font-weight: 700;
-    font-size: 12.5px;
+    font-size: 10.5px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
 }
-.step-card-active .step-num, .step-num-live {
+.side-tab.active .side-tab-num {
     background: var(--accent-primary);
     border-color: var(--border-highlight);
     color: #fff;
 }
+.side-tab-num-target {
+    font-size: 12px;
+}
 
-.step-header-text {
-    flex: 1;
-}
-.step-header-text h2 {
-    font-size: 14px;
-    font-weight: 700;
-}
-.step-summary {
-    font-size: 11.5px;
+.side-tab-sum {
+    max-width: 100%;
+    min-height: 16px;
+    font-size: 10.5px;
     color: var(--text-muted);
     font-family: 'JetBrains Mono', monospace;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.side-tab-sum .katex {
+    font-size: 1.05em;
 }
 
-.step-chevron {
-    font-size: 14px;
+.side-panels {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+    padding: 14px 14px 16px 16px;
+}
+.side-panel > .field-label:first-child {
+    margin-top: 0;
+}
+
+.panel-hint {
+    font-size: 11.5px;
     color: var(--text-muted);
-    transition: transform 0.2s ease;
-}
-.step-card:not(.step-card-active) .step-chevron {
-    transform: rotate(-90deg);
-}
-.step-card:not(.step-card-active) .step-card-body {
-    display: none;
 }
 
-.step-card-body {
-    padding: 16px 16px;
-    border-top: 1px solid var(--border-color);
-}
-
-.step-intro {
-    font-size: 12.5px;
-    color: var(--text-secondary);
-    margin-bottom: 14px;
-    line-height: 1.45;
+/* Single-column layout: the sidebar flows with the page again */
+@media (max-width: 1060px) {
+    .workflow-sidebar {
+        position: static;
+        height: auto;
+        min-height: 0;
+    }
+    .side-panels {
+        overflow: visible;
+    }
 }
 
 .field-label {
@@ -652,7 +690,7 @@ code, pre, .num-unit input, .matrix-grid, .vector-table td, .compare-table td {
 .num-unit-lg input {
     font-size: 14px;
     width: 64px;
-    color: #38bdf8;
+    color: var(--border-highlight);
 }
 .num-unit span {
     font-size: 11px;
@@ -718,50 +756,36 @@ input[type="range"] {
     color: var(--text-muted);
 }
 
-/* Live Phi_M Box */
-.live-phi-highlight {
-    background: rgba(14, 165, 233, 0.08);
-    border: 1px solid rgba(56, 189, 248, 0.3);
-    border-radius: var(--radius-sm);
-    padding: 12px;
-    margin-bottom: 14px;
+/* Magnet dock: always visible at the bottom of the left column */
+.magnet-dock {
+    flex-shrink: 0;
+    background: var(--bg-panel);
+    border: 1px solid rgba(56, 189, 248, 0.45);
+    border-left: 4px solid var(--accent-primary);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    padding: 11px 14px 12px;
 }
 
-.smart-jumps-label {
-    font-size: 12px;
-    color: var(--text-secondary);
-    margin: 8px 0 7px;
-    font-weight: 600;
-}
-
-.smart-jumps-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-    margin-bottom: 14px;
-}
-
-.smart-jump-btn {
-    padding: 8px 10px;
-    font-size: 11.5px;
-    background: var(--bg-input);
-    border: 1px solid var(--border-color);
-    color: var(--text-secondary);
-    border-radius: 6px;
-    cursor: pointer;
+.magnet-dock-head {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 6px;
-    transition: all 0.15s;
+    gap: 8px;
+    margin-bottom: 8px;
 }
-.smart-jump-btn:hover {
-    border-color: var(--border-highlight);
+.magnet-dock-title {
+    margin-right: auto;
+    font-size: 13px;
+    font-weight: 700;
     color: var(--text-primary);
 }
-.smart-jump-btn code {
-    color: #38bdf8;
-    font-weight: 700;
+.magnet-dock-b0 {
+    margin-left: 4px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.magnet-dock .num-unit:last-child input {
+    width: 44px;
 }
 
 /* Mounting Presets & IP Calibration */
@@ -827,27 +851,6 @@ input[type="range"] {
 .mounting-summary-box code {
     color: #38bdf8;
     font-weight: 600;
-}
-
-/* Sub-details inside step cards */
-.sub-details {
-    margin-top: 12px;
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    padding: 10px 12px;
-}
-.sub-details summary {
-    font-size: 12.5px;
-    font-weight: 600;
-    color: var(--text-secondary);
-    cursor: pointer;
-    padding: 2px 0;
-}
-.sub-details-body {
-    padding-top: 12px;
-    margin-top: 10px;
-    border-top: 1px solid var(--border-color);
 }
 
 /* Popular 0°-Edge Presets per Cut */
@@ -925,14 +928,6 @@ input[type="range"] {
     font-weight: 600;
 }
 
-.control-row-compact {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 12px;
-    padding: 5px 0;
-}
-
 .hkil-apply-row {
     display: flex;
     align-items: center;
@@ -950,134 +945,105 @@ input[type="range"] {
     border-radius: 5px;
 }
 
-/* Modular Ziel-Finder (Inverse Solver) */
-.solver-modular-body {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-}
-
-.solver-step-block {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.solver-step-label {
-    font-size: 11.5px;
+/* Ziel tab: target chips with the φ_M that reaches them */
+.target-group-label {
+    font-size: 11px;
     font-weight: 700;
-    color: var(--text-secondary);
-    letter-spacing: 0.01em;
+    color: var(--text-muted);
+    margin: 12px 0 6px;
 }
 
-.solver-cat-tabs {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 7px;
-}
-
-.solver-cat-tab {
-    padding: 8px 8px;
-    border-radius: 6px;
-    background: var(--bg-input);
-    border: 1px solid var(--border-color);
-    color: var(--text-secondary);
-    font-size: 11.5px;
-    font-weight: 600;
-    cursor: pointer;
-    text-align: center;
-    transition: all 0.15s ease;
-}
-
-.solver-cat-tab:hover {
-    border-color: var(--border-highlight);
-    color: var(--text-primary);
-}
-
-.solver-cat-tab.active {
-    background: rgba(14, 165, 233, 0.2);
-    border-color: #38bdf8;
-    color: var(--text-primary);
-    box-shadow: 0 0 10px rgba(56, 189, 248, 0.14);
-}
-
-.solver-target-grid {
+.target-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 8px;
+    gap: 6px;
 }
 
-.solver-target-card {
-    background: var(--bg-input);
-    border: 1.5px solid var(--border-color);
-    border-radius: 7px;
-    padding: 9px 11px;
-    text-align: left;
-    cursor: pointer;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    transition: all 0.15s ease;
-}
-
-.solver-target-card strong {
-    font-size: 12px;
-    color: var(--text-primary);
-    line-height: 1.3;
-}
-
-.solver-target-card small {
-    font-size: 10.5px;
-    color: var(--text-muted);
-    line-height: 1.35;
-}
-
-.solver-target-card:hover {
-    border-color: rgba(56, 189, 248, 0.55);
-    transform: translateY(-1px);
-}
-
-.solver-target-card.active {
-    background: linear-gradient(135deg, rgba(14, 165, 233, 0.18), rgba(59, 130, 246, 0.15));
-    border-color: #38bdf8;
-    box-shadow: 0 2px 10px rgba(14, 165, 233, 0.15);
-}
-
-.solver-results {
-    margin-top: 4px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-.solver-card {
-    background: var(--bg-panel);
-    border: 1px solid var(--border-color);
-    border-radius: 7px;
-    padding: 10px 12px;
+.target-chip {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
+    gap: 6px;
+    min-width: 0;
+    padding: 7px 10px;
+    font-size: 12px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s ease, background 0.15s ease;
 }
-.solver-card-info {
+.target-chip-wide {
+    grid-column: 1 / -1;
+}
+.target-chip:hover {
+    border-color: var(--border-highlight);
+}
+.target-chip.active {
+    background: rgba(14, 165, 233, 0.14);
+    border-color: var(--border-highlight);
+}
+
+.target-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.target-name small {
+    font-size: 10.5px;
+    color: var(--text-muted);
+}
+
+.target-phi {
+    flex-shrink: 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--border-highlight);
+}
+.target-chip.approx .target-phi {
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+.target-chip.unreachable .target-phi,
+.target-chip.unreachable .target-name {
+    color: var(--text-muted);
+}
+/* The field currently points there */
+.target-chip.on .target-phi::before {
+    content: '✓ ';
+    color: var(--accent-emerald);
+}
+
+.target-remount {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 7px 10px;
+    border-radius: 6px;
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    font-size: 11.5px;
+    color: var(--text-secondary);
+}
+.target-remount[hidden] {
+    display: none;
+}
+.target-remount-text {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 1px;
 }
-.solver-card-info strong {
-    display: block;
-    font-size: 12px;
-    color: var(--text-primary);
-}
-.solver-card-info code {
-    font-size: 12px;
-    color: #38bdf8;
-}
-.solver-card-info small {
-    display: block;
+.target-remount small {
     font-size: 11px;
     color: var(--text-muted);
-    line-height: 1.35;
+}
+.target-remount .btn {
+    flex-shrink: 0;
 }
 
 /* ==========================================================================
@@ -2114,8 +2080,8 @@ body.theme-light .canvas-pill-btn {
     color: #f87171;
 }
 
-/* Target finder flashes when "Feld dorthin drehen" jumps to it */
-.solver-details.flash {
+/* The [uvtw] target chip flashes when "Feld dorthin drehen" jumps to it */
+.target-chip.flash {
     animation: flash-ring 1.2s ease;
 }
 @keyframes flash-ring {
