@@ -37,7 +37,7 @@ import {
 
 import { Scene3DController, VECTOR_COLORS } from './visualizer_3d.js';
 import { generateThesisSVG } from './svg_exporter.js';
-import { buildNarrative, describeDirection, token } from './narrative.js';
+import { buildNarrative, buildSummary, describeDirection, token } from './narrative.js';
 import { GuidedTour } from './tour.js';
 
 // Application State (Default: c-cut (0001) in IP orientation)
@@ -73,6 +73,7 @@ const appState = {
     targetId: 'B_parallel_k',
     customTargetUVTW: [1, 1, -2, 0],
     vectorTableMode: 'angles', // 'angles' | 'xyz'
+    vectorTableAll: false, // false: only B, m, l, k (+ custom)
     customDir: { mode: 'dir' } // 'dir' | 'plane' | 'cross' | 'angles'
 };
 
@@ -432,8 +433,8 @@ function syncLegend() {
     document.querySelectorAll('#canvasLegend .legend-chip[data-vis]').forEach((chip) => {
         chip.classList.toggle('off', !vis[chip.dataset.vis]);
     });
-    const chk = document.getElementById('chkCustomDirShow');
-    if (chk) chk.checked = !!vis.showCustom;
+    // The "Eigene Richtung" layer only exists while its card is open
+    document.getElementById('legendChipCustom').hidden = !document.getElementById('customDirCard').open;
 }
 
 function syncFramePills() {
@@ -758,6 +759,10 @@ function bindUIEvents() {
     });
 
     // Vector table: frame & display mode
+    document.getElementById('btnVectorTableAll').addEventListener('click', () => {
+        appState.vectorTableAll = !appState.vectorTableAll;
+        if (lastActiveState) updateVectorTable(lastActiveState);
+    });
     document.getElementById('selectVectorTableFrame').addEventListener('change', () => {
         if (lastActiveState) updateVectorTable(lastActiveState);
     });
@@ -875,9 +880,11 @@ function bindCustomDirection() {
         el.addEventListener('change', handler);
     });
 
-    document.getElementById('chkCustomDirShow').addEventListener('change', (e) => {
-        sceneController.visibility.showCustom = e.target.checked;
+    // Opening the card draws the arrow, closing it removes it again
+    document.getElementById('customDirCard').addEventListener('toggle', (e) => {
+        sceneController.visibility.showCustom = e.target.open;
         syncLegend();
+        if (lastActiveState) updateVectorTable(lastActiveState);
         rerenderScenes();
     });
 
@@ -977,26 +984,22 @@ function updateCustomDirection(state) {
     sceneController.customVector = { Lab: vLab, label: dir.text };
     if (sceneController2) sceneController2.customVector = sceneController.customVector;
 
-    const thetaSub = Math.acos(Math.max(-1, Math.min(1, vSub[2]))) * RAD2DEG;
-    const phiSub = wrapDeg360(Math.atan2(vSub[1], vSub[0]) * RAD2DEG);
-    const inSample = Math.abs(90 - thetaSub) < 0.5;
-
-    const row = (keyHtml, val) => `<div class="cd-row"><span>${keyHtml}</span><strong>${val}</strong></div>`;
+    // Tilt out of the sample plane (0° = lies in the sample)
+    const elevSub = Math.asin(Math.min(1, Math.abs(vSub[2]))) * RAD2DEG;
+    const stat = (val, labelHtml) => `<div class="cd-stat"><strong>${val}</strong><span>${labelHtml}</span></div>`;
+    const planeTitle = appState.customDir.mode === 'plane' ? 'Diese Ebene' : 'Ebene senkrecht zu dieser Richtung';
     out.innerHTML = `
         <div class="cd-headline">
-            ${token('custom', `Richtung ${tex(dir.latex)}`)}
-            ${dir.exact ? '' : '<span class="muted">(nicht ganzzahlig)</span>'}
-            <span class="cd-sep">·</span>
-            Ebene senkrecht dazu: ${tex(plane.latex)}
+            ${token('custom', tex(dir.latex))}
+            ${dir.exact ? '' : '<span class="muted">(gerundet)</span>'}
+            <span class="muted" title="${planeTitle}">${tex('\\perp')} ${tex(plane.latex)}</span>
         </div>
         <p class="cd-desc">Die Richtung ${describeDirection(vCryst, tex)}.</p>
-        <div class="cd-grid">
-            ${row(`zur ${token('ec', 'c-Achse')}`, `${angleDeg(vCryst, [0, 0, 1]).toFixed(1)}°`)}
-            ${row(`zur Normale ${token('n', tex('\\hat{n}'))}`, `${angleDeg(vSub, [0, 0, 1]).toFixed(1)}°`)}
-            ${row(`zur Welle ${token('k', tex('\\hat{k}'))}`, `${angleDeg(vSub, v.kHat.Sub).toFixed(1)}°`)}
-            ${row(`zum Feld ${token('B', tex('\\mathbf{B}'))}`, `${angleDeg(vSub, v.bHat.Sub).toFixed(1)}°`)}
-            ${row('in der Probe (θ, φ)', `${thetaSub.toFixed(1)}°, ${phiSub.toFixed(1)}°`)}
-            ${row('liegt in Probenebene?', inSample ? 'ja' : 'nein')}
+        <div class="cd-stats">
+            ${stat(`${angleDeg(vCryst, [0, 0, 1]).toFixed(1)}°`, `zur ${token('ec', 'c-Achse')}`)}
+            ${stat(`${elevSub.toFixed(1)}°`, 'aus der Probe')}
+            ${stat(`${angleDeg(vSub, v.kHat.Sub).toFixed(1)}°`, `zu ${token('k', tex('\\hat{k}'))}`)}
+            ${stat(`${angleDeg(vSub, v.bHat.Sub).toFixed(1)}°`, `zu ${token('B', tex('\\mathbf{B}'))}`)}
         </div>`;
 }
 
@@ -1188,6 +1191,7 @@ function recomputeAndRender() {
 
     // Overview column
     updateMetricsCards(activeState, stateA, stateB);
+    document.getElementById('gistBody').innerHTML = buildSummary(activeState, tex);
     document.getElementById('narrativeBody').innerHTML = buildNarrative(activeState, tex);
     updateVectorTable(activeState);
     updateCompareTable(stateA, stateB);
@@ -1316,17 +1320,16 @@ function updateMetricsCards(activeState, stateA, stateB) {
     const isCPW = activeState.setup.deviceType === 'CPW';
 
     document.getElementById('valBSampleAngles').textContent = `${m.angleBKDeg.toFixed(1)}°`;
-    document.getElementById('valBEasy').innerHTML =
-        `in Easy-Plane: <strong>${m.bEasyTesla.toFixed(2)} T</strong> (${(m.bEasyRatio * 100).toFixed(0)} %)`;
+    const valBEasy = document.getElementById('valBEasy');
+    valBEasy.innerHTML = `<strong>${(m.bEasyRatio * 100).toFixed(0)} %</strong> in Easy-Plane`;
+    valBEasy.title = `${m.bEasyTesla.toFixed(2)} T von ${activeState.setup.b0Tesla} T liegen in der Easy-Plane`;
 
     document.getElementById('valAngleMK').textContent = m.isEasyPlaneSingular ? '–' : `${m.angleMKDeg.toFixed(1)}°`;
-    document.getElementById('valMDotK').innerHTML = isCPW
-        ? `CPW-Kopplung ${tex('|\\hat{k}\\times\\hat{m}|')}: <strong>${(m.cpwTorqueM * 100).toFixed(0)} %</strong>`
-        : `${tex('|\\hat{m}\\cdot\\hat{k}|')}: <strong>${(Math.abs(Math.cos(m.angleMKDeg * DEG2RAD)) * 100).toFixed(0)} %</strong>`;
+    const valMDotK = document.getElementById('valMDotK');
+    valMDotK.innerHTML = isCPW ? `Kopplung <strong>${(m.cpwTorqueM * 100).toFixed(0)} %</strong>` : '';
+    valMDotK.title = isCPW ? 'CPW-Kopplung |k̂ × m̂|' : '';
 
     document.getElementById('valAngleLK').textContent = m.isEasyPlaneSingular ? '–' : `${m.angleLKDeg.toFixed(1)}°`;
-    document.getElementById('valLDotK').innerHTML =
-        `${tex('|\\hat{l}\\cdot\\hat{k}|')}: <strong>${(Math.abs(m.lDotK) * 100).toFixed(0)} %</strong>`;
 
     // Compare delta badges on result tiles
     ['cmpBSample', 'cmpAngleMK', 'cmpAngleLK'].forEach((id) => {
@@ -1379,11 +1382,12 @@ const TABLE_AXIS_TEX = {
     Lab: ['X_L', 'Y_L', 'Z_L']
 };
 const TABLE_FOOT = {
-    Sub: 'θ: Winkel zur Probennormale n̂ (90° = liegt in der Probe) · φ: Azimut ab der 0°-Kante.',
-    Wave: 'θ: Winkel zur Probennormale n̂ · φ: Azimut ab der Welle k̂ (90° = t̂).',
-    Cryst: 'θ: Winkel zur c-Achse (90° = liegt in der Easy-Plane) · φ: Azimut ab der a-Achse [11-20].',
-    Lab: 'θ: Winkel zur Vertikalen Z_L · φ: Azimut ab der Magnetrichtung bei φ_M = 0°.'
+    Sub: 'θ = 90°: liegt in der Probe',
+    Wave: 'θ = 90°: liegt in der Probe',
+    Cryst: 'θ = 90°: liegt in der Easy-Plane',
+    Lab: 'θ = 90°: liegt horizontal'
 };
+const TABLE_CORE_KEYS = ['B', 'm', 'l', 'k', 'custom'];
 
 function updateVectorTable(activeState) {
     const sel = document.getElementById('selectVectorTableFrame').value;
@@ -1394,9 +1398,7 @@ function updateVectorTable(activeState) {
     document.getElementById('vectorTableHeaderRow').innerHTML = angles
         ? `<th>Richtung</th><th>θ zu ${tex(axes[2])}</th><th>φ ab ${tex(axes[0])}</th><th>Kristall</th>`
         : `<th>Richtung</th><th>${tex(axes[0])}</th><th>${tex(axes[1])}</th><th>${tex(axes[2])}</th><th>Kristall</th>`;
-    document.getElementById('vectorTableFoot').textContent = angles
-        ? `${TABLE_FOOT[frame] || ''}${sel === 'view' ? ' (System folgt Ansicht 1.)' : ''}`
-        : `Einheitsvektoren im System ${FRAME_METADATA[frame].name}.`;
+    document.getElementById('vectorTableFoot').textContent = angles ? TABLE_FOOT[frame] || '' : 'Einheitsvektoren';
 
     const v = activeState.vectors;
     const mb = activeState.millerBravais;
@@ -1424,7 +1426,7 @@ function updateVectorTable(activeState) {
             skip: tiltNC < 1
         }
     ];
-    if (sceneController.customVector && appState.customDir.uvtw) {
+    if (sceneController.visibility.showCustom && sceneController.customVector && appState.customDir.uvtw) {
         const lab = sceneController.customVector.Lab;
         const R = activeState.matrices.getRotationMatrix(frame, 'Lab');
         entries.push({
@@ -1441,8 +1443,13 @@ function updateVectorTable(activeState) {
     };
     const color = (key) => (key === 'xs' || key === 'ys' ? VECTOR_COLORS.edge : VECTOR_COLORS[key]);
 
-    document.getElementById('vectorTableBody').innerHTML = entries
-        .filter((e) => !e.skip)
+    const shown = entries.filter((e) => !e.skip);
+    const visible = appState.vectorTableAll ? shown : shown.filter((e) => TABLE_CORE_KEYS.includes(e.key));
+    document.getElementById('btnVectorTableAll').textContent = appState.vectorTableAll
+        ? 'weniger ▴'
+        : `+ ${shown.length - visible.length} weitere (Achsen, Kanten …)`;
+
+    document.getElementById('vectorTableBody').innerHTML = visible
         .map((e) => {
             const vec = e.vecInFrame || e.vec[frame];
             const th = Math.acos(Math.max(-1, Math.min(1, vec[2]))) * RAD2DEG;

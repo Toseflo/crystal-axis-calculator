@@ -163,7 +163,7 @@ export class Scene3DController {
             showSampleSlab: true,
             showMicrostructure: true,
             showCompareOverlay: true,
-            showCustom: true,
+            showCustom: false,
             // Helper vectors that normally stay hidden and only appear when emphasized
             showT: false,
             showN: false,

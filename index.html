@@ -463,7 +463,7 @@
                             <button type="button" class="legend-chip" data-vis="showEasyPlane" data-emph="easy" style="--chip:#c084fc"><i></i>Easy-Plane</button>
                             <button type="button" class="legend-chip" data-vis="showCrystalAxes" data-emph="crystal" style="--chip:#a78bfa"><i></i>Achsen <span data-tex="a,m,c">a,m,c</span></button>
                             <button type="button" class="legend-chip" data-vis="showLabMagnet" data-emph="magnet" style="--chip:#f87171"><i></i>Magnet</button>
-                            <button type="button" class="legend-chip" data-vis="showCustom" data-emph="custom" style="--chip:#fb923c" id="legendChipCustom"><i></i>Eigene Richtung</button>
+                            <button type="button" class="legend-chip" data-vis="showCustom" data-emph="custom" style="--chip:#fb923c" id="legendChipCustom" hidden><i></i>Eigene Richtung</button>
                         </div>
 
                         <canvas id="canvas3D"></canvas>
@@ -567,18 +567,20 @@
                         <span class="core-result-label"><span data-tex="\angle(\hat{l},\hat{k})">∠(l̂,k̂)</span></span>
                         <strong class="core-result-val" id="valAngleLK">90.0°</strong>
                     </div>
-                    <div class="core-result-sub" id="valLDotK"></div>
                     <div class="opt-compare hidden" id="cmpAngleLK"></div>
                 </div>
             </div>
 
-            <!-- Plain-language explanation -->
-            <section class="overview-card" id="narrativeCard">
+            <!-- At a glance + optional long explanation -->
+            <section class="overview-card" id="narrativeCard" title="Farbige Begriffe überfahren → im 3D-Bild hervorgehoben">
                 <header class="overview-card-head">
-                    <h2>Was passiert hier?</h2>
-                    <span class="overview-card-hint">Farbige Begriffe überfahren → im 3D-Bild hervorgehoben</span>
+                    <h2>Kurz gesagt</h2>
                 </header>
-                <div class="story" id="narrativeBody"></div>
+                <ul class="gist" id="gistBody"></ul>
+                <details class="more-details" id="narrativeMore">
+                    <summary>Ausführlich erklären</summary>
+                    <div class="story" id="narrativeBody"></div>
+                </details>
             </section>
 
             <!-- Where does everything point? -->
@@ -605,15 +607,18 @@
                         <tbody id="vectorTableBody"></tbody>
                     </table>
                 </div>
-                <p class="overview-card-foot" id="vectorTableFoot"></p>
+                <div class="vt-foot">
+                    <span class="overview-card-foot" id="vectorTableFoot"></span>
+                    <button type="button" class="btn-link" id="btnVectorTableAll"></button>
+                </div>
             </section>
 
             <!-- Custom direction: converter + "where is it?" + drive the field there -->
-            <section class="overview-card" id="customDirCard">
-                <header class="overview-card-head">
+            <details class="overview-card overview-details" id="customDirCard">
+                <summary class="overview-card-head">
                     <h2>Eigene Richtung</h2>
-                    <span class="overview-card-hint">wird als <span class="tok-inline" style="--tok:#fb923c">oranger Pfeil</span> eingezeichnet</span>
-                </header>
+                    <span class="overview-card-hint">umrechnen, einzeichnen, Feld dorthin drehen</span>
+                </summary>
 
                 <div class="segmented-control seg-xs custom-dir-modes" id="customDirModes">
                     <button type="button" class="seg-btn active" data-cdmode="dir">Richtung <span data-tex="[uvtw]">[uvtw]</span></button>
@@ -688,9 +693,8 @@
                     <button type="button" class="btn btn-xs btn-primary" id="btnCustomDirDrive" title="Im Ziel-Finder die nötigen Halter- und Magnetwinkel für B ∥ diese Richtung berechnen">
                         Feld dorthin drehen →
                     </button>
-                    <label class="inline-check"><input type="checkbox" id="chkCustomDirShow" checked /> im 3D-Bild zeigen</label>
                 </div>
-            </section>
+            </details>
 
             <!-- Side-by-Side Comparison Summary Table (Only shown when Compare A vs. B is active) -->
             <section id="compareSummarySection" class="overview-card hidden">

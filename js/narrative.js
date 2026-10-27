@@ -49,7 +49,7 @@ export function describeDirection(vCryst, tex) {
     const [x, y, z] = vCryst;
     const tiltDeg = Math.asin(Math.min(1, Math.abs(z))) * RAD2DEG; // angle out of the (0001) plane
     if (tiltDeg > 89) {
-        return `parallel zur ${token('ec', 'c-Achse')} – senkrecht zur Easy-Plane`;
+        return `zeigt entlang der ${token('ec', 'c-Achse')} – senkrecht zur Easy-Plane`;
     }
     const phi = Math.atan2(y, x) * RAD2DEG;
     // a-type axes sit at 0° + n·60°, m-type axes at 30° + n·60° (measured from e_a)
@@ -68,6 +68,68 @@ export function describeDirection(vCryst, tex) {
         return `liegt in der ${token('easy', 'Easy-Plane')}, ${inPlane}`;
     }
     return `ist ${fmt(tiltDeg)}° aus der ${token('easy', 'Easy-Plane')} gekippt (Projektion ${inPlane})`;
+}
+
+// Very short classification for the summary lines ("a-Achse, in der Easy-Plane", "12.3° aus der Easy-Plane").
+function shortDirection(vCryst) {
+    const [x, y, z] = vCryst;
+    const tiltDeg = Math.asin(Math.min(1, Math.abs(z))) * RAD2DEG;
+    const easy = token('easy', 'Easy-Plane');
+    if (tiltDeg > 89) return `entlang der ${token('ec', 'c-Achse')}`;
+    if (tiltDeg >= 1) return `${fmt(tiltDeg)}° aus der ${easy}`;
+    const r = ((((Math.atan2(y, x) * RAD2DEG) % 60) + 60) % 60);
+    if (Math.min(r, 60 - r) < 0.75) return `${token('ea', 'a-Achse')}, in der ${easy}`;
+    if (Math.abs(r - 30) < 0.75) return `${token('em', 'm-Achse')}, in der ${easy}`;
+    return `in der ${easy}`;
+}
+
+/**
+ * Four one-liners (Probe / Welle / Feld / Spins) – the "at a glance" version of buildNarrative.
+ */
+export function buildSummary(state, tex) {
+    const s = state.setup;
+    const m = state.metrics;
+    const mb = state.millerBravais;
+    const lm = solveSweepLandmarksForFixedPsi(s);
+    const T = (latex) => tex(latex);
+    const easy = token('easy', 'Easy-Plane');
+
+    const cutInfo = CUT_PRESETS[s.cutPreset];
+    const cutName = cutInfo && s.cutPreset !== 'custom' ? cutInfo.shortLabel : T(mb.zsPlane.latex);
+    const tiltNC = Math.min(m.angleNCDeg, 180 - m.angleNCDeg);
+    let probe;
+    if (tiltNC < 1) probe = `${easy} liegt flach in der Probe`;
+    else if (Math.abs(tiltNC - 90) < 1) probe = `${easy} steht senkrecht zur Probe`;
+    else probe = `${easy} um ${fmt(tiltNC)}° gekippt`;
+
+    const welle = `${token('k', T('\\hat{k}'))} ${T('\\parallel')} ${T(mb.k.latex)} · ${shortDirection(state.vectors.kHat.Cryst)}`;
+
+    const elev = m.elevationSampleDeg;
+    const bWhere = Math.abs(elev) < 0.5 ? 'liegt in der Probe' : `${fmt(Math.abs(elev))}° aus der Probe`;
+    const bk = lm.bParallelK.errorDeg < 0.5
+        ? `parallel zu ${token('k', T('\\hat{k}'))} bei ${T(`\\phi_M = ${fmt(lm.bParallelK.phiMDeg)}^\\circ`)}`
+        : `nie parallel zu ${token('k', T('\\hat{k}'))}`;
+    const feld = `${token('B', T('\\mathbf{B}'))} ${bWhere} · ${bk}`;
+
+    let spins;
+    if (m.isEasyPlaneSingular) {
+        spins = `${token('m', T('\\hat{m}'))} unbestimmt (${token('B', T('\\mathbf{B}'))} ${T('\\parallel')} ${token('ec', 'c')})`;
+    } else {
+        spins = `${token('m', T('\\hat{m}'))} ${T('\\parallel')} ${T(mb.m.latex)}`;
+        if (s.deviceType === 'CPW') {
+            const t = m.cpwTorqueM;
+            const verdict = t > 0.9 ? '<span class="gist-good">stark</span>' : t < 0.15 ? '<span class="gist-bad">schwach</span>' : 'mittel';
+            spins += ` · CPW-Kopplung ${verdict}`;
+        } else {
+            spins += ` · ${token('l', T('\\hat{l}'))} ${T('\\parallel')} ${T(mb.l.latex)}`;
+        }
+    }
+
+    const line = (label, keys, body) => `<li data-emph="${keys}"><span class="gist-label">${label}</span><span>${body}</span></li>`;
+    return line('Probe', 'sample,easy', `${cutName} · ${probe}`)
+        + line('Welle', 'device,k', welle)
+        + line('Feld', 'B,magnet', feld)
+        + line('Spins', 'm,l', spins);
 }
 
 export function buildNarrative(state, tex) {

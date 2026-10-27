@@ -1669,8 +1669,23 @@ body.theme-light .canvas-pill-btn {
 }
 
 .overview-col .core-results-strip {
-    grid-template-columns: 1fr;
     gap: 6px;
+}
+.overview-col .core-result-tile {
+    padding: 9px 10px;
+    gap: 2px;
+}
+.overview-col .core-result-top {
+    flex-wrap: wrap;
+    gap: 2px 6px;
+}
+.overview-col .core-result-val {
+    flex-basis: 100%;
+    font-size: 20px;
+}
+.overview-col .core-result-sub {
+    padding-left: 0;
+    font-size: 11px;
 }
 
 .core-result-tile[data-emph] {
@@ -1854,27 +1869,30 @@ body.theme-light .canvas-pill-btn {
     flex-wrap: wrap;
     gap: 6px;
 }
-.cd-sep {
-    color: var(--text-muted);
-}
 .cd-desc {
     color: var(--text-secondary);
     line-height: 1.5;
 }
-.cd-grid {
+.cd-stats {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 3px 16px;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
 }
-.cd-row {
+.cd-stat {
     display: flex;
-    justify-content: space-between;
-    gap: 8px;
-    color: var(--text-secondary);
-    font-size: 12px;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    padding: 5px 4px;
+    background: var(--bg-panel);
+    border-radius: 6px;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: center;
 }
-.cd-row strong {
+.cd-stat strong {
     font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
     color: var(--text-primary);
 }
 .custom-dir-actions {
@@ -1882,14 +1900,6 @@ body.theme-light .canvas-pill-btn {
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-}
-.inline-check {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    color: var(--text-secondary);
-    cursor: pointer;
 }
 
 /* Target finder flashes when "Feld dorthin drehen" jumps to it */
@@ -2088,4 +2098,94 @@ body.theme-light .tour-caption {
     border-radius: var(--radius-sm);
     box-shadow: var(--shadow-sm);
     font-size: 12.5px;
+}
+
+/* --- "Kurz gesagt" one-liners ------------------------------------------- */
+.gist {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.gist li {
+    display: grid;
+    grid-template-columns: 52px 1fr;
+    gap: 8px;
+    align-items: baseline;
+    padding: 5px 6px;
+    border-radius: 6px;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--text-secondary);
+}
+.gist li:hover {
+    background: rgba(56, 189, 248, 0.06);
+}
+.gist-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+}
+.gist-good { color: #4ade80; font-weight: 600; }
+.gist-bad { color: #fbbf24; font-weight: 600; }
+
+/* --- Collapsible extras --------------------------------------------------- */
+.more-details > summary,
+.overview-details > summary {
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+.more-details > summary::-webkit-details-marker,
+.overview-details > summary::-webkit-details-marker {
+    display: none;
+}
+.more-details > summary {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+.more-details > summary::before,
+.overview-details > summary h2::before {
+    content: '▸';
+    display: inline-block;
+    width: 1em;
+    transition: transform 0.15s ease;
+}
+.more-details[open] > summary::before,
+.overview-details[open] > summary h2::before {
+    transform: rotate(90deg);
+}
+.more-details > summary:hover {
+    color: var(--text-secondary);
+}
+.more-details[open] > .story {
+    margin-top: 10px;
+}
+.overview-details:not([open]) {
+    gap: 0;
+}
+
+/* --- Vector table footer --------------------------------------------------- */
+.vt-foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+}
+.btn-link {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    font-size: 11.5px;
+    color: #7dd3fc;
+    cursor: pointer;
+}
+.btn-link:hover {
+    text-decoration: underline;
+}
+.legend-chip[hidden] {
+    display: none;
 }
