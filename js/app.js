@@ -710,6 +710,9 @@ function bindUIEvents() {
         if (mark) previewPhiMark(mark);
     });
     phiMarks.addEventListener('focusout', () => setFieldPreview([]));
+    // Tick angle lines depend on the dock width and on the loaded font
+    window.addEventListener('resize', layoutPhiTicks);
+    document.fonts?.ready.then(layoutPhiTicks);
 
     // Directions out of reach: a click opens (or closes) the mount that reaches them
     document.getElementById('phiOff').addEventListener('click', (e) => {
@@ -1611,10 +1614,26 @@ function renderPhiMarks(reach, phiNow) {
         phiMarksSignature = signature;
         const attrs = (g) => `data-phi="${g.phi}" data-emph="preview,${g.items.map((m) => m.key).join(',')}" title="${g.items.map((m) => m.title).join('\n')}"`;
         box.innerHTML = `
-            <div class="phi-ticks">${groups.map((g) => `<span class="phi-tick" style="left:${(g.phi / 360) * 100}%" ${attrs(g)}></span>`).join('')}</div>
+            <div class="phi-ticks">${groups.map((g) => `<span class="phi-tick" style="left:${(g.phi / 360) * 100}%" ${attrs(g)}><span class="phi-tick-deg">${fmtDeg(g.phi)}</span></span>`).join('')}</div>
             <div class="phi-pills">${groups.map((g) => `<button type="button" class="phi-pill" ${attrs(g)}>${g.items.map(markLabel).join('<span class="phi-mark-sep">·</span>')}<span class="phi-pill-deg">${fmtDeg(g.phi)}</span></button>`).join('')}</div>`;
+        layoutPhiTicks();
     }
     box.querySelectorAll('[data-phi]').forEach((el) => el.classList.toggle('on', phiDistDeg(phiNow, Number(el.dataset.phi)) < 0.05));
+}
+
+// Tick angles sit centred under their tick; one that would touch its left neighbour moves down a line
+function layoutPhiTicks() {
+    const ticks = document.querySelector('#phiMarks .phi-ticks');
+    if (!ticks?.clientWidth) return;
+    const rowEnds = [];
+    ticks.querySelectorAll('.phi-tick-deg').forEach((deg) => {
+        const b = deg.getBoundingClientRect();
+        let row = rowEnds.findIndex((end) => b.left >= end + 6);
+        if (row < 0) row = rowEnds.length;
+        rowEnds[row] = b.right;
+        deg.parentElement.style.setProperty('--row', row);
+    });
+    ticks.style.setProperty('--rows', Math.max(rowEnds.length, 1));
 }
 
 function renderPhiOff(off, setup) {

@@ -545,6 +545,11 @@ code, pre, .num-unit input, .matrix-grid, .vector-table td, .compare-table td {
 .side-panel > .field-label:first-child {
     margin-top: 0;
 }
+.field-label.section-start {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-color);
+}
 
 /* Single column or a short window: the sidebar flows with the page again (a sticky one would squeeze the tabs) */
 @media (max-width: 1060px), (max-height: 820px) {
@@ -954,29 +959,50 @@ input[type="range"] {
 }
 .phi-ticks {
     position: relative;
-    height: 8px;
+    height: calc(20px + (var(--rows, 1) - 1) * 13px);
     margin: 0 8px; /* the range thumb's centre never gets closer to the ends than half its width */
 }
 .phi-tick {
+    --row: 0;
     position: absolute;
     top: 0;
-    width: 2px;
-    height: 6px;
-    margin-left: -1px;
-    border-radius: 1px;
-    background: var(--text-muted);
+    width: 0;
+    height: 0;
     cursor: pointer;
 }
-.phi-tick.on,
-.phi-tick.hot {
-    height: 8px;
+.phi-tick::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -1px;
+    width: 2px;
+    height: calc(6px + var(--row) * 13px); /* reaches down to its angle when that moved a line lower */
+    border-radius: 1px;
+    background: var(--text-muted);
+}
+.phi-tick-deg {
+    position: absolute;
+    top: calc(7px + var(--row) * 13px);
+    transform: translateX(-50%);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    line-height: 12px;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+.phi-tick.on::before,
+.phi-tick.hot::before {
     background: var(--border-highlight);
+}
+.phi-tick.on .phi-tick-deg,
+.phi-tick.hot .phi-tick-deg {
+    color: var(--border-highlight);
 }
 .phi-pills {
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
-    margin-top: 6px;
+    margin-top: 4px;
 }
 .phi-pills:empty {
     display: none;
