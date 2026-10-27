@@ -84,10 +84,6 @@
                     <span class="side-tab-title"><span class="side-tab-num">3</span>Einbau</span>
                     <span class="side-tab-sum" id="summaryStep2">IP 0°</span>
                 </button>
-                <button type="button" class="side-tab" role="tab" id="sideTabZiel" data-side-tab="ziel" aria-selected="false" data-emph="B,k">
-                    <span class="side-tab-title"><span class="side-tab-num side-tab-num-target">◎</span>Ziel</span>
-                    <span class="side-tab-sum" id="summaryStepZiel"></span>
-                </button>
                 </nav>
                 <div class="side-panels" id="sidePanels">
                 <section class="side-panel" id="panelProbe" data-side-panel="probe" role="tabpanel" aria-labelledby="sideTabProbe">
@@ -246,70 +242,11 @@
                         </div>
                     </div>
                 </section>
-                <!-- ◎ Ziel: every chip shows the φ_M that realizes it with the current mount -->
-                <section class="side-panel" id="panelZiel" data-side-panel="ziel" role="tabpanel" aria-labelledby="sideTabZiel" hidden>
-                    <p class="panel-hint">Klick dreht den Magneten dorthin.</p>
-
-                    <div class="target-group-label">Welle &amp; Probe</div>
-                    <div class="target-grid">
-                        <button type="button" class="target-chip" data-target-id="B_parallel_k" data-emph="B,k" data-sum="\mathbf{B}\parallel +\hat{k}" title="Feld längs zur Welle">
-                            <span class="target-name" data-tex="\mathbf{B} \parallel +\hat{k}">B ∥ +k̂</span><span class="target-phi"></span>
-                        </button>
-                        <button type="button" class="target-chip" data-target-id="B_antiparallel_k" data-emph="B,k" data-sum="\mathbf{B}\parallel -\hat{k}" title="Feld entgegen der Welle">
-                            <span class="target-name" data-tex="\mathbf{B} \parallel -\hat{k}">B ∥ −k̂</span><span class="target-phi"></span>
-                        </button>
-                        <button type="button" class="target-chip" data-target-id="B_parallel_t" data-emph="B,t" data-sum="\mathbf{B}\parallel \hat{t}" title="Feld quer zur Welle, in der Probe (längs Leiter / Finger)">
-                            <span class="target-name" data-tex="\mathbf{B} \parallel \hat{t}">B ∥ t̂</span><span class="target-phi"></span>
-                        </button>
-                        <button type="button" class="target-chip" data-target-id="B_parallel_n" data-emph="B,n" data-sum="\mathbf{B}\parallel \hat{n}" title="Feld senkrecht zur Probe">
-                            <span class="target-name" data-tex="\mathbf{B} \parallel \hat{n}">B ∥ n̂</span><span class="target-phi"></span>
-                        </button>
-                    </div>
-
-                    <div class="target-group-label">Easy-Plane &amp; Spins</div>
-                    <div class="target-grid">
-                        <button type="button" class="target-chip" data-target-id="m_align_k" data-emph="m,k" data-sum="\hat{m}\parallel \hat{k}" title="FM-Moment in der Easy-Plane längs zur Welle">
-                            <span class="target-name" data-tex="\hat{m} \parallel \hat{k}">m̂ ∥ k̂</span><span class="target-phi"></span>
-                        </button>
-                        <button type="button" class="target-chip" data-target-id="l_align_k" data-emph="l,k" data-sum="\hat{l}\parallel \hat{k}" title="Néel-Vektor in der Easy-Plane längs zur Welle">
-                            <span class="target-name" data-tex="\hat{l} \parallel \hat{k}">l̂ ∥ k̂</span><span class="target-phi"></span>
-                        </button>
-                        <button type="button" class="target-chip target-chip-wide" data-target-id="B_easy_and_sample" data-emph="B,easy,nodes" data-sum="\mathbf{B}\in \text{Easy}\cap\text{Probe}" title="Feld flach in der Probe und in der Easy-Plane (Schnittlinie)">
-                            <span class="target-name">Flach in Probe &amp; Easy-Plane</span><span class="target-phi"></span>
-                        </button>
-                    </div>
-
-                    <div class="target-group-label">Feld <span data-tex="\parallel">∥</span> Kristallachse</div>
-                    <div class="target-grid">
-                        <button type="button" class="target-chip" data-target-id="B_parallel_ea" data-emph="B,crystal" data-sum="\mathbf{B}\parallel [11\bar{2}0]" title="a-Achse (in der Easy-Plane)">
-                            <span class="target-name"><span data-tex="[11\bar{2}0]">[11-20]</span> <small>a</small></span><span class="target-phi"></span>
-                        </button>
-                        <button type="button" class="target-chip" data-target-id="B_parallel_em" data-emph="B,crystal" data-sum="\mathbf{B}\parallel [1\bar{1}00]" title="m-Achse (in der Easy-Plane)">
-                            <span class="target-name"><span data-tex="[1\bar{1}00]">[1-100]</span> <small>m</small></span><span class="target-phi"></span>
-                        </button>
-                        <button type="button" class="target-chip" data-target-id="B_parallel_ec" data-emph="B,crystal" data-sum="\mathbf{B}\parallel [0001]" title="c-Achse (senkrecht zur Easy-Plane)">
-                            <span class="target-name"><span data-tex="[0001]">[0001]</span> <small>c</small></span><span class="target-phi"></span>
-                        </button>
-                        <button type="button" class="target-chip" data-target-id="custom_mb" data-emph="B,crystal" data-sum="\mathbf{B}\parallel [uvtw]" title="Freie Kristallrichtung">
-                            <span class="target-name"><span data-tex="[uvtw]">[uvtw]</span> <small>eigene</small></span><span class="target-phi"></span>
-                        </button>
-                    </div>
-
-                    <div id="customTargetMBBox" class="hkil-apply-row hidden">
-                        <span data-tex="[u\,v\,t\,w]:">[uvtw]:</span>
-                        <input type="number" id="targetU" value="1" step="1" />
-                        <input type="number" id="targetV" value="1" step="1" />
-                        <input type="number" id="targetT" value="-2" disabled />
-                        <input type="number" id="targetW" value="0" step="1" />
-                    </div>
-
-                    <!-- Only shown when the selected target is not exactly reachable with the current mount -->
-                    <div id="targetRemount" class="target-remount" hidden></div>
-                </section>
                 </div>
             </div>
 
-            <!-- Magnetic field: always visible below the tabs (this is what one turns during a measurement) -->
+            <!-- Magnetic field: always visible below the tabs (this is what one turns during a measurement).
+                 Each direction chip shows the φ_M that realizes it with the current mount; a click turns the magnet there. -->
             <section class="magnet-dock" id="magnetDock">
                 <div class="magnet-dock-head">
                     <label for="sliderPhiM" class="magnet-dock-title" data-emph="B,m,l,magnet">Magnetfeld <span data-tex="\phi_M">φ_M</span></label>
@@ -318,13 +255,58 @@
                     <div class="num-unit"><input type="number" id="numB0" min="0.001" max="20" step="0.05" value="0.50" /><span>T</span></div>
                 </div>
                 <input type="range" id="sliderPhiM" min="0" max="360" step="0.5" value="0" class="range-lg" />
-                <div class="quick-chips" data-target="PhiM">
-                    <button type="button" data-val="0">0°</button>
-                    <button type="button" data-val="45">45°</button>
-                    <button type="button" data-val="90">90°</button>
-                    <button type="button" data-val="180">180°</button>
-                    <button type="button" data-val="270">270°</button>
+
+                <div class="field-targets" role="group" aria-label="Feld ausrichten">
+                    <span class="ft-label" data-tex="\mathbf{B}\parallel">B ∥</span>
+                    <button type="button" class="target-chip" data-target-id="B_parallel_k" data-emph="B,k" title="B ∥ +k̂: Feld längs zur Welle">
+                        <span class="target-name" data-tex="+\hat{k}">+k̂</span><span class="target-phi"></span>
+                    </button>
+                    <button type="button" class="target-chip" data-target-id="B_antiparallel_k" data-emph="B,k" title="B ∥ −k̂: Feld entgegen der Welle">
+                        <span class="target-name" data-tex="-\hat{k}">−k̂</span><span class="target-phi"></span>
+                    </button>
+                    <button type="button" class="target-chip" data-target-id="B_parallel_t" data-emph="B,t" title="B ∥ t̂: Feld quer zur Welle, in der Probe (längs Leiter / Finger)">
+                        <span class="target-name" data-tex="\hat{t}">t̂</span><span class="target-phi"></span>
+                    </button>
+                    <button type="button" class="target-chip" data-target-id="B_parallel_n" data-emph="B,n" title="B ∥ n̂: Feld senkrecht zur Probe">
+                        <span class="target-name" data-tex="\hat{n}">n̂</span><span class="target-phi"></span>
+                    </button>
+
+                    <span class="ft-label">Spins</span>
+                    <button type="button" class="target-chip" data-target-id="m_align_k" data-emph="m,k" title="m̂ ∥ k̂: FM-Moment in der Easy-Plane längs zur Welle">
+                        <span class="target-name" data-tex="\hat{m}\parallel\hat{k}">m̂ ∥ k̂</span><span class="target-phi"></span>
+                    </button>
+                    <button type="button" class="target-chip" data-target-id="l_align_k" data-emph="l,k" title="l̂ ∥ k̂: Néel-Vektor in der Easy-Plane längs zur Welle">
+                        <span class="target-name" data-tex="\hat{l}\parallel\hat{k}">l̂ ∥ k̂</span><span class="target-phi"></span>
+                    </button>
+                    <button type="button" class="target-chip target-chip-wide" data-target-id="B_easy_and_sample" data-emph="B,easy,nodes" title="Feld flach in der Probe und in der Easy-Plane (Schnittlinie)">
+                        <span class="target-name">flach in Probe ∩ Easy</span><span class="target-phi"></span>
+                    </button>
+
+                    <span class="ft-label" data-tex="\mathbf{B}\parallel">B ∥</span>
+                    <button type="button" class="target-chip" data-target-id="B_parallel_ea" data-emph="B,crystal" title="B ∥ a-Achse [11-20] (in der Easy-Plane)">
+                        <span class="target-name" data-tex="[11\bar{2}0]">[11-20]</span><span class="target-phi"></span>
+                    </button>
+                    <button type="button" class="target-chip" data-target-id="B_parallel_em" data-emph="B,crystal" title="B ∥ m-Achse [1-100] (in der Easy-Plane)">
+                        <span class="target-name" data-tex="[1\bar{1}00]">[1-100]</span><span class="target-phi"></span>
+                    </button>
+                    <button type="button" class="target-chip" data-target-id="B_parallel_ec" data-emph="B,crystal" title="B ∥ c-Achse [0001] (senkrecht zur Easy-Plane)">
+                        <span class="target-name" data-tex="[0001]">[0001]</span><span class="target-phi"></span>
+                    </button>
+                    <button type="button" class="target-chip" data-target-id="custom_mb" data-emph="B,crystal" title="B ∥ freie Kristallrichtung [uvtw]">
+                        <span class="target-name" data-tex="[uvtw]">[uvtw]</span><span class="target-phi"></span>
+                    </button>
                 </div>
+
+                <div id="customTargetMBBox" class="hkil-apply-row hidden">
+                    <span data-tex="[u\,v\,t\,w]:">[uvtw]:</span>
+                    <input type="number" id="targetU" value="1" step="1" />
+                    <input type="number" id="targetV" value="1" step="1" />
+                    <input type="number" id="targetT" value="-2" disabled />
+                    <input type="number" id="targetW" value="0" step="1" />
+                </div>
+
+                <!-- Only shown when the selected direction is not exactly reachable with the current mount -->
+                <div id="targetRemount" class="target-remount" hidden></div>
             </section>
         </aside>
 

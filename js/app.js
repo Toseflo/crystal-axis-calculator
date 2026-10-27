@@ -444,7 +444,7 @@ function rerenderScenes() {
 }
 
 function bindUIEvents() {
-    // Setup tabs (Probe · Struktur · Einbau · Ziel); the magnet dock below them is always visible
+    // Setup tabs (Probe · Struktur · Einbau); the magnet dock below them is always visible
     document.querySelectorAll('#sideTabs .side-tab').forEach((tab) => {
         tab.addEventListener('click', () => showSideTab(tab.dataset.sideTab));
     });
@@ -691,7 +691,7 @@ function bindUIEvents() {
         recomputeAndRender();
     });
 
-    // Ziel: a chip selects the target and turns the magnet to it
+    // Magnet dock: a direction chip selects the target and turns the magnet to it
     document.querySelectorAll('.target-chip[data-target-id]').forEach((chip) => {
         chip.addEventListener('click', () => driveFieldToTarget(chip.dataset.targetId));
     });
@@ -798,7 +798,7 @@ function bindUIEvents() {
 }
 
 // ============================================================================
-// Setup tabs & target ("Ziel") helpers
+// Setup tabs & field-direction helpers
 // ============================================================================
 
 function showSideTab(name) {
@@ -1112,8 +1112,8 @@ function driveFieldToCustomDirection() {
     document.getElementById('targetW').value = uvtw[3];
 
     driveFieldToTarget('custom_mb');
-    showSideTab('ziel');
     const chip = document.querySelector('.target-chip[data-target-id="custom_mb"]');
+    chip.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     chip.classList.add('flash');
     setTimeout(() => chip.classList.remove('flash'), 1200);
 }
@@ -1584,7 +1584,7 @@ function updateVectorTable(activeState) {
 }
 
 // ============================================================================
-// Target finder results
+// Magnet dock: field-direction chips
 // ============================================================================
 
 const fmtDeg = (deg) => `${Number(deg.toFixed(1))}°`;
@@ -1610,12 +1610,8 @@ function updateTargetChips(activeState) {
         chip.dataset.baseTitle ??= chip.title;
         chip.title = exact ? chip.dataset.baseTitle : `${chip.dataset.baseTitle} · mit diesem Einbau ${reachable ? `nur bis ${fmtDeg(errorDeg)} genau` : 'nicht erreichbar'}`;
 
-        if (chip.dataset.targetId === appState.targetId) selected = { chip, sol, on, exact, reachable };
+        if (chip.dataset.targetId === appState.targetId) selected = { sol, exact, reachable };
     });
-
-    document.getElementById('summaryStepZiel').innerHTML = selected
-        ? `${tex(selected.chip.dataset.sum)}${selected.on ? ' ✓' : ''}`
-        : '';
 
     const box = document.getElementById('targetRemount');
     box.hidden = !selected || selected.exact;
