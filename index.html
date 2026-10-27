@@ -620,80 +620,84 @@
                     <span class="overview-card-hint">umrechnen, einzeichnen, Feld dorthin drehen</span>
                 </summary>
 
-                <div class="segmented-control seg-xs custom-dir-modes" id="customDirModes">
-                    <button type="button" class="seg-btn active" data-cdmode="dir">Richtung <span data-tex="[uvtw]">[uvtw]</span></button>
-                    <button type="button" class="seg-btn" data-cdmode="plane">Ebenen-Normale <span data-tex="(hkil)">(hkil)</span></button>
-                    <button type="button" class="seg-btn" data-cdmode="cross">Senkrecht zu zwei</button>
-                    <button type="button" class="seg-btn" data-cdmode="angles">Winkel θ, φ</button>
+                <div class="cd-modes" id="customDirModes">
+                    <button type="button" class="cd-mode active" data-cdmode="dir" title="Kristallrichtung [uvtw] eingeben">Richtung</button>
+                    <button type="button" class="cd-mode" data-cdmode="plane" title="Ebene (hkil) eingeben – gezeigt wird ihre Normale">Ebene</button>
+                    <button type="button" class="cd-mode" data-cdmode="cross" title="Richtung senkrecht zu zwei Richtungen/Ebenen (Kreuzprodukt)">Senkrecht zu zwei</button>
+                    <button type="button" class="cd-mode" data-cdmode="angles" title="Richtung über Winkel θ, φ in einem Bezugssystem eingeben">Winkel</button>
                 </div>
 
                 <div class="custom-dir-panel" data-cdpanel="dir plane">
-                    <div class="mb-4input-row">
-                        <div class="mb-field"><label data-cd-lbl="0">u</label><input type="number" id="cdH" value="1" step="1" /></div>
-                        <div class="mb-field"><label data-cd-lbl="1">v</label><input type="number" id="cdK" value="0" step="1" /></div>
-                        <div class="mb-field"><label data-cd-lbl="2">t</label><input type="number" id="cdI" value="-1" disabled /></div>
-                        <div class="mb-field"><label data-cd-lbl="3">w</label><input type="number" id="cdL" value="1" step="1" /></div>
+                    <div class="mi-input" id="cdMainIndex">
+                        <span class="mi-br">[</span>
+                        <label class="mi-cell"><input type="number" id="cdH" value="1" step="1" /><span data-cd-lbl="0">u</span></label>
+                        <label class="mi-cell"><input type="number" id="cdK" value="0" step="1" /><span data-cd-lbl="1">v</span></label>
+                        <label class="mi-cell" title="ergibt sich aus den ersten beiden"><input type="number" id="cdI" value="-1" disabled /><span data-cd-lbl="2">t</span></label>
+                        <label class="mi-cell"><input type="number" id="cdL" value="1" step="1" /><span data-cd-lbl="3">w</span></label>
+                        <span class="mi-br">]</span>
                     </div>
                 </div>
 
                 <div class="custom-dir-panel hidden" data-cdpanel="cross">
-                    <div class="cross-axis-grid">
-                        <div class="cross-axis-box">
-                            <div class="cross-axis-top">
-                                <strong>1.</strong>
-                                <select id="crossMode1" class="select-xs">
-                                    <option value="direction" selected>Richtung [uvtw]</option>
-                                    <option value="plane">Ebene (hkil)</option>
-                                </select>
-                            </div>
-                            <div class="mb-4input-row">
+                    <div class="cd-cross">
+                        <div class="cd-cross-row">
+                            <select id="crossMode1" class="select-xs">
+                                <option value="direction" selected>Richtung</option>
+                                <option value="plane">Ebene</option>
+                            </select>
+                            <div class="mi-input mi-sm" data-cross="1">
+                                <span class="mi-br">[</span>
                                 <input type="number" id="cross1_h" value="1" step="1" />
                                 <input type="number" id="cross1_k" value="1" step="1" />
                                 <input type="number" id="cross1_i" value="-2" disabled />
                                 <input type="number" id="cross1_l" value="0" step="1" />
+                                <span class="mi-br">]</span>
                             </div>
                         </div>
-                        <div class="cross-axis-box">
-                            <div class="cross-axis-top">
-                                <strong>2.</strong>
-                                <select id="crossMode2" class="select-xs">
-                                    <option value="direction">Richtung [uvtw]</option>
-                                    <option value="plane" selected>Ebene (hkil)</option>
-                                </select>
-                            </div>
-                            <div class="mb-4input-row">
+                        <div class="cd-cross-row">
+                            <select id="crossMode2" class="select-xs">
+                                <option value="direction">Richtung</option>
+                                <option value="plane" selected>Ebene</option>
+                            </select>
+                            <div class="mi-input mi-sm" data-cross="2">
+                                <span class="mi-br">(</span>
                                 <input type="number" id="cross2_h" value="1" step="1" />
                                 <input type="number" id="cross2_k" value="-1" step="1" />
                                 <input type="number" id="cross2_i" value="0" disabled />
                                 <input type="number" id="cross2_l" value="2" step="1" />
+                                <span class="mi-br">)</span>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <div class="custom-dir-panel hidden" data-cdpanel="angles">
-                    <div class="xyz-3input-row">
-                        <div class="mb-field">
-                            <label>System</label>
+                    <div class="cd-angles">
+                        <label class="cd-ang" title="Winkel zur z-Achse des Systems (Probe: Normale n̂)">
+                            <span>θ</span>
+                            <div class="num-unit"><input type="number" id="cdTheta" value="90" step="1" /><span>°</span></div>
+                        </label>
+                        <label class="cd-ang" title="Azimut ab der x-Achse des Systems (Probe: 0°-Kante)">
+                            <span>φ</span>
+                            <div class="num-unit"><input type="number" id="cdPhi" value="0" step="1" /><span>°</span></div>
+                        </label>
+                        <label class="cd-ang">
+                            <span>in</span>
                             <select id="cdAngFrame" class="select-xs">
                                 <option value="Sub" selected>Probe</option>
                                 <option value="Wave">Welle</option>
                                 <option value="Lab">Magnet/Labor</option>
                                 <option value="Cryst">Kristall</option>
                             </select>
-                        </div>
-                        <div class="mb-field"><label>θ zur Normale/z</label><input type="number" id="cdTheta" value="90" step="1" /></div>
-                        <div class="mb-field"><label>φ in der xy-Ebene</label><input type="number" id="cdPhi" value="0" step="1" /></div>
+                        </label>
                     </div>
                 </div>
 
                 <div class="custom-dir-result" id="customDirResult"></div>
 
-                <div class="custom-dir-actions">
-                    <button type="button" class="btn btn-xs btn-primary" id="btnCustomDirDrive" title="Im Ziel-Finder die nötigen Halter- und Magnetwinkel für B ∥ diese Richtung berechnen">
-                        Feld dorthin drehen →
-                    </button>
-                </div>
+                <button type="button" class="btn btn-secondary btn-block cd-drive" id="btnCustomDirDrive" title="Im Ziel-Finder die nötigen Halter- und Magnetwinkel für B ∥ diese Richtung berechnen">
+                    Feld <span data-tex="\mathbf{B}">B</span> in diese Richtung drehen →
+                </button>
             </details>
 
             <!-- Side-by-Side Comparison Summary Table (Only shown when Compare A vs. B is active) -->

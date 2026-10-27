@@ -37,7 +37,7 @@ import {
 
 import { Scene3DController, VECTOR_COLORS } from './visualizer_3d.js';
 import { generateThesisSVG } from './svg_exporter.js';
-import { buildNarrative, buildSummary, describeDirection, token } from './narrative.js';
+import { buildNarrative, buildSummary, shortDirection, token } from './narrative.js';
 import { GuidedTour } from './tour.js';
 
 // Application State (Default: c-cut (0001) in IP orientation)
@@ -847,11 +847,12 @@ function bindCustomDirection() {
         dir: ['u', 'v', 't', 'w'],
         plane: ['h', 'k', 'i', 'l']
     };
-    document.querySelectorAll('#customDirModes .seg-btn').forEach((btn) => {
+    document.querySelectorAll('#customDirModes .cd-mode').forEach((btn) => {
         btn.addEventListener('click', () => {
             const mode = btn.dataset.cdmode;
             appState.customDir.mode = mode;
-            document.querySelectorAll('#customDirModes .seg-btn').forEach((b) => b.classList.toggle('active', b === btn));
+            document.querySelectorAll('#customDirModes .cd-mode').forEach((b) => b.classList.toggle('active', b === btn));
+            setIndexBrackets(document.getElementById('cdMainIndex'), mode === 'plane');
             document.querySelectorAll('.custom-dir-panel[data-cdpanel]').forEach((p) => {
                 p.classList.toggle('hidden', !p.dataset.cdpanel.split(' ').includes(mode));
             });
@@ -863,6 +864,12 @@ function bindCustomDirection() {
             sceneController.visibility.showCustom = true;
             syncLegend();
             if (lastActiveState) updateCustomDirection(lastActiveState);
+        });
+    });
+
+    [1, 2].forEach((n) => {
+        document.getElementById(`crossMode${n}`).addEventListener('change', (e) => {
+            setIndexBrackets(document.querySelector(`.mi-input[data-cross="${n}"]`), e.target.value === 'plane');
         });
     });
 
@@ -889,6 +896,13 @@ function bindCustomDirection() {
     });
 
     document.getElementById('btnCustomDirDrive').addEventListener('click', driveFieldToCustomDirection);
+}
+
+// Directions are written [uvtw], planes (hkil)
+function setIndexBrackets(container, isPlane) {
+    const [open, close] = container.querySelectorAll('.mi-br');
+    open.textContent = isPlane ? '(' : '[';
+    close.textContent = isPlane ? ')' : ']';
 }
 
 // Returns the custom direction as a unit vector in the crystal frame (or null).
@@ -987,14 +1001,13 @@ function updateCustomDirection(state) {
     // Tilt out of the sample plane (0° = lies in the sample)
     const elevSub = Math.asin(Math.min(1, Math.abs(vSub[2]))) * RAD2DEG;
     const stat = (val, labelHtml) => `<div class="cd-stat"><strong>${val}</strong><span>${labelHtml}</span></div>`;
-    const planeTitle = appState.customDir.mode === 'plane' ? 'Diese Ebene' : 'Ebene senkrecht zu dieser Richtung';
+    const planeText = appState.customDir.mode === 'plane' ? 'Normale der Ebene' : 'steht senkrecht auf';
     out.innerHTML = `
-        <div class="cd-headline">
-            ${token('custom', tex(dir.latex))}
-            ${dir.exact ? '' : '<span class="muted">(gerundet)</span>'}
-            <span class="muted" title="${planeTitle}">${tex('\\perp')} ${tex(plane.latex)}</span>
+        <div class="cd-res-head" data-emph="custom">
+            <span class="cd-res-idx">${tex(dir.latex)}</span>
+            <span class="cd-res-class">${shortDirection(vCryst)}</span>
         </div>
-        <p class="cd-desc">Die Richtung ${describeDirection(vCryst, tex)}.</p>
+        <div class="cd-res-sub">${planeText} ${tex(plane.latex)}${dir.exact ? '' : ' · gerundet'}</div>
         <div class="cd-stats">
             ${stat(`${angleDeg(vCryst, [0, 0, 1]).toFixed(1)}°`, `zur ${token('ec', 'c-Achse')}`)}
             ${stat(`${elevSub.toFixed(1)}°`, 'aus der Probe')}

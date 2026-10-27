@@ -71,7 +71,7 @@ export function describeDirection(vCryst, tex) {
 }
 
 // Very short classification for the summary lines ("a-Achse, in der Easy-Plane", "12.3° aus der Easy-Plane").
-function shortDirection(vCryst) {
+export function shortDirection(vCryst) {
     const [x, y, z] = vCryst;
     const tiltDeg = Math.asin(Math.min(1, Math.abs(z))) * RAD2DEG;
     const easy = token('easy', 'Easy-Plane');

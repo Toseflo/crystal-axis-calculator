@@ -1423,72 +1423,19 @@ body.theme-light .canvas-pill-btn {
     font-size: 11.5px;
 }
 
-.mb-4input-row {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 8px;
-}
 
-.xyz-3input-row {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-}
 
-.mb-field {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-}
-.mb-field label {
-    font-size: 11px;
-    color: var(--text-muted);
-    font-weight: 600;
-}
-.mb-field input,
-.mb-4input-row input {
-    width: 100%;
-    padding: 6px 8px;
-    background: var(--bg-input);
-    border: 1px solid var(--border-color);
-    border-radius: 5px;
-    color: var(--text-primary);
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12.5px;
-    text-align: center;
-}
-.mb-field input:disabled,
-.mb-4input-row input:disabled {
-    opacity: 0.6;
-}
 
-.cross-axis-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 10px;
-    align-items: center;
-}
-@media (max-width: 900px) {
-    .cross-axis-grid {
-        grid-template-columns: 1fr;
-    }
-}
-.cross-axis-box {
-    background: var(--bg-panel);
-    border: 1px solid var(--border-color);
-    border-radius: 7px;
-    padding: 10px 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 7px;
-    font-size: 12px;
-}
-.cross-axis-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 6px;
-}
+
+
+
+
+
+
+
+
+
+
 
 /* Tables & 3x3 Matrix */
 .select-xs {
@@ -1840,66 +1787,190 @@ body.theme-light .canvas-pill-btn {
 }
 
 /* --- Eigene Richtung ------------------------------------------------------ */
-.custom-dir-modes {
+/* Mode switch: one row, underline style */
+.cd-modes {
     display: grid;
-    grid-auto-flow: row;
     grid-template-columns: repeat(4, auto);
+    border-bottom: 1px solid var(--border-color);
 }
-.overview-col .cross-axis-grid {
-    grid-template-columns: 1fr 1fr;
+.cd-mode {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    padding: 6px 4px 7px;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    white-space: nowrap;
 }
-.overview-col .cross-axis-box {
-    background: var(--bg-card);
-    padding: 8px 10px;
+.cd-mode:hover {
+    color: var(--text-secondary);
 }
-.custom-dir-result {
-    background: var(--bg-card);
+.cd-mode.active {
+    color: #fdba74;
+    border-bottom-color: #fb923c;
+}
+
+/* Miller(-Bravais) index input that looks like [u v t w] */
+.mi-input {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 0 2px;
+}
+.mi-br {
+    font-family: 'KaTeX_Main', 'Times New Roman', serif;
+    font-size: 34px;
+    line-height: 1;
+    color: var(--text-muted);
+    margin-top: -14px;
+}
+.mi-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+.mi-cell span {
+    font-size: 10.5px;
+    font-style: italic;
+    color: var(--text-muted);
+}
+.mi-input input {
+    width: 54px;
+    padding: 6px 2px;
+    background: var(--bg-input);
     border: 1px solid var(--border-color);
-    border-left: 3px solid #fb923c;
-    border-radius: var(--radius-sm);
-    padding: 9px 11px;
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 15px;
+    font-weight: 600;
+    text-align: center;
+    outline: none;
+    -moz-appearance: textfield;
+}
+.mi-input input::-webkit-inner-spin-button,
+.mi-input input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+.mi-input input:focus {
+    border-color: #fb923c;
+}
+.mi-input input:disabled {
+    background: transparent;
+    border-style: dashed;
+    color: var(--text-muted);
+}
+.mi-sm {
+    padding: 0;
+    gap: 4px;
+}
+.mi-sm .mi-br {
+    font-size: 24px;
+    margin-top: -2px;
+}
+.mi-sm input {
+    width: 44px;
+    padding: 4px 2px;
+    font-size: 13px;
+}
+
+/* "Senkrecht zu zwei" */
+.cd-cross {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    font-size: 12.5px;
+    padding-top: 4px;
 }
-.cd-headline {
+.cd-cross-row {
+    display: grid;
+    grid-template-columns: 84px 1fr;
+    align-items: center;
+    gap: 8px;
+}
+.cd-cross-row .mi-input {
+    justify-content: flex-start;
+}
+
+/* Angle input */
+.cd-angles {
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+    padding-top: 6px;
+}
+.cd-ang {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+.cd-ang > span {
+    font-style: italic;
+}
+
+/* Result */
+.custom-dir-result {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 12px;
+    background: rgba(251, 146, 60, 0.06);
+    border: 1px solid rgba(251, 146, 60, 0.28);
+    border-radius: var(--radius-sm);
+}
+.cd-res-head {
     display: flex;
     align-items: baseline;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 4px 10px;
+    cursor: help;
 }
-.cd-desc {
+.cd-res-idx {
+    font-size: 17px;
+    color: #fdba74;
+}
+.cd-res-class {
+    font-size: 12.5px;
     color: var(--text-secondary);
-    line-height: 1.5;
+}
+.cd-res-sub {
+    font-size: 11.5px;
+    color: var(--text-muted);
 }
 .cd-stats {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 6px;
+    margin-top: 6px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(251, 146, 60, 0.18);
 }
 .cd-stat {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 1px;
-    padding: 5px 4px;
-    background: var(--bg-panel);
-    border-radius: 6px;
     font-size: 11px;
     color: var(--text-muted);
     text-align: center;
 }
+.cd-stat + .cd-stat {
+    border-left: 1px solid var(--border-color);
+}
 .cd-stat strong {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 13px;
+    font-size: 14px;
     color: var(--text-primary);
 }
-.custom-dir-actions {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
+.cd-drive:hover {
+    border-color: #fb923c;
 }
 
 /* Target finder flashes when "Feld dorthin drehen" jumps to it */
