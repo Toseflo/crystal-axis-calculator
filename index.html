@@ -617,7 +617,7 @@
             <details class="overview-card overview-details" id="customDirCard">
                 <summary class="overview-card-head">
                     <h2>Eigene Richtung</h2>
-                    <span class="overview-card-hint">umrechnen, einzeichnen, Feld dorthin drehen</span>
+                    <span class="overview-card-hint">umrechnen, einzeichnen, Feld dorthin drehen<span id="customDirPinCount"></span></span>
                 </summary>
 
                 <div class="cd-modes" id="customDirModes">
@@ -695,9 +695,20 @@
 
                 <div class="custom-dir-result" id="customDirResult"></div>
 
-                <button type="button" class="btn btn-secondary btn-block cd-drive" id="btnCustomDirDrive" title="Im Ziel-Finder die nötigen Halter- und Magnetwinkel für B ∥ diese Richtung berechnen">
-                    Feld <span data-tex="\mathbf{B}">B</span> in diese Richtung drehen →
-                </button>
+                <div class="cd-actions">
+                    <button type="button" class="btn btn-secondary cd-pin" id="btnCustomDirPin" title="Richtung in die Liste übernehmen – sie bleibt als eigener Pfeil im 3D-Bild">+ Merken</button>
+                    <button type="button" class="btn btn-secondary cd-drive" id="btnCustomDirDrive" title="Im Ziel-Finder die nötigen Halter- und Magnetwinkel für B ∥ diese Richtung berechnen">
+                        Feld <span data-tex="\mathbf{B}">B</span> dorthin drehen →
+                    </button>
+                </div>
+
+                <div class="pinned-dirs" id="pinnedDirs" hidden>
+                    <div class="pinned-head">
+                        <span>Gemerkte Richtungen</span>
+                        <button type="button" class="btn-link" id="btnPinClear" hidden>alle entfernen</button>
+                    </div>
+                    <ul class="pinned-list" id="pinnedDirList"></ul>
+                </div>
             </details>
 
             <!-- Side-by-Side Comparison Summary Table (Only shown when Compare A vs. B is active) -->

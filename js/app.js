@@ -74,8 +74,12 @@ const appState = {
     customTargetUVTW: [1, 1, -2, 0],
     vectorTableMode: 'angles', // 'angles' | 'xyz'
     vectorTableAll: false, // false: only B, m, l, k (+ custom)
-    customDir: { mode: 'dir' } // 'dir' | 'plane' | 'cross' | 'angles'
+    customDir: { mode: 'dir' }, // 'dir' | 'plane' | 'cross' | 'angles'
+    pinnedDirs: [] // [{ id, cryst, label, latex, uvtw, exact, color }] – fixed in the crystal frame
 };
+
+// Arrow colours for pinned directions (distinct from the built-in vectors)
+const PIN_COLORS = ['#84cc16', '#06b6d4', '#ec4899', '#ef4444', '#14b8a6', '#a8a29e'];
 
 const PRESET_STORAGE_KEY = 'hematite_user_presets_v1';
 
@@ -863,7 +867,7 @@ function bindCustomDirection() {
             }
             sceneController.visibility.showCustom = true;
             syncLegend();
-            if (lastActiveState) updateCustomDirection(lastActiveState);
+            refreshCustomDirection();
         });
     });
 
@@ -877,14 +881,8 @@ function bindCustomDirection() {
     ids.forEach((id) => {
         const el = document.getElementById(id);
         if (!el) return;
-        const handler = () => {
-            if (lastActiveState) {
-                updateCustomDirection(lastActiveState);
-                rerenderScenes();
-            }
-        };
-        el.addEventListener('input', handler);
-        el.addEventListener('change', handler);
+        el.addEventListener('input', refreshCustomDirection);
+        el.addEventListener('change', refreshCustomDirection);
     });
 
     // Opening the card draws the arrow, closing it removes it again
@@ -896,6 +894,92 @@ function bindCustomDirection() {
     });
 
     document.getElementById('btnCustomDirDrive').addEventListener('click', driveFieldToCustomDirection);
+
+    // Pinned directions: "+ Merken" adds the current one, × removes, clicking the index loads it back
+    document.getElementById('btnCustomDirPin').addEventListener('click', pinCurrentDirection);
+    document.getElementById('pinnedDirList').addEventListener('click', (e) => {
+        const item = e.target.closest('[data-pin-id]');
+        if (!item) return;
+        const id = Number(item.dataset.pinId);
+        if (e.target.closest('.pin-remove')) {
+            appState.pinnedDirs = appState.pinnedDirs.filter((p) => p.id !== id);
+            setEmphasis(null);
+        } else if (e.target.closest('.pin-load')) {
+            loadPinnedDirection(appState.pinnedDirs.find((p) => p.id === id));
+        }
+        refreshCustomDirection();
+    });
+    document.getElementById('btnPinClear').addEventListener('click', () => {
+        appState.pinnedDirs = [];
+        refreshCustomDirection();
+    });
+}
+
+// Recompute the custom + pinned directions and redraw everything that shows them
+function refreshCustomDirection() {
+    if (!lastActiveState) return;
+    updateCustomDirection(lastActiveState);
+    updatePinnedDirections(lastActiveState);
+    updateVectorTable(lastActiveState);
+    rerenderScenes();
+}
+
+function pinCurrentDirection() {
+    const cd = appState.customDir;
+    if (!cd.cryst || findPinned(cd.cryst)) return;
+    const used = new Set(appState.pinnedDirs.map((p) => p.color));
+    const color = PIN_COLORS.find((c) => !used.has(c)) || PIN_COLORS[appState.pinnedDirs.length % PIN_COLORS.length];
+    const id = (appState.pinnedDirs.reduce((m, p) => Math.max(m, p.id), 0) || 0) + 1;
+    appState.pinnedDirs.push({ id, cryst: [...cd.cryst], label: cd.text, latex: cd.latex, uvtw: cd.uvtw, exact: cd.exact, color });
+    refreshCustomDirection();
+}
+
+function findPinned(vCryst) {
+    return appState.pinnedDirs.find((p) => dot3(p.cryst, vCryst) > 1 - 1e-6);
+}
+
+// Puts a pinned direction back into the [uvtw] input
+function loadPinnedDirection(pin) {
+    if (!pin) return;
+    document.querySelector('#customDirModes .cd-mode[data-cdmode="dir"]').click();
+    document.getElementById('cdH').value = pin.uvtw[0];
+    document.getElementById('cdK').value = pin.uvtw[1];
+    document.getElementById('cdL').value = pin.uvtw[3];
+}
+
+function updatePinnedDirections(state) {
+    const pins = appState.pinnedDirs;
+    const R = state.matrices.getRotationMatrix('Lab', 'Cryst');
+    const vectors = pins.map((p) => ({ Lab: matVec3(R, p.cryst), label: p.label, color: p.color, key: `pin${p.id}` }));
+    sceneController.pinnedVectors = vectors;
+    if (sceneController2) sceneController2.pinnedVectors = vectors;
+
+    const cur = appState.customDir.cryst;
+    const btn = document.getElementById('btnCustomDirPin');
+    const already = cur && findPinned(cur);
+    btn.disabled = !cur || Boolean(already) || pins.length >= PIN_COLORS.length;
+    btn.textContent = already ? '✓ gemerkt' : pins.length >= PIN_COLORS.length ? 'Liste voll' : '+ Merken';
+
+    document.getElementById('pinnedDirs').hidden = pins.length === 0;
+    document.getElementById('btnPinClear').hidden = pins.length < 2;
+    document.getElementById('customDirPinCount').textContent = pins.length ? ` · ${pins.length} gemerkt` : '';
+
+    const v = state.vectors;
+    const RSub = state.matrices.getRotationMatrix('Sub', 'Cryst');
+    document.getElementById('pinnedDirList').innerHTML = pins
+        .map((p) => {
+            const vSub = matVec3(RSub, p.cryst);
+            const active = cur && dot3(p.cryst, cur) > 1 - 1e-6;
+            return `
+            <li class="pin-item${active ? ' active' : ''}" data-pin-id="${p.id}" data-emph="pin${p.id}">
+                <span class="vt-dot" style="background:${p.color}"></span>
+                <button type="button" class="pin-load" title="wieder in die Eingabe laden">${tex(p.latex)}</button>
+                <span class="pin-class">${shortDirection(p.cryst)}</span>
+                <span class="pin-ang" title="Winkel zu k̂ und zu B">${tex('\\hat{k}')} ${angleDeg(vSub, v.kHat.Sub).toFixed(0)}° · ${tex('\\mathbf{B}')} ${angleDeg(vSub, v.bHat.Sub).toFixed(0)}°</span>
+                <button type="button" class="pin-remove" title="aus der Liste entfernen" aria-label="entfernen">×</button>
+            </li>`;
+        })
+        .join('');
 }
 
 // Directions are written [uvtw], planes (hkil)
@@ -978,6 +1062,7 @@ const angleDeg = (u, v) => Math.acos(Math.max(-1, Math.min(1, dot3(normalize3(u)
 function updateCustomDirection(state) {
     const out = document.getElementById('customDirResult');
     const vCryst = computeCustomDirCryst(state);
+    appState.customDir.cryst = vCryst;
     if (!vCryst) {
         sceneController.customVector = null;
         if (sceneController2) sceneController2.customVector = null;
@@ -994,6 +1079,8 @@ function updateCustomDirection(state) {
     const plane = bestMillerBravais(vCryst, s.aLattice, s.cLattice, true);
     appState.customDir.uvtw = dir.indices;
     appState.customDir.latex = dir.latex;
+    appState.customDir.text = dir.text;
+    appState.customDir.exact = dir.exact;
 
     sceneController.customVector = { Lab: vLab, label: dir.text };
     if (sceneController2) sceneController2.customVector = sceneController.customVector;
@@ -1195,6 +1282,7 @@ function recomputeAndRender() {
 
     // The custom direction depends on the setup (it is drawn in Lab coordinates)
     updateCustomDirection(activeState);
+    updatePinnedDirections(activeState);
 
     // 3D views (paused while the tour animates its own temporary field sweep)
     if (!(tour && tour.active && tour._raf)) {
@@ -1439,15 +1527,15 @@ function updateVectorTable(activeState) {
             skip: tiltNC < 1
         }
     ];
-    if (sceneController.visibility.showCustom && sceneController.customVector && appState.customDir.uvtw) {
-        const lab = sceneController.customVector.Lab;
-        const R = activeState.matrices.getRotationMatrix(frame, 'Lab');
-        entries.push({
-            key: 'custom',
-            name: 'Eigene',
-            vecInFrame: matVec3(R, lab),
-            mb: appState.customDir.latex
-        });
+    if (sceneController.visibility.showCustom) {
+        const RC = activeState.matrices.getRotationMatrix(frame, 'Cryst');
+        const cur = appState.customDir.cryst;
+        if (cur && !findPinned(cur)) {
+            entries.push({ key: 'custom', name: 'Eigene', vecInFrame: matVec3(RC, cur), mb: appState.customDir.latex });
+        }
+        for (const p of appState.pinnedDirs) {
+            entries.push({ key: `pin${p.id}`, name: 'Gemerkt', vecInFrame: matVec3(RC, p.cryst), mb: p.latex, color: p.color, pinned: true });
+        }
     }
 
     const fmtComp = (x) => {
@@ -1457,7 +1545,7 @@ function updateVectorTable(activeState) {
     const color = (key) => (key === 'xs' || key === 'ys' ? VECTOR_COLORS.edge : VECTOR_COLORS[key]);
 
     const shown = entries.filter((e) => !e.skip);
-    const visible = appState.vectorTableAll ? shown : shown.filter((e) => TABLE_CORE_KEYS.includes(e.key));
+    const visible = appState.vectorTableAll ? shown : shown.filter((e) => e.pinned || TABLE_CORE_KEYS.includes(e.key));
     document.getElementById('btnVectorTableAll').textContent = appState.vectorTableAll
         ? 'weniger ▴'
         : `+ ${shown.length - visible.length} weitere (Achsen, Kanten …)`;
@@ -1472,7 +1560,7 @@ function updateVectorTable(activeState) {
             const cells = angles
                 ? `<td class="num">${th.toFixed(1)}°</td><td class="num">${phTxt}</td>`
                 : `<td class="num">${fmtComp(vec[0])}</td><td class="num">${fmtComp(vec[1])}</td><td class="num">${fmtComp(vec[2])}</td>`;
-            return `<tr data-emph="${e.key}"><td><span class="vt-dot" style="background:${color(e.key)}"></span>${e.name}</td>${cells}<td>${tex(e.mb)}</td></tr>`;
+            return `<tr data-emph="${e.key}"><td><span class="vt-dot" style="background:${e.color || color(e.key)}"></span>${e.name}</td>${cells}<td>${tex(e.mb)}</td></tr>`;
         })
         .join('');
 }

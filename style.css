@@ -1819,8 +1819,8 @@ body.theme-light .canvas-pill-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    padding: 6px 0 2px;
+    gap: 8px;
+    padding: 10px 0 4px;
 }
 .mi-br {
     font-family: 'KaTeX_Main', 'Times New Roman', serif;
@@ -1885,8 +1885,8 @@ body.theme-light .canvas-pill-btn {
 .cd-cross {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    padding-top: 4px;
+    gap: 10px;
+    padding-top: 8px;
 }
 .cd-cross-row {
     display: grid;
@@ -1902,8 +1902,8 @@ body.theme-light .canvas-pill-btn {
 .cd-angles {
     display: flex;
     justify-content: center;
-    gap: 14px;
-    padding-top: 6px;
+    gap: 18px;
+    padding: 10px 0 4px;
 }
 .cd-ang {
     display: flex;
@@ -1920,8 +1920,8 @@ body.theme-light .canvas-pill-btn {
 .custom-dir-result {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    padding: 10px 12px;
+    gap: 6px;
+    padding: 14px 14px 12px;
     background: rgba(251, 146, 60, 0.06);
     border: 1px solid rgba(251, 146, 60, 0.28);
     border-radius: var(--radius-sm);
@@ -1948,8 +1948,8 @@ body.theme-light .canvas-pill-btn {
 .cd-stats {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    margin-top: 6px;
-    padding-top: 8px;
+    margin-top: 8px;
+    padding-top: 10px;
     border-top: 1px solid rgba(251, 146, 60, 0.18);
 }
 .cd-stat {
@@ -1969,8 +1969,121 @@ body.theme-light .canvas-pill-btn {
     font-size: 14px;
     color: var(--text-primary);
 }
+/* Content of a <details> lives in ::details-content (a block box), so space it there */
+#customDirCard[open] {
+    gap: 14px;
+}
+#customDirCard::details-content {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+.cd-actions {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 8px;
+}
+.cd-pin:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+.cd-pin:not(:disabled):hover,
 .cd-drive:hover {
     border-color: #fb923c;
+}
+
+/* Pinned directions */
+.pinned-dirs {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border-color);
+}
+.pinned-dirs[hidden] {
+    display: none;
+}
+.pinned-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+.pinned-head .btn-link {
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 400;
+}
+.pinned-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.pin-item {
+    display: grid;
+    grid-template-columns: auto auto 1fr auto auto;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 6px 6px 10px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: var(--bg-input);
+    font-size: 12px;
+}
+.pin-item:hover {
+    border-color: var(--border-color);
+}
+.pin-item.active {
+    border-color: rgba(251, 146, 60, 0.45);
+}
+.pin-item .vt-dot {
+    margin-right: 0;
+}
+.pin-load {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    font-size: 13.5px;
+    color: var(--text-primary);
+    cursor: pointer;
+}
+.pin-load:hover {
+    color: #fdba74;
+}
+.pin-class {
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.pin-ang {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+.pin-remove {
+    background: none;
+    border: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    font-size: 16px;
+    line-height: 1;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+.pin-remove:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
 }
 
 /* Target finder flashes when "Feld dorthin drehen" jumps to it */

@@ -141,6 +141,8 @@ export class Scene3DController {
 
         // Optional user-defined direction { Lab: [x,y,z], label: '[uvtw]' }
         this.customVector = null;
+        // Directions the user pinned to the list: [{ Lab, label, color, key }]
+        this.pinnedVectors = [];
         this.camera = {
             azimuthDeg: -38,
             elevationDeg: 28,
@@ -501,7 +503,20 @@ export class Scene3DController {
         if (vis.showB) {
             arrows3D.push({ vec: bHat, baseLen: 1.00, color: VECTOR_COLORS.B, label: 'B', width: 3.5, dashed: false, keys: ['B'] });
         }
-        if (vis.showCustom && this.customVector && this.customVector.Lab && norm3(this.customVector.Lab) > 1e-9) {
+        const pinned = vis.showCustom ? this.pinnedVectors.filter((p) => p.Lab && norm3(p.Lab) > 1e-9) : [];
+        for (const p of pinned) {
+            arrows3D.push({
+                vec: toLock(normalize3(p.Lab), 'Lab'),
+                baseLen: 0.9,
+                color: p.color,
+                label: p.label,
+                width: 2.6,
+                dashed: false,
+                keys: [p.key, 'pinned']
+            });
+        }
+        const customIsPinned = (cv) => pinned.some((p) => Math.abs(dot3(normalize3(p.Lab), normalize3(cv.Lab)) - 1) < 1e-6);
+        if (vis.showCustom && this.customVector && this.customVector.Lab && norm3(this.customVector.Lab) > 1e-9 && !customIsPinned(this.customVector)) {
             arrows3D.push({
                 vec: toLock(normalize3(this.customVector.Lab), 'Lab'),
                 baseLen: 0.95,
