@@ -1698,7 +1698,7 @@ function updateInverseSolver() {
 }
 
 // ============================================================================
-// Export dialog: SVG · Python · Rotation matrix
+// Export dialog: PNG · SVG · field sweep · Python · rotation matrix
 // ============================================================================
 
 let activeExportTab = 'svg';
@@ -1717,10 +1717,51 @@ function refreshSvgPreview() {
         showAngleArcs: document.getElementById('svgOptArcs').checked,
         showLegend: document.getElementById('svgOptLegend').checked,
         latexLabels: document.getElementById('svgOptLatex').checked,
-        transparentBg: document.getElementById('svgOptTransparent').checked
+        transparentBg: document.getElementById('svgOptTransparent').checked,
+        sweep: document.getElementById('svgOptSweep').checked
+            ? {
+                  fromDeg: Number(document.getElementById('svgOptSweepFrom').value) || 0,
+                  toDeg: Number(document.getElementById('svgOptSweepTo').value) || 0
+              }
+            : null
     });
     document.getElementById('svgPreviewContainer').innerHTML = svgStr;
     return svgStr;
+}
+
+// Logical size (CSS px) per PNG format; 'view' = the size of view 1 on screen
+const PNG_FORMATS = { '16:9': [960, 540], '4:3': [800, 600], '1:1': [680, 680] };
+
+function renderPngExport(scale = Number(document.getElementById('pngOptScale').value)) {
+    const rect = sceneController.canvas3d.getBoundingClientRect();
+    const [width, height] = PNG_FORMATS[document.getElementById('pngOptFormat').value] || [
+        Math.round(rect.width),
+        Math.round(rect.height)
+    ];
+    const colors = document.getElementById('pngOptColors').value;
+    return sceneController.renderToCanvas({
+        width,
+        height,
+        scale,
+        light: colors === 'app' ? document.body.classList.contains('theme-light') : colors === 'light',
+        transparent: document.getElementById('pngOptTransparent').checked
+    });
+}
+
+function refreshPngPreview() {
+    const scale = Number(document.getElementById('pngOptScale').value);
+    // Preview at screen resolution; the download renders at the chosen scale
+    const canvas = renderPngExport(window.devicePixelRatio || 1);
+    const box = document.getElementById('pngPreviewContainer');
+    box.replaceChildren(canvas);
+    box.classList.toggle('is-transparent', document.getElementById('pngOptTransparent').checked);
+    const w = Math.round((canvas.width / (window.devicePixelRatio || 1)) * scale);
+    const h = Math.round((canvas.height / (window.devicePixelRatio || 1)) * scale);
+    document.getElementById('pngSizeHint').textContent = `${w} × ${h} px`;
+}
+
+function pngBlob() {
+    return new Promise((resolve) => renderPngExport().toBlob(resolve, 'image/png'));
 }
 
 const FRAME_SHORT_DE = { Sub: 'Probe', Wave: 'Welle', Cryst: 'Kristall', Lab: 'Labor', Mount: 'Halter' };
@@ -1753,6 +1794,8 @@ function updateMatrixInspector() {
 function refreshExportPanel() {
     if (activeExportTab === 'svg') {
         refreshSvgPreview();
+    } else if (activeExportTab === 'png') {
+        refreshPngPreview();
     } else if (activeExportTab === 'python') {
         document.getElementById('pythonSnippetCode').textContent = generatePythonSnippet(
             appState.setupA,
@@ -1816,8 +1859,33 @@ function bindExportModal() {
         'svgOptArcs',
         'svgOptLegend',
         'svgOptLatex',
-        'svgOptTransparent'
+        'svgOptTransparent',
+        'svgOptSweep'
     ].forEach((id) => document.getElementById(id).addEventListener('change', refreshSvgPreview));
+
+    // Typing a start/stop angle switches the sweep on
+    ['svgOptSweepFrom', 'svgOptSweepTo'].forEach((id) =>
+        document.getElementById(id).addEventListener('input', () => {
+            document.getElementById('svgOptSweep').checked = true;
+            refreshSvgPreview();
+        })
+    );
+
+    ['pngOptFormat', 'pngOptColors', 'pngOptScale', 'pngOptTransparent'].forEach((id) =>
+        document.getElementById(id).addEventListener('change', refreshPngPreview)
+    );
+
+    document.getElementById('btnDownloadPng').addEventListener('click', () => {
+        pngBlob().then((blob) => blob && downloadBlob(blob, `${exportBaseName(getActiveSetup())}.png`));
+    });
+
+    document.getElementById('btnCopyPng').addEventListener('click', (e) => {
+        const btn = e.currentTarget;
+        navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob() })]).then(
+            () => flashButton(btn, 'Bild kopiert'),
+            () => flashButton(btn, 'Kopieren nicht möglich')
+        );
+    });
 
     document.getElementById('btnDownloadSvg').addEventListener('click', () => {
         downloadText(refreshSvgPreview(), `${exportBaseName(getActiveSetup())}.svg`, 'image/svg+xml');
@@ -1862,13 +1930,6 @@ function bindExportCard() {
             () => showToast('Notiz kopiert – einfach ins Laborbuch einfügen'),
             () => showToast('Kopieren nicht möglich')
         );
-    });
-
-    document.getElementById('btnDownloadPng').addEventListener('click', () => {
-        sceneController.render();
-        sceneController.canvas3d.toBlob((blob) => {
-            if (blob) downloadBlob(blob, `${exportBaseName(getActiveSetup())}.png`);
-        }, 'image/png');
     });
 
     document.getElementById('btnDownloadCsv').addEventListener('click', () => {

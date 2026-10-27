@@ -394,29 +394,52 @@ export class Scene3DController {
         this._render3DScene();
     }
 
+    // Offscreen render for the image export: own size, pixel scale, color scheme and background.
+    // Hover emphasis is dropped so the exported picture never comes out half faded.
+    renderToCanvas({ width, height, scale = 2, light = false, transparent = false }) {
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(width * scale);
+        canvas.height = Math.round(height * scale);
+        if (!this.stateA) return canvas;
+        const ctx = canvas.getContext('2d');
+        ctx.setTransform(scale, 0, 0, scale, 0, 0);
+        const savedEmphasis = this.emphasis;
+        this.emphasis = null;
+        this._exportTarget = { ctx, w: width, h: height, light, transparent };
+        try {
+            this._render3DScene();
+        } finally {
+            this._exportTarget = null;
+            this.emphasis = savedEmphasis;
+        }
+        return canvas;
+    }
+
     // ========================================================================
     // 3D Main Scene Renderer
     // ========================================================================
     _render3DScene() {
-        const prep = this._prepareCanvas(this.canvas3d);
+        const prep = this._exportTarget || this._prepareCanvas(this.canvas3d);
         if (!prep) return;
         const { ctx, w, h } = prep;
-        const isLight = document.body.classList.contains('theme-light');
+        const isLight = prep.light ?? document.body.classList.contains('theme-light');
         const cx = w * 0.5;
         const cy = h * 0.53;
         const baseScale = Math.min(w, h) * 0.33 * this.camera.zoom;
 
         ctx.clearRect(0, 0, w, h);
-        const bgGrad = ctx.createRadialGradient(cx, cy, 10, cx, cy, Math.max(w, h) * 0.72);
-        if (isLight) {
-            bgGrad.addColorStop(0, '#ffffff');
-            bgGrad.addColorStop(1, '#f1f5f9');
-        } else {
-            bgGrad.addColorStop(0, '#131c31');
-            bgGrad.addColorStop(1, '#090d16');
+        if (!prep.transparent) {
+            const bgGrad = ctx.createRadialGradient(cx, cy, 10, cx, cy, Math.max(w, h) * 0.72);
+            if (isLight) {
+                bgGrad.addColorStop(0, '#ffffff');
+                bgGrad.addColorStop(1, '#f1f5f9');
+            } else {
+                bgGrad.addColorStop(0, '#131c31');
+                bgGrad.addColorStop(1, '#090d16');
+            }
+            ctx.fillStyle = bgGrad;
+            ctx.fillRect(0, 0, w, h);
         }
-        ctx.fillStyle = bgGrad;
-        ctx.fillRect(0, 0, w, h);
 
         const F = this.lockFrame;
         const stA = this.stateA;

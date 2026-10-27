@@ -20,8 +20,8 @@ Link zur Anwendung: [Hematite Crystal Calculator](https://toseflo.github.io/crys
 - **Teilen & Exportieren** (Karte rechts unten):
   - **Link kopieren**: Das komplette Setup (inkl. Vergleich A/B und aktivem Tab), die Ansicht, das Ziel im Ziel-Finder und die gemerkten Richtungen stehen in der URL (z. B. `…&pins=1,0,-1,1;0,0,0,1`) und lassen sich an Kollegen weitergeben.
   - **Notiz kopieren**: Setup als kurzer Text fürs Laborbuch (Probe, Halter, Struktur, Feld, Spins, Winkel, gemerkte Richtungen, Link); beim Vergleich A und B untereinander.
-  - **Bild (PNG)**: Ansicht 1 genau so, wie sie gerade zu sehen ist – für Folien.
-  - **Grafik (SVG)**: saubere Vektorgrafik mit Vorschau und Optionen für die Abschlussarbeit (optional mit LaTeX-Labels für Inkscape → PDF+LaTeX).
+  - **Bild (PNG)**: Ansicht 1 so, wie sie gerade gedreht ist, mit Vorschau – Format (wie Ansicht, 16:9, 4:3, quadratisch), helle oder dunkle Farben, transparenter Hintergrund, Auflösung 1×/2×/4×; herunterladen oder direkt in die Zwischenablage (für PowerPoint/Teams).
+  - **Grafik (SVG)**: saubere Vektorgrafik mit Vorschau und Optionen für die Abschlussarbeit (optional mit LaTeX-Labels für Inkscape → PDF+LaTeX). Auf Wunsch mit Feld-Sweep: gepunktete Spur von $\mathbf{B}$ und $\hat{m}$ für $\phi_M$ von Start bis Stopp, Pfeilspitze = Drehrichtung (eigene Inkscape-Ebene).
   - **Feld-Sweep**: $\phi_M = 0\ldots360^\circ$ als Plot (Winkel zu $\hat{k}$, Geometrie-Streifen, Easy-Plane-Anteil; Klick setzt $\phi_M$) und als CSV in 1°-Schritten inkl. $\hat{m}$, $\hat{l}$ im Wellen-System – direkt für Origin/Excel/Python.
   - Für Auswerteskripte: Python-Code für [`hematite_coords.py`](hematite_coords.py) und 3×3-Rotationsmatrizen zwischen allen Systemen (auch als LaTeX).
 

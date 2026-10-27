@@ -726,9 +726,9 @@
                         <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg>
                         <span>Notiz kopieren</span>
                     </button>
-                    <button type="button" class="export-tile" id="btnDownloadPng" title="Ansicht 1 so wie sie gerade ist als Bild (.png) – für Folien und Gruppenmeetings">
+                    <button type="button" class="export-tile" data-open-export="png" title="Ansicht 1 als Bild (.png) mit Vorschau: Format, helle/dunkle Farben, Auflösung – für Folien und Gruppenmeetings">
                         <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h3l2-3h6l2 3h3v13H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
-                        <span>Bild (PNG)</span>
+                        <span>Bild (PNG) …</span>
                     </button>
                     <button type="button" class="export-tile" data-open-export="svg" title="Saubere Vektorgrafik (.svg) mit Vorschau und Optionen – für die Abschlussarbeit">
                         <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
@@ -750,12 +750,16 @@
     </main>
 
     <!-- ====================================================================
-         EXPORT MODAL: SVG · Python · Rotation matrix (one dialog, three tabs)
+         EXPORT MODAL: PNG · SVG · field sweep · Python · rotation matrix (one dialog, tabs)
          ==================================================================== -->
     <div id="modalExport" class="modal-backdrop hidden" role="dialog" aria-modal="true">
         <div class="modal-card modal-xl">
             <div class="modal-header">
                 <div class="export-tabs" id="exportTabs" role="tablist">
+                    <button type="button" class="export-tab" data-etab="png">
+                        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h3l2-3h6l2 3h3v13H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+                        Bild (PNG)
+                    </button>
                     <button type="button" class="export-tab active" data-etab="svg">
                         <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
                         SVG für die Arbeit
@@ -776,6 +780,53 @@
                 <button type="button" id="btnCloseExportModal" class="btn-close">
                     <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
                 </button>
+            </div>
+
+            <!-- Tab: PNG -->
+            <div class="modal-body svg-modal-grid export-panel hidden" data-epanel="png">
+                <div class="svg-options-col">
+                    <p class="export-intro">Ansicht 1 so, wie sie gerade gedreht ist – für Folien und Meetings.</p>
+                    <label class="field-label" for="pngOptFormat">Format:</label>
+                    <select id="pngOptFormat" class="select-input">
+                        <option value="view">Wie die Ansicht</option>
+                        <option value="16:9">16:9 (Folie)</option>
+                        <option value="4:3">4:3</option>
+                        <option value="1:1">Quadratisch</option>
+                    </select>
+
+                    <label class="field-label" for="pngOptColors">Farben:</label>
+                    <select id="pngOptColors" class="select-input">
+                        <option value="app">Wie die App</option>
+                        <option value="light">Hell</option>
+                        <option value="dark">Dunkel</option>
+                    </select>
+
+                    <label class="field-label" for="pngOptScale">Auflösung:</label>
+                    <select id="pngOptScale" class="select-input">
+                        <option value="1">1× (Bildschirm)</option>
+                        <option value="2" selected>2× (scharf auf Folien)</option>
+                        <option value="4">4× (Poster)</option>
+                    </select>
+
+                    <div class="svg-chk-list">
+                        <label><input type="checkbox" id="pngOptTransparent" /> Transparenter Hintergrund</label>
+                    </div>
+
+                    <div class="modal-actions-stack">
+                        <button type="button" id="btnDownloadPng" class="btn btn-primary btn-block">
+                            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            Als .png herunterladen
+                        </button>
+                        <button type="button" id="btnCopyPng" class="btn btn-secondary btn-block" title="Direkt in PowerPoint, Teams oder OneNote einfügen">
+                            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                            Bild kopieren
+                        </button>
+                        <p class="png-size muted" id="pngSizeHint"></p>
+                    </div>
+                </div>
+                <div class="svg-preview-col">
+                    <div id="pngPreviewContainer" class="svg-preview-box png-preview-box"></div>
+                </div>
             </div>
 
             <!-- Tab: SVG -->
@@ -810,6 +861,14 @@
                         <label><input type="checkbox" id="svgOptTransparent" /> Transparenter Hintergrund</label>
                     </div>
 
+                    <label class="field-label" title="Gepunktete Spur: wohin B und m̂ wandern, während der Magnet von Start bis Stopp dreht. Die Pfeilspitze zeigt die Drehrichtung.">Feld-Sweep einzeichnen:</label>
+                    <div class="svg-sweep-row">
+                        <label><input type="checkbox" id="svgOptSweep" /> <span data-tex="\phi_M">φ_M</span></label>
+                        <div class="num-unit"><input type="number" id="svgOptSweepFrom" value="0" step="15" aria-label="Startwinkel" /><span>°</span></div>
+                        <span aria-hidden="true">→</span>
+                        <div class="num-unit"><input type="number" id="svgOptSweepTo" value="180" step="15" aria-label="Stoppwinkel" /><span>°</span></div>
+                    </div>
+
                     <div class="modal-actions-stack">
                         <button type="button" id="btnDownloadSvg" class="btn btn-primary btn-block">
                             <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -826,7 +885,7 @@
                 </div>
             </div>
 
-            <!-- Tab: Python -->
+            <!-- Tab: field sweep -->
             <div class="modal-body export-panel hidden" data-epanel="sweep">
                 <p class="export-intro">Magnet einmal rundherum drehen, alles andere bleibt fest<span class="muted" id="sweepSetupHint"></span>. Klick in den Plot setzt <span data-tex="\phi_M">φ_M</span>.</p>
                 <div id="sweepPlot" class="sweep-plot"></div>
@@ -835,6 +894,7 @@
                 </div>
             </div>
 
+            <!-- Tab: Python -->
             <div class="modal-body export-panel hidden" data-epanel="python">
                 <p class="export-intro">Dieselben Rotationsmatrizen, 5 Bezugssysteme und Magnet-Sweeps für eigene Auswerteskripte (<code>hematite_coords.py</code>).</p>
                 <pre id="pythonSnippetCode" class="code-block"></pre>

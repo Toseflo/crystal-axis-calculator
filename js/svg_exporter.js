@@ -8,6 +8,7 @@
  *   - 02_Crystal_EasyPlane
  *   - 03_Substrate_Chip
  *   - 04_Microstructure_IDT_CPW
+ *   - 04b_Field_Sweep (only with a sweep range)
  *   - 05_Vectors_Projections
  *   - 06_Angle_Arcs
  *   - 07_Labels_Legend
@@ -21,6 +22,7 @@ import {
     norm3,
     normalize3,
     matVec3,
+    evaluateSetup,
     FRAME_METADATA
 } from './math_core.js';
 
@@ -49,7 +51,8 @@ export function generateThesisSVG(stateA, options = {}) {
         showCrystalAxes = true,
         showEquilibrium = true,
         showAngleArcs = true,
-        showLegend = true
+        showLegend = true,
+        sweep = null // { fromDeg, toDeg }: draw where B and m̂ travel while φ_M runs from start to stop
     } = options;
 
     const width = layout === 'combined' ? 1080 : 680;
@@ -89,6 +92,7 @@ export function generateThesisSVG(stateA, options = {}) {
         crystal: [],
         substrate: [],
         device: [],
+        sweep: [],
         vectors: [],
         arcs: [],
         labels: []
@@ -139,6 +143,77 @@ export function generateThesisSVG(stateA, options = {}) {
             );
         }
     };
+
+    // Field sweep: the setup re-evaluated along φ_M = from … to (2° steps, at most one full turn)
+    const sweepStates = [];
+    let sweepFrom = 0;
+    let sweepTo = 0;
+    if (sweep && Number.isFinite(sweep.fromDeg) && Number.isFinite(sweep.toDeg) && Math.abs(sweep.toDeg - sweep.fromDeg) >= 1) {
+        sweepFrom = sweep.fromDeg;
+        const span = Math.max(-360, Math.min(360, sweep.toDeg - sweep.fromDeg));
+        sweepTo = sweepFrom + span;
+        const n = Math.max(8, Math.ceil(Math.abs(span) / 2));
+        for (let i = 0; i <= n; i++) {
+            sweepStates.push(evaluateSetup({ ...stateA.setup, phiMDeg: sweepFrom + (span * i) / n }));
+        }
+    }
+    const fmtDeg = (d) => (Number.isInteger(d) ? String(d) : d.toFixed(1));
+    const degLbl = (d) => lbl(`${fmtDeg(d)}°`, `$${fmtDeg(d)}^\\circ$`);
+
+    // Dotted trace of an arrow tip along the sweep; arrowhead = sense of rotation.
+    // pointOf(state) returns the projected tip or null (e.g. m̂ undefined) – the trace breaks there.
+    const addSweepTrace = (pointOf, color, markerId, center, withLabels = false) => {
+        if (sweepStates.length < 2) return;
+        const runs = [];
+        let cur = [];
+        for (const s of sweepStates) {
+            const p = pointOf(s);
+            if (p) cur.push(p);
+            else if (cur.length) {
+                runs.push(cur);
+                cur = [];
+            }
+        }
+        if (cur.length) runs.push(cur);
+        const pathLen = (run) => run.reduce((acc, p, i) => (i ? acc + Math.hypot(p.x - run[i - 1].x, p.y - run[i - 1].y) : 0), 0);
+        const drawn = runs.filter((run) => run.length > 1 && pathLen(run) > 4);
+        drawn.forEach((run, idx) => {
+            const head = idx === drawn.length - 1 ? ` marker-end="url(#${markerId})"` : '';
+            layers.sweep.push(
+                `<polyline points="${run.map((p) => `${fmt(p.x)},${fmt(p.y)}`).join(' ')}" fill="none" stroke="${color}" stroke-width="1.5" stroke-dasharray="0.1,3.6" stroke-linecap="round" stroke-linejoin="round"${head} />`
+            );
+        });
+        if (!withLabels || !drawn.length) return;
+        const firstRun = drawn[0];
+        const lastRun = drawn[drawn.length - 1];
+        const first = firstRun[0];
+        const last = lastRun[lastRun.length - 1];
+        // Label sideways to the trace (normal pointing away from the panel centre), so it never
+        // sits on the radial label of the arrow that may end at the same spot
+        const labelAt = (p, q, text) => {
+            let nx = -(q.y - p.y);
+            let ny = q.x - p.x;
+            const nl = Math.hypot(nx, ny) || 1;
+            nx /= nl;
+            ny /= nl;
+            if (nx * (p.x - center.x) + ny * (p.y - center.y) < 0) {
+                nx = -nx;
+                ny = -ny;
+            }
+            const anchor = Math.abs(nx) < 0.35 ? 'middle' : nx > 0 ? 'start' : 'end';
+            layers.labels.push(
+                `<text x="${fmt(p.x + nx * 9)}" y="${fmt(p.y + ny * 9 + 3.5 + (ny > 0.35 ? 4 : 0))}" fill="${palette.textMuted}" font-family="Inter, Arial, sans-serif" font-size="10.5" text-anchor="${anchor}">${escXml(text)}</text>`
+            );
+        };
+        layers.sweep.push(`<circle cx="${fmt(first.x)}" cy="${fmt(first.y)}" r="2.6" fill="${color}" />`);
+        if (Math.hypot(last.x - first.x, last.y - first.y) < 16) {
+            labelAt(first, firstRun[1], lbl(`${fmtDeg(sweepFrom)}° → ${fmtDeg(sweepTo)}°`, `$${fmtDeg(sweepFrom)}^\\circ \\to ${fmtDeg(sweepTo)}^\\circ$`));
+        } else {
+            labelAt(first, firstRun[1], degLbl(sweepFrom));
+            labelAt(last, lastRun[lastRun.length - 2], degLbl(sweepTo));
+        }
+    };
+    const mDefined = (s) => showEquilibrium && !s.metrics.isEasyPlaneSingular;
 
     // ------------------------------------------------------------------------
     // Panel 1: 3D Isometric Schematic
@@ -269,7 +344,21 @@ export function generateThesisSVG(stateA, options = {}) {
         }
 
         const origin2 = proj3([0, 0, 0]);
-        const addVec3 = (v3, scaleLen, color, markerId, text, sw = 2.5, dashed = false) => {
+
+        // Sweep traces: tips of m̂ (scaled with |B_easy|/|B| like its arrow) and B
+        addSweepTrace(
+            (s) => {
+                if (!mDefined(s)) return null;
+                const len = norm3(s.vectors.bEasyProjVec[F]) / (s.metrics.b0Tesla || 1);
+                return len > 0.04 ? proj3(scale3(s.vectors.mHat[F], len)) : null;
+            },
+            palette.m,
+            'arrow-m',
+            origin2
+        );
+        addSweepTrace((s) => proj3(s.vectors.bHat[F]), palette.B, 'arrow-B', origin2, true);
+
+        const addVec3 =(v3, scaleLen, color, markerId, text, sw = 2.5, dashed = false) => {
             const pEnd = proj3(scale3(v3, scaleLen));
             addArrow2D(origin2.x, origin2.y, pEnd.x, pEnd.y, color, markerId, text, sw, dashed);
         };
@@ -361,6 +450,10 @@ export function generateThesisSVG(stateA, options = {}) {
             addArrow2D(cx, cy, cx + v[0] * rMax, cy - v[1] * rMax, color, marker, text, sw, dashed);
         };
 
+        const subTip = (v) => ({ x: cx + v[0] * rMax, y: cy - v[1] * rMax });
+        addSweepTrace((s) => (mDefined(s) ? subTip(s.vectors.mHat.Sub) : null), palette.m, 'arrow-m', { x: cx, y: cy });
+        addSweepTrace((s) => subTip(s.vectors.bHat.Sub), palette.B, 'arrow-B', { x: cx, y: cy }, true);
+
         drawSubVec([1, 0, 0], palette.textMuted, 'arrow-t', lbl('x̂_s', '$\\hat{x}_s$'), 1.3, true);
         drawSubVec([0, 1, 0], palette.textMuted, 'arrow-t', lbl('ŷ_s', '$\\hat{y}_s$'), 1.3, true);
         drawSubVec(stateA.vectors.tHat.Sub, palette.t, 'arrow-t', lbl('t̂', '$\\hat{t}$'), 1.5, true);
@@ -394,6 +487,10 @@ export function generateThesisSVG(stateA, options = {}) {
             addArrow2D(cx, cy, cx + v[0] * rMax, cy - v[1] * rMax, color, marker, text, sw, dashed);
         };
 
+        const crystTip = (v) => ({ x: cx + v[0] * rMax, y: cy - v[1] * rMax });
+        addSweepTrace((s) => (mDefined(s) ? crystTip(s.vectors.mHat.Cryst) : null), palette.m, 'arrow-m', { x: cx, y: cy });
+        addSweepTrace((s) => crystTip(s.vectors.bHat.Cryst), palette.B_easy, 'arrow-Beasy', { x: cx, y: cy }, true);
+
         drawCrystVec([1, 0, 0], palette.ea, 'arrow-ea', lbl('ê_a [112\u03050]', '$\\hat{e}_a$'), 1.4, true);
         drawCrystVec([0, 1, 0], palette.em, 'arrow-em', lbl('ê_m [11\u030500]', '$\\hat{e}_m$'), 1.4, true);
         drawCrystVec(stateA.vectors.kHat.Cryst, palette.k, 'arrow-k', lbl('k̂_⊥c', '$\\hat{k}_{\\perp c}$'), 2.3, true);
@@ -412,8 +509,8 @@ export function generateThesisSVG(stateA, options = {}) {
     // Dispatch layout
     if (layout === 'combined') {
         render3DPanel(300, 265, 195);
-        render2DSamplePanel(825, 145, 92);
-        render2DEasyPanel(825, 385, 92);
+        render2DSamplePanel(825, 140, 88);
+        render2DEasyPanel(825, 370, 88);
     } else if (layout === '3d') {
         render3DPanel(width * 0.5, height * 0.5, 195);
     } else if (layout === '2d_sample') {
@@ -426,10 +523,22 @@ export function generateThesisSVG(stateA, options = {}) {
     if (showLegend) {
         const s = stateA.setup;
         const m = stateA.metrics;
-        const infoLine = `${s.name} | ${s.mountMode}-Halterung | ${s.cutPreset} (θ_cut=${s.thetaCutDeg.toFixed(2)}°) | ${s.deviceType} θ_dev=${s.thetaDevDeg.toFixed(1)}° | ψ_S=${s.psiSDeg.toFixed(1)}°, φ_M=${s.phiMDeg.toFixed(1)}° | B_⊥c/B₀=${(m.bEasyRatio * 100).toFixed(1)}%, ∠(B,k̂)=${m.angleBKDeg.toFixed(1)}°, ∠(m̂,k̂)=${m.angleMKDeg.toFixed(1)}°, ∠(l̂,k̂)=${m.angleLKDeg.toFixed(1)}°`;
+        const infoLine = `${s.name} | ${s.mountMode}-Halterung | ${s.cutPreset} (θ_cut=${s.thetaCutDeg.toFixed(2)}°) | ${s.deviceType} θ_dev=${s.thetaDevDeg.toFixed(1)}° | ψ_S=${s.psiSDeg.toFixed(1)}°, φ_M=${s.phiMDeg.toFixed(1)}° | B_⊥c/B₀=${(m.bEasyRatio * 100).toFixed(1)}%, ∠(B,k̂)=${m.angleBKDeg.toFixed(1)}°, ∠(m̂,k̂)=${m.angleMKDeg.toFixed(1)}°, ∠(l̂,k̂)=${m.angleLKDeg.toFixed(1)}°${sweepStates.length ? ` | Sweep φ_M: ${fmtDeg(sweepFrom)}°→${fmtDeg(sweepTo)}°` : ''}`;
+        // Monospace 10.5px ≈ 6.4px per character: split into two rows at a " | " if it would overflow
+        const parts = infoLine.split(' | ');
+        let rows = [infoLine];
+        if (infoLine.length * 6.4 > width - 48 && parts.length > 1) {
+            let cut = 1;
+            while (cut < parts.length - 1 && parts.slice(0, cut + 1).join(' | ').length <= infoLine.length / 2) cut++;
+            rows = [parts.slice(0, cut).join(' | '), parts.slice(cut).join(' | ')];
+        }
+        const stripH = 10 + rows.length * 14;
         layers.labels.push(
-            `<rect x="16" y="${height - 36}" width="${width - 32}" height="24" rx="4" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1" />`,
-            `<text x="${width / 2}" y="${height - 20}" fill="${palette.textMain}" font-family="JetBrains Mono, Consolas, monospace" font-size="10.5" text-anchor="middle">${escXml(infoLine)}</text>`
+            `<rect x="16" y="${height - 12 - stripH}" width="${width - 32}" height="${stripH}" rx="4" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1" />`,
+            ...rows.map(
+                (row, i) =>
+                    `<text x="${width / 2}" y="${height - 12 - stripH + 16 + i * 14}" fill="${palette.textMain}" font-family="JetBrains Mono, Consolas, monospace" font-size="10.5" text-anchor="middle">${escXml(row)}</text>`
+            )
         );
     }
 
@@ -451,7 +560,14 @@ export function generateThesisSVG(stateA, options = {}) {
   </g>
   <g inkscape:groupmode="layer" id="layer_04_device" inkscape:label="04_Microstructure_IDT_CPW">
     ${layers.device.join('\n    ')}
-  </g>
+  </g>${
+      layers.sweep.length
+          ? `
+  <g inkscape:groupmode="layer" id="layer_04b_sweep" inkscape:label="04b_Field_Sweep">
+    ${layers.sweep.join('\n    ')}
+  </g>`
+          : ''
+  }
   <g inkscape:groupmode="layer" id="layer_05_vectors" inkscape:label="05_Vectors_Projections">
     ${layers.vectors.join('\n    ')}
   </g>
