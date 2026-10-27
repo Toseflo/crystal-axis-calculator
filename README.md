@@ -17,7 +17,7 @@ Link zur Anwendung: [Hematite Crystal Calculator](https://toseflo.github.io/crys
   - „Kurz gesagt“: vier Zeilen zu Probe, Welle, Feld und Spins; die ausführliche Erklärung lässt sich aufklappen.
   - „Wo zeigt was hin?“: $\mathbf{B}$, $\hat{m}$, $\hat{l}$, $\hat{k}$ (auf Wunsch alle Achsen und Kanten) als Winkel $(\theta,\phi)$ oder $(x,y,z)$ im gewählten System plus $[uvtw]$.
   - „Eigene Richtung“ (aufklappbar): beliebige Richtung $[uvtw]$, Ebenennormale $(hkil)$, Kreuzprodukt zweier Richtungen/Ebenen oder Winkel $(\theta,\phi)$ eingeben → wird eingezeichnet, eingeordnet, und per Klick dreht der Ziel-Finder das Feld dorthin. Mit „+ Merken“ landen mehrere Richtungen in einer Liste – jede als eigener farbiger Pfeil im 3D-Bild (fest im Kristall, folgt also jeder Änderung am Aufbau), per × wieder entfernbar.
-- **Link kopieren**: Das komplette Setup (inkl. Vergleich A/B) steht in der URL und lässt sich an Kollegen weitergeben.
+- **Link kopieren**: Das komplette Setup (inkl. Vergleich A/B und aktivem Tab), die Ansicht, das Ziel im Ziel-Finder und die gemerkten Richtungen stehen in der URL (z. B. `…&pins=1,0,-1,1;0,0,0,1`) und lassen sich an Kollegen weitergeben.
 - **Export**: SVG-Grafik, [`hematite_coords.py`](hematite_coords.py) für Python-Auswerteskripte und 3×3-Rotationsmatrizen zwischen allen Systemen (auch als LaTeX).
 
 ## Lokal starten

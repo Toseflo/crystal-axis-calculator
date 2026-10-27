@@ -41,6 +41,8 @@ import { buildNarrative, buildSummary, shortDirection, token } from './narrative
 import { GuidedTour } from './tour.js';
 
 // Application State (Default: c-cut (0001) in IP orientation)
+const DEFAULT_TARGET_ID = 'B_parallel_k';
+
 const appState = {
     activeTab: 'A', // 'A' | 'B'
     compareActive: false,
@@ -70,7 +72,7 @@ const appState = {
         phiMDeg: 90,
         b0Tesla: 0.5
     }),
-    targetId: 'B_parallel_k',
+    targetId: DEFAULT_TARGET_ID,
     customTargetUVTW: [1, 1, -2, 0],
     vectorTableMode: 'angles', // 'angles' | 'xyz'
     vectorTableAll: false, // false: only B, m, l, k (+ custom)
@@ -289,6 +291,11 @@ document.addEventListener('DOMContentLoaded', () => {
     syncLegend();
     syncFramePills();
     recomputeAndRender();
+    applyUrlUiState();
+
+    // Pasting a shared link into an already open tab only changes the hash – reload to apply it
+    // (our own updates use history.replaceState, which does not fire hashchange)
+    window.addEventListener('hashchange', () => window.location.reload());
 
     window.addEventListener('load', () => {
         renderStaticLatex();
@@ -741,6 +748,7 @@ function bindUIEvents() {
             const svgOpt = document.getElementById('svgOptFrame');
             if (svgOpt) svgOpt.value = pill.dataset.frame;
             syncFramePills();
+            writeStateToUrl();
         });
     });
 
@@ -922,6 +930,7 @@ function refreshCustomDirection() {
     updatePinnedDirections(lastActiveState);
     updateVectorTable(lastActiveState);
     rerenderScenes();
+    writeStateToUrl();
 }
 
 function pinCurrentDirection() {
@@ -1173,8 +1182,27 @@ function writeStateToUrl() {
         put('b.', appState.setupB);
         params.set('cmp', '1');
     }
+    if (appState.compareActive && appState.activeTab === 'B') params.set('tab', 'B');
     params.set('view', sceneController ? sceneController.lockFrame : 'Sub');
-    history.replaceState(null, '', `#${params.toString()}`);
+    if (appState.targetId !== DEFAULT_TARGET_ID) params.set('ziel', appState.targetId);
+    let hash = params.toString();
+    // Index lists are appended by hand so they stay readable (URLSearchParams would escape , and ;)
+    if (appState.targetId === 'custom_mb') hash += `&zu=${appState.customTargetUVTW.join(',')}`;
+    if (appState.pinnedDirs.length) hash += `&pins=${appState.pinnedDirs.map((p) => p.uvtw.join(',')).join(';')}`;
+    history.replaceState(null, '', `#${hash}`);
+}
+
+const URL_ALLOWED = {
+    cutPreset: (v) => Object.prototype.hasOwnProperty.call(CUT_PRESETS, v),
+    deviceType: (v) => v === 'CPW' || v === 'IDT',
+    mountMode: (v) => v === 'IP' || v === 'OOP'
+};
+
+// Parses "1,0,-1,1" into [u, v, t, w] (t recomputed), or null if malformed / all zero
+function parseUvtw(raw) {
+    const n = (raw || '').split(',').map(Number);
+    if (n.length !== 4 || !n.every(Number.isFinite) || n.every((x) => x === 0)) return null;
+    return [n[0], n[1], -(n[0] + n[1]), n[3]];
 }
 
 function readStateFromUrl() {
@@ -1186,9 +1214,12 @@ function readStateFromUrl() {
             if (!params.has(prefix + key)) continue;
             const raw = params.get(prefix + key);
             if (URL_STRING_PROPS.has(prop)) {
+                if (!URL_ALLOWED[prop](raw)) continue;
                 setup[prop] = raw;
             } else if (Number.isFinite(parseFloat(raw))) {
                 setup[prop] = parseFloat(raw);
+            } else {
+                continue;
             }
             found = true;
         }
@@ -1197,8 +1228,40 @@ function readStateFromUrl() {
     apply('', appState.setupA);
     apply('b.', appState.setupB);
     appState.compareActive = params.get('cmp') === '1';
+    appState.activeTab = appState.compareActive && params.get('tab') === 'B' ? 'B' : 'A';
     const view = params.get('view');
     if (view && FRAME_METADATA[view] && view !== 'Mount') sceneController.lockFrame = view;
+
+    const target = params.get('ziel');
+    if (target && TARGET_PRESETS.some((t) => t.id === target)) appState.targetId = target;
+    const zu = parseUvtw(params.get('zu'));
+    if (zu) appState.customTargetUVTW = zu;
+
+    // Pinned directions are stored as [uvtw]; they live in the crystal frame, so A's lattice is enough
+    const { aLattice: a, cLattice: c } = appState.setupA;
+    appState.pinnedDirs = (params.get('pins') || '')
+        .split(';')
+        .map(parseUvtw)
+        .filter(Boolean)
+        .slice(0, PIN_COLORS.length)
+        .map((uvtw, i) => {
+            const cryst = normalize3(millerBravaisDirectionToCrystal(uvtw, a, c));
+            const dir = bestMillerBravais(cryst, a, c, false);
+            return { id: i + 1, cryst, label: dir.text, latex: dir.latex, uvtw: dir.indices, exact: dir.exact, color: PIN_COLORS[i] };
+        });
+}
+
+// UI that only exists after bindUIEvents(): target-finder selection and the pinned-directions card
+function applyUrlUiState() {
+    const t = appState.customTargetUVTW;
+    ['targetU', 'targetV', 'targetT', 'targetW'].forEach((id, i) => {
+        document.getElementById(id).value = t[i];
+    });
+    const card = document.querySelector(`.solver-target-card[data-target-id="${appState.targetId}"]`);
+    const panel = card && card.closest('[data-solver-panel]');
+    if (panel) selectSolverCategory(panel.dataset.solverPanel, false);
+    setSolverTarget(appState.targetId);
+    if (appState.pinnedDirs.length) document.getElementById('customDirCard').open = true;
 }
 
 // ============================================================================
