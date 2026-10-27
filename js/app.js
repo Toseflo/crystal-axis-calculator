@@ -1651,13 +1651,13 @@ function renderPhiOff(off, setup) {
         const ip = open.sol.ipSolutions[0];
         const alt = setup.mountMode === 'OOP' && ip.errorDeg < 0.05 ? ip : open.sol.oopSolutions[0];
         remount = alt.errorDeg < 0.05
-            ? `<div class="phi-remount"><span>Geht mit Probe ${MOUNT_WORDS[alt.mountMode]}, um ${fmtDeg(alt.psiSDeg)} gedreht</span>
-                <button type="button" class="btn btn-xs btn-secondary" data-apply-mount="${alt.mountMode}" data-psi="${alt.psiSDeg}" data-phi="${alt.phiMDeg}" title="Einbau (${MOUNT_WORDS[alt.mountMode]}) und Drehwinkel der Probe auf dem Halter umstellen, dann das Feld dorthin drehen">Einbau ändern</button></div>`
-            : '<div class="phi-remount"><span>Auch mit anderem Einbau nicht genau erreichbar</span></div>';
+            ? `<div class="phi-remount"><span>${markLabel(open)} geht mit Probe <b>${MOUNT_WORDS[alt.mountMode]}</b>, auf dem Halter um <b>${fmtDeg(alt.psiSDeg)}</b> gedreht</span>
+                <button type="button" class="btn btn-xs btn-secondary" data-apply-mount="${alt.mountMode}" data-psi="${alt.psiSDeg}" data-phi="${alt.phiMDeg}" title="Probe so einbauen (Tab Einbau) und das Feld dorthin drehen">So einbauen</button></div>`
+            : `<div class="phi-remount"><span>${markLabel(open)} geht mit keinem Einbau genau</span></div>`;
     }
     box.innerHTML = `
-        <div class="phi-off-row"><span class="phi-off-label">Mit diesem Einbau nicht:</span>
-        ${off.map((m) => `<button type="button" class="phi-off-item${m === open ? ' active' : ''}" data-off-id="${m.id}" data-emph="${m.key}" title="${m.title}\nKlick zeigt, mit welchem Einbau es geht">${markLabel(m)}</button>`).join('')}</div>
+        <div class="phi-off-row"><span class="phi-off-label">Nur mit anderem Einbau:</span>
+        ${off.map((m) => `<button type="button" class="phi-off-item${m === open ? ' active' : ''}" data-off-id="${m.id}" data-emph="${m.key}" title="${m.title}\nKlick zeigt, wie die Probe dafür eingebaut sein muss" aria-expanded="${m === open}">${markLabel(m)}<span class="phi-off-caret">${m === open ? '▾' : '▸'}</span></button>`).join('')}</div>
         ${remount}`;
 }
 

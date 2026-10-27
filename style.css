@@ -1079,6 +1079,11 @@ input[type="range"] {
     border-style: solid;
     border-color: rgba(245, 158, 11, 0.6);
 }
+.phi-off-caret {
+    margin-left: 4px;
+    font-size: 9px;
+    color: var(--text-muted);
+}
 .phi-remount {
     display: flex;
     align-items: center;
@@ -1089,6 +1094,9 @@ input[type="range"] {
     border-radius: 8px;
     background: rgba(245, 158, 11, 0.08);
     border: 1px solid rgba(245, 158, 11, 0.35);
+    color: var(--text-secondary);
+}
+.phi-remount b {
     color: var(--text-primary);
 }
 .phi-remount .btn {
