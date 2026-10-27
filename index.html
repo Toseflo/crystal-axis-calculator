@@ -67,7 +67,7 @@
             </div>
 
             <!-- ============================================================
-                 SETUP TABS: Probe · Struktur · Einbau · Ziel
+                 SETUP TABS: Probe · Struktur · Einbau (+ magnet dock)
                  (the tab bar stays put, only the panel below changes)
                  ============================================================ -->
             <div class="side-tabs-card" id="sideTabsCard">
@@ -576,7 +576,7 @@
 
                 <div class="cd-actions">
                     <button type="button" class="btn btn-secondary cd-pin" id="btnCustomDirPin" title="Richtung in die Liste übernehmen – sie bleibt als eigener Pfeil im 3D-Bild">+ Merken</button>
-                    <button type="button" class="btn btn-secondary cd-drive" id="btnCustomDirDrive" title="Im Ziel-Finder die nötigen Halter- und Magnetwinkel für B ∥ diese Richtung berechnen">
+                    <button type="button" class="btn btn-secondary cd-drive" id="btnCustomDirDrive" title="Magnetfeld auf diese Richtung drehen (bzw. so nah wie mit diesem Einbau möglich)">
                         Feld <span data-tex="\mathbf{B}">B</span> dorthin drehen →
                     </button>
                 </div>
@@ -616,7 +616,7 @@
                     <h2>Teilen &amp; Exportieren</h2>
                     <span class="overview-card-hint" id="exportCardHint"></span>
                 </header>
-                <button type="button" id="btnCopyLink" class="btn btn-primary export-main" title="Link mit allen Einstellungen kopieren: Setup (auch A/B), Ansicht, Ziel-Finder und gemerkte Richtungen">
+                <button type="button" id="btnCopyLink" class="btn btn-primary export-main" title="Link mit allen Einstellungen kopieren: Setup (auch A/B), Ansicht, gewählte Feldrichtung und gemerkte Richtungen">
                     <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
                     <span>Link kopieren</span>
                 </button>
