@@ -689,10 +689,10 @@ function bindUIEvents() {
         recomputeAndRender();
     });
 
-    // Magnet dock: a slider mark turns the magnet there; hovering it previews the new field
+    // Magnet dock: a direction button (or its tick on the slider) turns the magnet there; hovering previews the new field
     const phiMarks = document.getElementById('phiMarks');
     phiMarks.addEventListener('click', (e) => {
-        const mark = e.target.closest('.phi-mark');
+        const mark = e.target.closest('[data-phi]');
         if (!mark) return;
         getActiveSetup().phiMDeg = Number(Number(mark.dataset.phi).toFixed(2));
         setFieldPreview([]);
@@ -700,13 +700,13 @@ function bindUIEvents() {
         recomputeAndRender();
     });
     phiMarks.addEventListener('pointerover', (e) => {
-        const mark = e.target.closest('.phi-mark');
+        const mark = e.target.closest('[data-phi]');
         if (mark) previewPhiMark(mark);
         else setFieldPreview([]);
     });
     phiMarks.addEventListener('pointerleave', () => setFieldPreview([]));
     phiMarks.addEventListener('focusin', (e) => {
-        const mark = e.target.closest('.phi-mark');
+        const mark = e.target.closest('[data-phi]');
         if (mark) previewPhiMark(mark);
     });
     phiMarks.addEventListener('focusout', () => setFieldPreview([]));
@@ -1563,20 +1563,21 @@ const phiDistDeg = (a, b) => Math.abs((((a - b) % 360) + 540) % 360 - 180);
 const MOUNT_WORDS = { IP: 'flach', OOP: 'stehend' };
 const uvtwTex = (uvtw) => uvtw.map((v) => (v < 0 ? `\\bar{${-v}}` : `${v}`)).join('\\,');
 
-// Field directions offered on the slider: along the wave / sample frame or along a crystal axis
+// Field directions offered on the slider: along the wave / sample frame or along a crystal axis.
+// Plain words on purpose: single symbols (t̂, n̂ …) are hard to tell apart at a glance.
 const FIELD_MARKS = [
-    { id: 'B_parallel_k', key: 'k', tex: '+\\hat{k}', title: 'B ∥ +k̂: längs zur Welle' },
-    { id: 'B_antiparallel_k', key: 'k', tex: '-\\hat{k}', title: 'B ∥ −k̂: entgegen der Welle' },
-    { id: 'B_parallel_t', key: 't', tex: '\\hat{t}', title: 'B ∥ t̂: quer zur Welle, in der Probe' },
-    { id: 'B_parallel_n', key: 'n', tex: '\\hat{n}', title: 'B ∥ n̂: senkrecht zur Probe' },
-    { id: 'B_parallel_ea', key: 'ea', tex: 'a', title: 'B ∥ [112̅0]: a-Achse' },
-    { id: 'B_parallel_em', key: 'em', tex: 'm', title: 'B ∥ [11̅00]: m-Achse' },
-    { id: 'B_parallel_ec', key: 'ec', tex: 'c', title: 'B ∥ [0001]: c-Achse' }
+    { id: 'B_parallel_k', key: 'k', text: 'längs zur Welle', title: 'Feld in Ausbreitungsrichtung der Welle (B ∥ +k̂)' },
+    { id: 'B_antiparallel_k', key: 'k', text: 'gegen die Welle', title: 'Feld entgegen der Ausbreitungsrichtung (B ∥ −k̂)' },
+    { id: 'B_parallel_t', key: 't', text: 'quer zur Welle', title: 'Feld quer zur Welle, in der Probenebene (B ∥ t̂)' },
+    { id: 'B_parallel_n', key: 'n', text: 'senkrecht zur Probe', title: 'Feld senkrecht zur Probenoberfläche (B ∥ n̂)' },
+    { id: 'B_parallel_ea', key: 'ea', text: 'a-Achse', title: 'Feld entlang der a-Achse [112̅0]' },
+    { id: 'B_parallel_em', key: 'em', text: 'm-Achse', title: 'Feld entlang der m-Achse [11̅00]' },
+    { id: 'B_parallel_ec', key: 'ec', text: 'c-Achse', title: 'Feld entlang der c-Achse [0001]' }
 ];
 // A direction from the "Eigene Richtung" card, only while its remount hint is open
 const customFieldMark = () => ({ id: 'custom_mb', key: 'custom', tex: `[${uvtwTex(appState.customTargetUVTW)}]`, title: 'eigene Richtung' });
 
-const markLabel = (m) => `<span class="phi-mark-label" style="--tok:${VECTOR_COLORS[m.key]}">${tex(m.tex)}</span>`;
+const markLabel = (m) => `<span class="phi-mark-label" style="--tok:${VECTOR_COLORS[m.key]}">${m.tex ? tex(m.tex) : m.text}</span>`;
 let phiMarksSignature = '';
 
 // Exactly reachable directions become marks at their φ_M; the others are listed below the slider,
@@ -1596,29 +1597,24 @@ function updateFieldMarks(activeState) {
 }
 
 function renderPhiMarks(reach, phiNow) {
-    // Directions at the same φ_M share one mark; a mark too close to its left neighbour drops to a second row
+    // Directions at the same φ_M share one tick and one button
     const groups = [];
     for (const m of [...reach].sort((a, b) => a.phi - b.phi)) {
         const g = groups.find((x) => phiDistDeg(x.phi, m.phi) < 1);
         if (g) g.items.push(m);
         else groups.push({ phi: m.phi, items: [m] });
     }
-    let lastRow1 = -Infinity;
-    for (const g of groups) {
-        g.row2 = g.phi - lastRow1 < 32;
-        if (!g.row2) lastRow1 = g.phi;
-    }
 
     const box = document.getElementById('phiMarks');
-    const signature = JSON.stringify(groups.map((g) => [g.phi.toFixed(2), g.row2, g.items.map((m) => m.tex)]));
+    const signature = JSON.stringify(groups.map((g) => [g.phi.toFixed(2), g.items.map((m) => m.id)]));
     if (signature !== phiMarksSignature) {
         phiMarksSignature = signature;
-        box.classList.toggle('two-rows', groups.some((g) => g.row2));
-        box.innerHTML = groups.map((g) => `
-            <button type="button" class="phi-mark${g.row2 ? ' row2' : ''}" style="left:${(g.phi / 360) * 100}%" data-phi="${g.phi}"
-                data-emph="preview,${g.items.map((m) => m.key).join(',')}" title="${g.items.map((m) => m.title).join('\n')}\nφ_M = ${fmtDeg(g.phi)}">${g.items.map(markLabel).join('')}</button>`).join('');
+        const attrs = (g) => `data-phi="${g.phi}" data-emph="preview,${g.items.map((m) => m.key).join(',')}" title="${g.items.map((m) => m.title).join('\n')}"`;
+        box.innerHTML = `
+            <div class="phi-ticks">${groups.map((g) => `<span class="phi-tick" style="left:${(g.phi / 360) * 100}%" ${attrs(g)}></span>`).join('')}</div>
+            <div class="phi-pills">${groups.map((g) => `<button type="button" class="phi-pill" ${attrs(g)}>${g.items.map(markLabel).join('<span class="phi-mark-sep">·</span>')}<span class="phi-pill-deg">${fmtDeg(g.phi)}</span></button>`).join('')}</div>`;
     }
-    box.querySelectorAll('.phi-mark').forEach((el) => el.classList.toggle('on', phiDistDeg(phiNow, Number(el.dataset.phi)) < 0.05));
+    box.querySelectorAll('[data-phi]').forEach((el) => el.classList.toggle('on', phiDistDeg(phiNow, Number(el.dataset.phi)) < 0.05));
 }
 
 function renderPhiOff(off, setup) {
@@ -1636,8 +1632,8 @@ function renderPhiOff(off, setup) {
         const ip = open.sol.ipSolutions[0];
         const alt = setup.mountMode === 'OOP' && ip.errorDeg < 0.05 ? ip : open.sol.oopSolutions[0];
         remount = alt.errorDeg < 0.05
-            ? `<div class="phi-remount"><span>Geht mit Probe ${MOUNT_WORDS[alt.mountMode]}, ${tex(`\\psi_S = ${Number(alt.psiSDeg.toFixed(1))}^\\circ`)}</span>
-                <button type="button" class="btn btn-xs btn-secondary" data-apply-mount="${alt.mountMode}" data-psi="${alt.psiSDeg}" data-phi="${alt.phiMDeg}" title="Halterung und Einbauwinkel umstellen und das Feld dorthin drehen">Einbau ändern</button></div>`
+            ? `<div class="phi-remount"><span>Geht mit Probe ${MOUNT_WORDS[alt.mountMode]}, um ${fmtDeg(alt.psiSDeg)} gedreht</span>
+                <button type="button" class="btn btn-xs btn-secondary" data-apply-mount="${alt.mountMode}" data-psi="${alt.psiSDeg}" data-phi="${alt.phiMDeg}" title="Einbau (${MOUNT_WORDS[alt.mountMode]}) und Drehwinkel der Probe auf dem Halter umstellen, dann das Feld dorthin drehen">Einbau ändern</button></div>`
             : '<div class="phi-remount"><span>Auch mit anderem Einbau nicht genau erreichbar</span></div>';
     }
     box.innerHTML = `
@@ -1646,9 +1642,10 @@ function renderPhiOff(off, setup) {
         ${remount}`;
 }
 
-// Hovering a mark: dashed "B neu" arrow where the field would point
+// Hovering a direction: dashed "B neu" arrow where the field would point, its tick lights up
 function previewPhiMark(mark) {
     const phi = Number(mark.dataset.phi);
+    document.querySelectorAll('#phiMarks [data-phi]').forEach((el) => el.classList.toggle('hot', el.dataset.phi === mark.dataset.phi));
     const setup = getActiveSetup();
     if (phiDistDeg(setup.phiMDeg, phi) < 0.05) return setFieldPreview([]);
     const st = evaluateSetup({ ...setup, phiMDeg: phi });
@@ -1656,6 +1653,7 @@ function previewPhiMark(mark) {
 }
 
 function setFieldPreview(vectors) {
+    if (!vectors.length) document.querySelectorAll('#phiMarks .hot').forEach((el) => el.classList.remove('hot'));
     sceneController.setFieldPreview(vectors);
     if (sceneController2) sceneController2.setFieldPreview(vectors);
 }
