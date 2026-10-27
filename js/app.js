@@ -42,7 +42,6 @@ import { buildNarrative, buildSummary, shortDirection, token } from './narrative
 import { GuidedTour } from './tour.js';
 
 // Application State (Default: c-cut (0001) in IP orientation)
-const DEFAULT_TARGET_ID = 'B_parallel_k';
 
 const appState = {
     activeTab: 'A', // 'A' | 'B'
@@ -73,7 +72,7 @@ const appState = {
         phiMDeg: 90,
         b0Tesla: 0.5
     }),
-    targetId: DEFAULT_TARGET_ID,
+    targetId: null, // field direction the user picked in the magnet dock (null = none)
     customTargetUVTW: [1, 1, -2, 0],
     vectorTableMode: 'angles', // 'angles' | 'xyz'
     vectorTableAll: false, // false: only B, m, l, k (+ custom)
@@ -606,6 +605,8 @@ function bindUIEvents() {
 
     // Sliders
     bindSliderPair('PhiM', 'phiMDeg', true);
+    // Turning the field by hand drops the picked direction (and with it the remount suggestion)
+    ['sliderPhiM', 'numPhiM'].forEach((id) => document.getElementById(id).addEventListener('input', clearSolverTarget));
     bindSliderPair('PsiS', 'psiSDeg', true);
     bindSliderPair('ThetaCut', 'thetaCutDeg', false);
     bindSliderPair('PhiCut', 'phiCutDeg', true);
@@ -693,8 +694,16 @@ function bindUIEvents() {
 
     // Magnet dock: a direction chip selects the target and turns the magnet to it
     document.querySelectorAll('.target-chip[data-target-id]').forEach((chip) => {
-        chip.addEventListener('click', () => driveFieldToTarget(chip.dataset.targetId));
+        chip.addEventListener('click', () => {
+            driveFieldToTarget(chip.dataset.targetId);
+            if (chip.matches(':hover, :focus-visible')) previewFieldTarget(chip);
+        });
+        chip.addEventListener('pointerenter', () => previewFieldTarget(chip));
+        chip.addEventListener('pointerleave', clearFieldPreview);
+        chip.addEventListener('focus', () => previewFieldTarget(chip));
+        chip.addEventListener('blur', clearFieldPreview);
     });
+    clearFieldPreview();
     document.getElementById('targetRemount').addEventListener('click', (e) => {
         const btn = e.target.closest('button[data-apply-mount]');
         if (!btn) return;
@@ -821,6 +830,10 @@ function setSolverTarget(targetId) {
     });
     document.getElementById('customTargetMBBox').classList.toggle('hidden', targetId !== 'custom_mb');
     recomputeAndRender();
+}
+
+function clearSolverTarget() {
+    if (appState.targetId) setSolverTarget(null);
 }
 
 // Best φ_M for a target with the current mount (null if the field cannot get anywhere near it)
@@ -1169,7 +1182,7 @@ function writeStateToUrl() {
     }
     if (appState.compareActive && appState.activeTab === 'B') params.set('tab', 'B');
     params.set('view', sceneController ? sceneController.lockFrame : 'Sub');
-    if (appState.targetId !== DEFAULT_TARGET_ID) params.set('ziel', appState.targetId);
+    if (appState.targetId) params.set('ziel', appState.targetId);
     let hash = params.toString();
     // Index lists are appended by hand so they stay readable (URLSearchParams would escape , and ;)
     if (appState.targetId === 'custom_mb') hash += `&zu=${appState.customTargetUVTW.join(',')}`;
@@ -1218,7 +1231,7 @@ function readStateFromUrl() {
     if (view && FRAME_METADATA[view] && view !== 'Mount') sceneController.lockFrame = view;
 
     const target = params.get('ziel');
-    if (target && TARGET_PRESETS.some((t) => t.id === target)) appState.targetId = target;
+    appState.targetId = target && TARGET_PRESETS.some((t) => t.id === target) ? target : null;
     const zu = parseUvtw(params.get('zu'));
     if (zu) appState.customTargetUVTW = zu;
 
@@ -1236,7 +1249,7 @@ function readStateFromUrl() {
         });
 }
 
-// UI that only exists after bindUIEvents(): target-finder selection and the pinned-directions card
+// UI that only exists after bindUIEvents(): selected field direction and the pinned-directions card
 function applyUrlUiState() {
     const t = appState.customTargetUVTW;
     ['targetU', 'targetV', 'targetT', 'targetW'].forEach((id, i) => {
@@ -1590,6 +1603,16 @@ function updateVectorTable(activeState) {
 const fmtDeg = (deg) => `${Number(deg.toFixed(1))}°`;
 const phiDistDeg = (a, b) => Math.abs((((a - b) % 360) + 540) % 360 - 180);
 
+// Last solution per chip (φ_M with the current mount), shared by the chips, the hover preview and the hint line
+const fieldTargetState = new Map();
+const FIELD_HINT_DEFAULT = 'Klick dreht das Feld dorthin · ≈ nur ungefähr · – nicht erreichbar';
+const MOUNT_WORDS = { IP: 'horizontal (flach)', OOP: 'vertikal (stehend)' };
+
+const uvtwTex = (uvtw) => uvtw.map((v) => (v < 0 ? `\\bar{${-v}}` : `${v}`)).join('\\,');
+const fieldTargetLabel = (chip) => chip.dataset.targetId === 'custom_mb'
+    ? `\\mathbf{B}\\parallel [${uvtwTex(appState.customTargetUVTW)}]`
+    : chip.dataset.label;
+
 // Each target chip shows the φ_M that reaches it with the current mount ("≈" = closest approach,
 // "–" = out of reach). Only for the selected, not exactly reachable target a remount is offered.
 function updateTargetChips(activeState) {
@@ -1602,31 +1625,64 @@ function updateTargetChips(activeState) {
         const reachable = errorDeg <= 89.9;
         const exact = errorDeg < 0.05;
         const on = exact && phiDistDeg(setup.phiMDeg, bestPhiMDeg) < 0.05;
+        fieldTargetState.set(chip.dataset.targetId, { phi: bestPhiMDeg, err: errorDeg, reachable, exact, on });
 
         chip.classList.toggle('approx', reachable && !exact);
         chip.classList.toggle('unreachable', !reachable);
         chip.classList.toggle('on', on);
         chip.querySelector('.target-phi').textContent = reachable ? `${exact ? '' : '≈ '}${fmtDeg(bestPhiMDeg)}` : '–';
-        chip.dataset.baseTitle ??= chip.title;
-        chip.title = exact ? chip.dataset.baseTitle : `${chip.dataset.baseTitle} · mit diesem Einbau ${reachable ? `nur bis ${fmtDeg(errorDeg)} genau` : 'nicht erreichbar'}`;
 
-        if (chip.dataset.targetId === appState.targetId) selected = { sol, exact, reachable };
+        if (chip.dataset.targetId === appState.targetId) selected = { chip, sol, exact, reachable };
     });
 
     const box = document.getElementById('targetRemount');
-    box.hidden = !selected || selected.exact;
+    // In-plane targets are reached exactly by the flat (IP) mount, everything else by the vertical (OOP) one
+    const alt = selected && !selected.exact
+        ? (setup.mountMode === 'OOP' && selected.sol.ipSolutions[0].errorDeg < 0.05 ? selected.sol.ipSolutions[0] : selected.sol.oopSolutions[0])
+        : null;
+    box.hidden = !alt || alt.errorDeg >= 0.05;
     if (box.hidden) {
         box.innerHTML = '';
         return;
     }
-    // In-plane targets are reached exactly by the flat (IP) mount, everything else by the vertical (OOP) one
-    const { sol, reachable } = selected;
-    const ip = sol.ipSolutions[0];
-    const alt = setup.mountMode === 'OOP' && ip.errorDeg < 0.05 ? ip : sol.oopSolutions[0];
-    const now = reachable ? `mit diesem Einbau nur bis Δ ${fmtDeg(sol.fixedPsiSweep.errorDeg)}` : 'mit diesem Einbau nicht erreichbar';
+    const { chip, sol, reachable } = selected;
+    const now = reachable ? `geht so nur auf ${fmtDeg(sol.fixedPsiSweep.errorDeg)} genau` : 'geht mit diesem Einbau nicht';
     box.innerHTML = `
-        <span class="target-remount-text"><small>${now}</small><span>exakt mit Umbau: <strong>${alt.mountMode}</strong>, ${tex(`\\psi_S = ${Number(alt.psiSDeg.toFixed(1))}^\\circ`)}</span></span>
-        <button type="button" class="btn btn-xs btn-secondary" data-apply-mount="${alt.mountMode}" data-psi="${alt.psiSDeg}" data-phi="${alt.phiMDeg}">Anwenden</button>`;
+        <span class="target-remount-text"><span>${tex(fieldTargetLabel(chip))} ${now}.</span><small>Genau mit Probe ${MOUNT_WORDS[alt.mountMode]}, ${tex(`\\psi_S = ${Number(alt.psiSDeg.toFixed(1))}^\\circ`)}</small></span>
+        <button type="button" class="btn btn-xs btn-secondary" data-apply-mount="${alt.mountMode}" data-psi="${alt.psiSDeg}" data-phi="${alt.phiMDeg}" title="Halterung und Einbauwinkel umstellen und das Feld auf die Richtung drehen">Einbau ändern</button>`;
+}
+
+// Hovering a chip: dashed "B neu" arrow (plus m̂ / l̂ for the spin targets) and a one-line explanation
+function previewFieldTarget(chip) {
+    const id = chip.dataset.targetId;
+    const r = fieldTargetState.get(id);
+    const head = `${tex(fieldTargetLabel(chip))} <span class="ft-hint-desc">${chip.dataset.desc}</span>`;
+    let tail = '';
+    if (r && !r.reachable) tail = ' · mit diesem Einbau nicht erreichbar';
+    else if (r && r.on) tail = ' · ist gerade eingestellt ✓';
+    else if (r) tail = ` · ${tex('\\phi_M')} = ${fmtDeg(r.phi)}${r.exact ? '' : `, bleibt ${fmtDeg(r.err)} daneben`}`;
+    document.getElementById('fieldTargetHint').innerHTML = head + tail;
+
+    const vectors = [];
+    if (r && r.reachable && !r.on) {
+        const st = evaluateSetup({ ...getActiveSetup(), phiMDeg: r.phi });
+        vectors.push({ Lab: st.vectors.bHat.Lab, colorKey: 'B', label: 'B neu' });
+        if (!st.metrics.isEasyPlaneSingular) {
+            if (id === 'm_align_k') vectors.push({ Lab: st.vectors.mHat.Lab, colorKey: 'm', label: 'm̂ neu' });
+            if (id === 'l_align_k') vectors.push({ Lab: st.vectors.lHat.Lab, colorKey: 'l', label: 'l̂ neu' });
+        }
+    }
+    setFieldPreview(vectors);
+}
+
+function clearFieldPreview() {
+    document.getElementById('fieldTargetHint').textContent = FIELD_HINT_DEFAULT;
+    setFieldPreview([]);
+}
+
+function setFieldPreview(vectors) {
+    sceneController.setFieldPreview(vectors);
+    if (sceneController2) sceneController2.setFieldPreview(vectors);
 }
 
 // ============================================================================

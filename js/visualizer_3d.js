@@ -143,6 +143,8 @@ export class Scene3DController {
         this.customVector = null;
         // Directions the user pinned to the list: [{ Lab, label, color, key }]
         this.pinnedVectors = [];
+        // Hover preview of a field-direction chip: where B (and m̂ / l̂) would point [{ Lab, colorKey, label }]
+        this.fieldPreview = [];
         this.camera = {
             azimuthDeg: -38,
             elevationDeg: 28,
@@ -311,6 +313,11 @@ export class Scene3DController {
 
     setEmphasis(keys) {
         this.emphasis = keys && keys.length ? new Set(keys) : null;
+        this.render();
+    }
+
+    setFieldPreview(vectors) {
+        this.fieldPreview = vectors || [];
         this.render();
     }
 
@@ -525,6 +532,9 @@ export class Scene3DController {
         }
         if (vis.showB) {
             arrows3D.push({ vec: bHat, baseLen: 1.00, color: VECTOR_COLORS.B, label: 'B', width: 3.5, dashed: false, keys: ['B'] });
+        }
+        for (const p of this.fieldPreview) {
+            arrows3D.push({ vec: toLock(normalize3(p.Lab), 'Lab'), baseLen: 1.00, color: VECTOR_COLORS[p.colorKey], label: p.label, width: 3.2, dashed: true, keys: ['preview'] });
         }
         const pinned = vis.showCustom ? this.pinnedVectors.filter((p) => p.Lab && norm3(p.Lab) > 1e-9) : [];
         for (const p of pinned) {
