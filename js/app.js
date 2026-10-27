@@ -37,6 +37,7 @@ import {
 
 import { Scene3DController, VECTOR_COLORS } from './visualizer_3d.js';
 import { generateThesisSVG } from './svg_exporter.js';
+import { buildLabNote, buildSweepCsv, downloadBlob, downloadText, exportBaseName } from './export_tools.js';
 import { buildNarrative, buildSummary, shortDirection, token } from './narrative.js';
 import { GuidedTour } from './tour.js';
 
@@ -808,6 +809,7 @@ function bindUIEvents() {
     bindCustomDirection();
     bindEmphasisHover();
     bindExportModal();
+    bindExportCard();
     bindTour();
 
     document.addEventListener('keydown', (e) => {
@@ -1362,6 +1364,7 @@ function recomputeAndRender() {
 
     const exportModal = document.getElementById('modalExport');
     if (exportModal && !exportModal.classList.contains('hidden')) refreshExportPanel();
+    document.getElementById('exportCardHint').textContent = appState.compareActive ? `Dateien für Setup ${appState.activeTab}` : '';
 
     writeStateToUrl();
 }
@@ -1799,17 +1802,7 @@ function bindExportModal() {
     ].forEach((id) => document.getElementById(id).addEventListener('change', refreshSvgPreview));
 
     document.getElementById('btnDownloadSvg').addEventListener('click', () => {
-        const svgStr = refreshSvgPreview();
-        const s = getActiveSetup();
-        const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `hematite_${s.cutPreset}_${s.mountMode}_${s.deviceType}_phiM${Math.round(s.phiMDeg)}.svg`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
+        downloadText(refreshSvgPreview(), `${exportBaseName(getActiveSetup())}.svg`, 'image/svg+xml');
     });
 
     document.getElementById('btnCopySvgCode').addEventListener('click', (e) => {
@@ -1833,5 +1826,36 @@ function bindExportModal() {
         const texStr = `R_{\\text{${FRAME_SHORT_DE[toF]}}\\leftarrow\\text{${FRAME_SHORT_DE[fromF]}}} = \\begin{pmatrix}\n  ${rows}\n\\end{pmatrix}`;
         navigator.clipboard.writeText(texStr);
         flashButton(e.currentTarget, 'Kopiert');
+    });
+}
+
+// "Teilen & Exportieren" card: everyday exports that need no dialog
+function bindExportCard() {
+    document.getElementById('btnCopyNote').addEventListener('click', () => {
+        writeStateToUrl();
+        const states = appState.compareActive
+            ? [evaluateSetup(appState.setupA), evaluateSetup(appState.setupB)]
+            : [evaluateSetup(getActiveSetup())];
+        const note = buildLabNote(states, {
+            pinned: appState.pinnedDirs.map((p) => p.label),
+            link: window.location.href
+        });
+        navigator.clipboard.writeText(note).then(
+            () => showToast('Notiz kopiert – einfach ins Laborbuch einfügen'),
+            () => showToast('Kopieren nicht möglich')
+        );
+    });
+
+    document.getElementById('btnDownloadPng').addEventListener('click', () => {
+        sceneController.render();
+        sceneController.canvas3d.toBlob((blob) => {
+            if (blob) downloadBlob(blob, `${exportBaseName(getActiveSetup())}.png`);
+        }, 'image/png');
+    });
+
+    document.getElementById('btnDownloadCsv').addEventListener('click', () => {
+        const s = getActiveSetup();
+        downloadText(buildSweepCsv(s), `${exportBaseName(s).replace(/_phiM\d+$/, '')}_sweep.csv`, 'text/csv');
+        showToast('Sweep φ_M = 0…360° gespeichert');
     });
 }

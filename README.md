@@ -17,8 +17,13 @@ Link zur Anwendung: [Hematite Crystal Calculator](https://toseflo.github.io/crys
   - „Kurz gesagt“: vier Zeilen zu Probe, Welle, Feld und Spins; die ausführliche Erklärung lässt sich aufklappen.
   - „Wo zeigt was hin?“: $\mathbf{B}$, $\hat{m}$, $\hat{l}$, $\hat{k}$ (auf Wunsch alle Achsen und Kanten) als Winkel $(\theta,\phi)$ oder $(x,y,z)$ im gewählten System plus $[uvtw]$.
   - „Eigene Richtung“ (aufklappbar): beliebige Richtung $[uvtw]$, Ebenennormale $(hkil)$, Kreuzprodukt zweier Richtungen/Ebenen oder Winkel $(\theta,\phi)$ eingeben → wird eingezeichnet, eingeordnet, und per Klick dreht der Ziel-Finder das Feld dorthin. Mit „+ Merken“ landen mehrere Richtungen in einer Liste – jede als eigener farbiger Pfeil im 3D-Bild (fest im Kristall, folgt also jeder Änderung am Aufbau), per × wieder entfernbar.
-- **Link kopieren**: Das komplette Setup (inkl. Vergleich A/B und aktivem Tab), die Ansicht, das Ziel im Ziel-Finder und die gemerkten Richtungen stehen in der URL (z. B. `…&pins=1,0,-1,1;0,0,0,1`) und lassen sich an Kollegen weitergeben.
-- **Export**: SVG-Grafik, [`hematite_coords.py`](hematite_coords.py) für Python-Auswerteskripte und 3×3-Rotationsmatrizen zwischen allen Systemen (auch als LaTeX).
+- **Teilen & Exportieren** (Karte rechts unten):
+  - **Link kopieren**: Das komplette Setup (inkl. Vergleich A/B und aktivem Tab), die Ansicht, das Ziel im Ziel-Finder und die gemerkten Richtungen stehen in der URL (z. B. `…&pins=1,0,-1,1;0,0,0,1`) und lassen sich an Kollegen weitergeben.
+  - **Notiz kopieren**: Setup als kurzer Text fürs Laborbuch (Probe, Halter, Struktur, Feld, Spins, Winkel, gemerkte Richtungen, Link); beim Vergleich A und B untereinander.
+  - **Bild (PNG)**: Ansicht 1 genau so, wie sie gerade zu sehen ist – für Folien.
+  - **Grafik (SVG)**: saubere Vektorgrafik mit Vorschau und Optionen für die Abschlussarbeit (optional mit LaTeX-Labels für Inkscape → PDF+LaTeX).
+  - **Feld-Sweep (CSV)**: $\phi_M = 0\ldots360^\circ$ in 1°-Schritten mit Winkeln zu $\hat{k}$, Easy-Plane-Anteil, CPW-Kopplung $|\hat{k}\times\hat{m}|$ und $\hat{m}$, $\hat{l}$ im Wellen-System – direkt für Origin/Excel/Python.
+  - Für Auswerteskripte: Python-Code für [`hematite_coords.py`](hematite_coords.py) und 3×3-Rotationsmatrizen zwischen allen Systemen (auch als LaTeX).
 
 ## Lokal starten
 
