@@ -288,14 +288,28 @@ code, pre, .num-unit input, .matrix-grid, .vector-table td, .compare-table td {
     top: 12px;
 }
 
+/* Laptops: keep all three columns, just narrower */
 @media (max-width: 1500px) {
     .workspace-3col {
-        grid-template-columns: 360px minmax(480px, 1fr);
+        grid-template-columns: 340px minmax(0, 1fr) 380px;
+        gap: 12px;
+        padding: 10px 12px;
+    }
+}
+
+/* Too narrow for three: the overview moves below. The stage must not stay pinned then, it would cover the overview while scrolling */
+@media (max-width: 1180px) {
+    .workspace-3col {
+        grid-template-columns: 340px minmax(0, 1fr);
+    }
+    .workspace-3col > .main-stage {
+        position: static;
     }
     .workspace-3col > .overview-col {
         grid-column: 1 / -1;
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+        align-items: start; /* cards keep their own height instead of stretching to their row neighbour */
     }
 }
 
@@ -1259,6 +1273,7 @@ body.theme-light .canvas-pill-btn {
 }
 
 .stage-card {
+    container-type: inline-size;
     background: var(--bg-panel);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
@@ -1283,6 +1298,12 @@ body.theme-light .canvas-pill-btn {
     padding: 3px 9px;
     border-radius: 5px;
     pointer-events: none;
+}
+/* Narrow stage: lift the hint above the "Ansicht: …" line drawn into the canvas, side by side they overlap */
+@container (max-width: 860px) {
+    .canvas-hint {
+        bottom: 34px;
+    }
 }
 
 /* ==========================================================================
