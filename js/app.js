@@ -38,6 +38,7 @@ import {
 import { Scene3DController, VECTOR_COLORS } from './visualizer_3d.js';
 import { generateThesisSVG } from './svg_exporter.js';
 import { buildLabNote, buildSweepCsv, downloadBlob, downloadText, exportBaseName } from './export_tools.js';
+import { renderSweepPlot } from './sweep_plot.js';
 import { buildNarrative, buildSummary, shortDirection, token } from './narrative.js';
 import { GuidedTour } from './tour.js';
 
@@ -1493,8 +1494,14 @@ function updateMetricsCards(activeState, stateA, stateB) {
 
     document.getElementById('valAngleMK').textContent = m.isEasyPlaneSingular ? '–' : `${m.angleMKDeg.toFixed(1)}°`;
     const valMDotK = document.getElementById('valMDotK');
-    valMDotK.innerHTML = isCPW ? `Kopplung <strong>${(m.cpwTorqueM * 100).toFixed(0)} %</strong>` : '';
-    valMDotK.title = isCPW ? 'CPW-Kopplung |k̂ × m̂|' : '';
+    const geo = m.geometry;
+    valMDotK.innerHTML = geo.key === 'none' ? '' : `<strong>${geo.label}</strong>`;
+    valMDotK.title = geo.key === 'none'
+        ? ''
+        : 'Spinwellen-Geometrie: BV = m̂ ∥ k̂, DE = m̂ ⊥ k̂ (beide in der Probe), FV = m̂ ⊥ Probe'
+          + (isCPW
+              ? `\nDrehmoment des CPW-Felds auf m̂: h_x ∥ k̂ → ${(m.cpwTorqueM * 100).toFixed(0)} %, h_z ⊥ Probe → ${(m.cpwTorqueMz * 100).toFixed(0)} %`
+              : '');
 
     document.getElementById('valAngleLK').textContent = m.isEasyPlaneSingular ? '–' : `${m.angleLKDeg.toFixed(1)}°`;
 
@@ -1530,7 +1537,7 @@ function updateCompareTable(stateA, stateB) {
         [tex('\\angle(\\mathbf{B}, \\hat{k})'), `${mA.angleBKDeg.toFixed(1)}°`, `${mB.angleBKDeg.toFixed(1)}°`, `${(mB.angleBKDeg - mA.angleBKDeg).toFixed(1)}°`],
         [tex('\\angle(\\hat{m}, \\hat{k})'), `${mA.angleMKDeg.toFixed(1)}°`, `${mB.angleMKDeg.toFixed(1)}°`, `${(mB.angleMKDeg - mA.angleMKDeg).toFixed(1)}°`],
         [tex('\\angle(\\hat{l}, \\hat{k})'), `${mA.angleLKDeg.toFixed(1)}°`, `${mB.angleLKDeg.toFixed(1)}°`, `${(mB.angleLKDeg - mA.angleLKDeg).toFixed(1)}°`],
-        [tex('|\\hat{k}\\times\\hat{m}|'), mA.cpwTorqueM.toFixed(3), mB.cpwTorqueM.toFixed(3), (mB.cpwTorqueM - mA.cpwTorqueM).toFixed(3)]
+        ['Geometrie', mA.geometry.label, mB.geometry.label, '—']
     ];
 
     document.getElementById('compareTableBody').innerHTML = rows
@@ -1752,9 +1759,20 @@ function refreshExportPanel() {
             appState.setupB,
             appState.compareActive
         );
+    } else if (activeExportTab === 'sweep') {
+        refreshSweepPreview();
     } else {
         updateMatrixInspector();
     }
+}
+
+function refreshSweepPreview() {
+    document.getElementById('sweepSetupHint').textContent = appState.compareActive ? ` (Setup ${appState.activeTab})` : '';
+    renderSweepPlot(document.getElementById('sweepPlot'), getActiveSetup(), (phi) => {
+        getActiveSetup().phiMDeg = phi;
+        syncControlsFromSetup();
+        recomputeAndRender();
+    });
 }
 
 function openExportTab(tab) {
@@ -1856,6 +1874,5 @@ function bindExportCard() {
     document.getElementById('btnDownloadCsv').addEventListener('click', () => {
         const s = getActiveSetup();
         downloadText(buildSweepCsv(s), `${exportBaseName(s).replace(/_phiM\d+$/, '')}_sweep.csv`, 'text/csv');
-        showToast('Sweep φ_M = 0…360° gespeichert');
     });
 }

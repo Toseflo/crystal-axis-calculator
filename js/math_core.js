@@ -719,6 +719,26 @@ export function computeFrameMatrices(setup) {
 /**
  * Evaluates all geometric and magnetic quantities for a given setup state.
  */
+/**
+ * Classic magnetostatic spin-wave geometry from the direction of m_hat in the wave frame (k, t, n):
+ *   BV: m || k (in the sample plane) · DE: m ⊥ k (in the plane) · FV: m || n (out of plane).
+ * Purely geometric; tolerance 10°.
+ */
+export function classifySpinWaveGeometry(mWave) {
+    if (!mWave) return { key: 'none', short: '–', label: 'unbestimmt', elevDeg: NaN, inPlaneDeg: NaN };
+    const [mk, mt, mn] = mWave;
+    const elevDeg = Math.asin(Math.min(1, Math.abs(mn))) * RAD2DEG;
+    const inPlaneDeg = Math.atan2(Math.abs(mt), Math.abs(mk)) * RAD2DEG; // 0 = along k, 90 = across k
+    const TOL = 10;
+    if (elevDeg > 90 - TOL) return { key: 'FV', short: 'FV', label: 'Forward-Volume', elevDeg, inPlaneDeg };
+    if (elevDeg < TOL) {
+        if (inPlaneDeg < TOL) return { key: 'BV', short: 'BV', label: 'Backward-Volume', elevDeg, inPlaneDeg };
+        if (inPlaneDeg > 90 - TOL) return { key: 'DE', short: 'DE', label: 'Damon-Eshbach', elevDeg, inPlaneDeg };
+        return { key: 'mixed', short: 'BV/DE', label: 'zwischen BV und DE', elevDeg, inPlaneDeg };
+    }
+    return { key: 'oblique', short: 'schräg', label: `schräg (${Math.round(elevDeg)}° aus der Probe)`, elevDeg, inPlaneDeg };
+}
+
 export function evaluateSetup(setup) {
     const matrices = computeFrameMatrices(setup);
     const { thetaCutDeg, phiCutDeg, vectorInAllFrames } = matrices;
@@ -821,6 +841,9 @@ export function evaluateSetup(setup) {
     // and on l_hat has |k_hat x l_hat| = sin(angle(l, k)).
     const cpwTorqueM = norm3(cross3(kHat.Sub, mHat.Sub));
     const cpwTorqueL = norm3(cross3(kHat.Sub, lHat.Sub));
+    // The CPW field also has an out-of-plane part h_z || n_hat; its torque on m_hat is |n_hat x m_hat|.
+    const cpwTorqueMz = norm3(cross3(nHat.Sub, mHat.Sub));
+    const geometry = isEasyPlaneSingular ? classifySpinWaveGeometry(null) : classifySpinWaveGeometry(mHat.Wave);
 
     // Miller-Bravais indices of key sample/wave directions:
     const mbXs = crystalToMillerBravaisDirection(xsHat.Cryst, a, c);
@@ -900,7 +923,9 @@ export function evaluateSetup(setup) {
             lDotT: dot3(lHat.Sub, tHat.Sub),
             lDotN: dot3(lHat.Sub, nHat.Sub),
             cpwTorqueM,
-            cpwTorqueL
+            cpwTorqueL,
+            cpwTorqueMz,
+            geometry
         },
         millerBravais: {
             xs: { raw: mbXs, label: formatMillerBravais(mbXs, false), latex: formatMillerBravaisLatex(mbXs, false) },

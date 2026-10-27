@@ -13,7 +13,7 @@ Link zur Anwendung: [Hematite Crystal Calculator](https://toseflo.github.io/crys
 - **Aufbau erklären**: geführte Tour Kristall → Probe → Struktur → Einbau → Feld drehen, gebaut aus dem aktuellen Setup.
 - **Hervorhebung**: Fährt man mit der Maus über einen Begriff, eine Tabellenzeile oder einen Setup-Schritt, wird das zugehörige Objekt im 3D-Bild hervorgehoben (alles andere wird blass).
 - **Übersicht** (rechts):
-  - Ergebnis-Kacheln für $\angle(\mathbf{B},\hat{k})$, $\angle(\hat{m},\hat{k})$, $\angle(\hat{l},\hat{k})$.
+  - Ergebnis-Kacheln für $\angle(\mathbf{B},\hat{k})$, $\angle(\hat{m},\hat{k})$, $\angle(\hat{l},\hat{k})$ plus Spinwellen-Geometrie: Backward-Volume ($\hat{m}\parallel\hat{k}$), Damon-Eshbach ($\hat{m}\perp\hat{k}$, beide in der Probe), Forward-Volume ($\hat{m}\perp$ Probe), je ±10°. Beim CPW zeigt der Tooltip das Drehmoment beider Feldkomponenten auf $\hat{m}$: $h_x\parallel\hat{k}$ → $|\hat{k}\times\hat{m}|$, $h_z\perp$ Probe → $|\hat{n}\times\hat{m}|$.
   - „Kurz gesagt“: vier Zeilen zu Probe, Welle, Feld und Spins; die ausführliche Erklärung lässt sich aufklappen.
   - „Wo zeigt was hin?“: $\mathbf{B}$, $\hat{m}$, $\hat{l}$, $\hat{k}$ (auf Wunsch alle Achsen und Kanten) als Winkel $(\theta,\phi)$ oder $(x,y,z)$ im gewählten System plus $[uvtw]$.
   - „Eigene Richtung“ (aufklappbar): beliebige Richtung $[uvtw]$, Ebenennormale $(hkil)$, Kreuzprodukt zweier Richtungen/Ebenen oder Winkel $(\theta,\phi)$ eingeben → wird eingezeichnet, eingeordnet, und per Klick dreht der Ziel-Finder das Feld dorthin. Mit „+ Merken“ landen mehrere Richtungen in einer Liste – jede als eigener farbiger Pfeil im 3D-Bild (fest im Kristall, folgt also jeder Änderung am Aufbau), per × wieder entfernbar.
@@ -22,7 +22,7 @@ Link zur Anwendung: [Hematite Crystal Calculator](https://toseflo.github.io/crys
   - **Notiz kopieren**: Setup als kurzer Text fürs Laborbuch (Probe, Halter, Struktur, Feld, Spins, Winkel, gemerkte Richtungen, Link); beim Vergleich A und B untereinander.
   - **Bild (PNG)**: Ansicht 1 genau so, wie sie gerade zu sehen ist – für Folien.
   - **Grafik (SVG)**: saubere Vektorgrafik mit Vorschau und Optionen für die Abschlussarbeit (optional mit LaTeX-Labels für Inkscape → PDF+LaTeX).
-  - **Feld-Sweep (CSV)**: $\phi_M = 0\ldots360^\circ$ in 1°-Schritten mit Winkeln zu $\hat{k}$, Easy-Plane-Anteil, CPW-Kopplung $|\hat{k}\times\hat{m}|$ und $\hat{m}$, $\hat{l}$ im Wellen-System – direkt für Origin/Excel/Python.
+  - **Feld-Sweep**: $\phi_M = 0\ldots360^\circ$ als Plot (Winkel zu $\hat{k}$, Geometrie-Streifen, Easy-Plane-Anteil; Klick setzt $\phi_M$) und als CSV in 1°-Schritten inkl. $\hat{m}$, $\hat{l}$ im Wellen-System – direkt für Origin/Excel/Python.
   - Für Auswerteskripte: Python-Code für [`hematite_coords.py`](hematite_coords.py) und 3×3-Rotationsmatrizen zwischen allen Systemen (auch als LaTeX).
 
 ## Lokal starten

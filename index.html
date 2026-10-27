@@ -734,9 +734,9 @@
                         <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
                         <span>Grafik (SVG) …</span>
                     </button>
-                    <button type="button" class="export-tile" id="btnDownloadCsv" title="Magnet einmal rundherum drehen (φ_M = 0…360°, 1°-Schritte): Winkel, Easy-Plane-Anteil, CPW-Kopplung und m̂, l̂ im Wellen-System als .csv – für Origin, Excel oder Python">
+                    <button type="button" class="export-tile" data-open-export="sweep" title="Magnet einmal rundherum drehen (φ_M = 0…360°): Winkel, Geometrie und Easy-Plane-Anteil als Plot ansehen und als .csv speichern">
                         <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15c2-6 4-6 6-2s4 4 6-4"/></svg>
-                        <span>Feld-Sweep (CSV)</span>
+                        <span>Feld-Sweep …</span>
                     </button>
                 </div>
                 <div class="export-more">
@@ -759,6 +759,10 @@
                     <button type="button" class="export-tab active" data-etab="svg">
                         <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
                         SVG für die Arbeit
+                    </button>
+                    <button type="button" class="export-tab" data-etab="sweep">
+                        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15c2-6 4-6 6-2s4 4 6-4"/></svg>
+                        Feld-Sweep
                     </button>
                     <button type="button" class="export-tab" data-etab="python">
                         <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
@@ -823,6 +827,14 @@
             </div>
 
             <!-- Tab: Python -->
+            <div class="modal-body export-panel hidden" data-epanel="sweep">
+                <p class="export-intro">Magnet einmal rundherum drehen, alles andere bleibt fest<span class="muted" id="sweepSetupHint"></span>. Klick in den Plot setzt <span data-tex="\phi_M">φ_M</span>.</p>
+                <div id="sweepPlot" class="sweep-plot"></div>
+                <div class="sweep-actions">
+                    <button type="button" id="btnDownloadCsv" class="btn btn-primary btn-xs" title="1°-Schritte: Winkel zu k̂, Easy-/Probenebenen-Anteil, m̂ und l̂ im Wellen-System (k̂, t̂, n̂), Geometrie – für Origin, Excel oder Python">CSV herunterladen</button>
+                </div>
+            </div>
+
             <div class="modal-body export-panel hidden" data-epanel="python">
                 <p class="export-intro">Dieselben Rotationsmatrizen, 5 Bezugssysteme und Magnet-Sweeps für eigene Auswerteskripte (<code>hematite_coords.py</code>).</p>
                 <pre id="pythonSnippetCode" class="code-block"></pre>

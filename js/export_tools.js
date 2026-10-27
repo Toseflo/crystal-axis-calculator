@@ -23,12 +23,11 @@ function setupRows(state, tag) {
     const m = state.metrics;
     const cut = CUT_PRESETS[s.cutPreset];
     const cutName = cut && s.cutPreset !== 'custom' ? cut.label : `eigener Schnitt ${mb.zsPlane.label}`;
-    const spins = m.isEasyPlaneSingular ? 'm̂ unbestimmt (B ∥ c)' : `m̂ ∥ ${mb.m.label}, l̂ ∥ ${mb.l.label}`;
+    const spins = m.isEasyPlaneSingular ? 'm̂ unbestimmt (B ∥ c)' : `m̂ ∥ ${mb.m.label}, l̂ ∥ ${mb.l.label} · ${m.geometry.label}`;
 
     const angles = [`B in Easy-Plane ${pct(m.bEasyRatio)}`];
     if (!m.isEasyPlaneSingular) {
         angles.unshift(`∠(m̂,k̂) = ${f1(m.angleMKDeg)}°`, `∠(l̂,k̂) = ${f1(m.angleLKDeg)}°`);
-        if (s.deviceType === 'CPW') angles.push(`CPW-Kopplung |k̂×m̂| ${pct(m.cpwTorqueM)}`);
     }
 
     const rows = [
@@ -66,7 +65,7 @@ export function buildLabNote(states, extras = {}) {
 
 /**
  * Magnet sweep φ_M = 0…360° (other angles fixed) as CSV.
- * Vector components are given in the wave frame (k̂, t̂, n̂).
+ * Vector components are given in the wave frame (k̂, t̂, n̂); geometry = BV | DE | FV | mixed | oblique | none.
  */
 export function buildSweepCsv(setup, stepDeg = 1) {
     const header = [
@@ -76,13 +75,13 @@ export function buildSweepCsv(setup, stepDeg = 1) {
         'angle_B_k_deg',
         'angle_m_k_deg',
         'angle_l_k_deg',
-        'cpw_coupling_kxm',
         'm_k',
         'm_t',
         'm_n',
         'l_k',
         'l_t',
-        'l_n'
+        'l_n',
+        'geometry'
     ];
     const num = (x, d = 5) => (Number.isFinite(x) ? Number(x.toFixed(d)) : '');
     const lines = [header.join(',')];
@@ -99,9 +98,9 @@ export function buildSweepCsv(setup, stepDeg = 1) {
                 num(m.angleBKDeg, 3),
                 singular ? '' : num(m.angleMKDeg, 3),
                 singular ? '' : num(m.angleLKDeg, 3),
-                singular ? '' : num(m.cpwTorqueM),
                 ...spin(st.vectors.mHat),
-                ...spin(st.vectors.lHat)
+                ...spin(st.vectors.lHat),
+                m.geometry.key
             ].join(',')
         );
     }

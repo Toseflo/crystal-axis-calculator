@@ -115,14 +115,7 @@ export function buildSummary(state, tex) {
     if (m.isEasyPlaneSingular) {
         spins = `${token('m', T('\\hat{m}'))} unbestimmt (${token('B', T('\\mathbf{B}'))} ${T('\\parallel')} ${token('ec', 'c')})`;
     } else {
-        spins = `${token('m', T('\\hat{m}'))} ${T('\\parallel')} ${T(mb.m.latex)}`;
-        if (s.deviceType === 'CPW') {
-            const t = m.cpwTorqueM;
-            const verdict = t > 0.9 ? '<span class="gist-good">stark</span>' : t < 0.15 ? '<span class="gist-bad">schwach</span>' : 'mittel';
-            spins += ` · CPW-Kopplung ${verdict}`;
-        } else {
-            spins += ` · ${token('l', T('\\hat{l}'))} ${T('\\parallel')} ${T(mb.l.latex)}`;
-        }
+        spins = `${token('m', T('\\hat{m}'))} ${T('\\parallel')} ${T(mb.m.latex)} · ${m.geometry.label}`;
     }
 
     const line = (label, keys, body) => `<li data-emph="${keys}"><span class="gist-label">${label}</span><span>${body}</span></li>`;
@@ -205,16 +198,21 @@ export function buildNarrative(state, tex) {
         spins += `${fmt(m.bEasyRatio * 100, 0)} % davon (${m.bEasyTesla.toFixed(2)} T) liegen in der ${token('easy', 'Easy-Plane')}. `
             + `${token('m', T('\\hat{m}'))} folgt dieser Projektion (${T('\\parallel')} ${T(mb.m.latex)}), `
             + `${token('l', T('\\hat{l}'))} steht in der Easy-Plane senkrecht dazu (${T('\\parallel')} ${T(mb.l.latex)}).`;
+        const geo = m.geometry;
+        const geoWhy = {
+            BV: `${token('m', T('\\hat{m}'))} liegt in der Probe parallel zu ${token('k', T('\\hat{k}'))}`,
+            DE: `${token('m', T('\\hat{m}'))} liegt in der Probe senkrecht zu ${token('k', T('\\hat{k}'))}`,
+            FV: `${token('m', T('\\hat{m}'))} steht senkrecht auf der Probe`,
+            mixed: `${token('m', T('\\hat{m}'))} liegt in der Probe, ${fmt(geo.inPlaneDeg)}° neben ${token('k', T('\\hat{k}'))}`,
+            oblique: `${token('m', T('\\hat{m}'))} steht ${fmt(geo.elevDeg)}° aus der Probe`
+        }[geo.key];
+        spins += ` Geometrie: <strong>${geo.label}</strong> (${geoWhy}).`;
         if (s.deviceType === 'CPW') {
-            const torque = m.cpwTorqueM;
-            const verdict = torque > 0.9
-                ? 'fast maximal'
-                : torque < 0.15
-                    ? `sehr schwach – ${token('m', T('\\hat{m}'))} liegt fast parallel zu ${token('k', T('\\hat{k}'))}`
-                    : 'mittel';
-            spins += ` CPW-Kopplung ${T('|\\hat{k}\\times\\hat{m}|')} = ${fmt(torque * 100, 0)} %: ${verdict}.`;
+            spins += ` Das CPW-Feld hat eine Komponente ${T('h_x \\parallel \\hat{k}')} und eine ${T('h_z')} senkrecht zur Probe; `
+                + `ihr Drehmoment auf ${token('m', T('\\hat{m}'))}: ${T('|\\hat{k}\\times\\hat{m}|')} = ${fmt(m.cpwTorqueM * 100, 0)} %, `
+                + `${T('|\\hat{n}\\times\\hat{m}|')} = ${fmt(m.cpwTorqueMz * 100, 0)} %.`;
         } else {
-            spins += ` ${T('\\angle(\\hat{m},\\hat{k})')} = ${fmt(m.angleMKDeg)}°, ${T('\\angle(\\hat{k},c)')} = ${fmt(m.angleKCDeg)}°.`;
+            spins += ` ${T('\\angle(\\hat{k},c)')} = ${fmt(m.angleKCDeg)}°.`;
         }
     }
 
