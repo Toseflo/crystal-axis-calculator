@@ -12,7 +12,6 @@ import {
     HEMATITE_CONSTANTS,
     CUT_PRESETS,
     FRAME_METADATA,
-    TARGET_PRESETS,
     RAD2DEG,
     DEG2RAD,
     createDefaultSetup,
@@ -72,7 +71,7 @@ const appState = {
         phiMDeg: 90,
         b0Tesla: 0.5
     }),
-    targetId: null, // field direction the user picked in the magnet dock (null = none)
+    remountFor: null, // direction whose remount hint is open below the φ_M slider
     customTargetUVTW: [1, 1, -2, 0],
     vectorTableMode: 'angles', // 'angles' | 'xyz'
     vectorTableAll: false, // false: only B, m, l, k (+ custom)
@@ -605,8 +604,6 @@ function bindUIEvents() {
 
     // Sliders
     bindSliderPair('PhiM', 'phiMDeg', true);
-    // Turning the field by hand drops the picked direction (and with it the remount suggestion)
-    ['sliderPhiM', 'numPhiM'].forEach((id) => document.getElementById(id).addEventListener('input', clearSolverTarget));
     bindSliderPair('PsiS', 'psiSDeg', true);
     bindSliderPair('ThetaCut', 'thetaCutDeg', false);
     bindSliderPair('PhiCut', 'phiCutDeg', true);
@@ -692,19 +689,36 @@ function bindUIEvents() {
         recomputeAndRender();
     });
 
-    // Magnet dock: a direction chip selects the target and turns the magnet to it
-    document.querySelectorAll('.target-chip[data-target-id]').forEach((chip) => {
-        chip.addEventListener('click', () => {
-            driveFieldToTarget(chip.dataset.targetId);
-            if (chip.matches(':hover, :focus-visible')) previewFieldTarget(chip);
-        });
-        chip.addEventListener('pointerenter', () => previewFieldTarget(chip));
-        chip.addEventListener('pointerleave', clearFieldPreview);
-        chip.addEventListener('focus', () => previewFieldTarget(chip));
-        chip.addEventListener('blur', clearFieldPreview);
+    // Magnet dock: a slider mark turns the magnet there; hovering it previews the new field
+    const phiMarks = document.getElementById('phiMarks');
+    phiMarks.addEventListener('click', (e) => {
+        const mark = e.target.closest('.phi-mark');
+        if (!mark) return;
+        getActiveSetup().phiMDeg = Number(Number(mark.dataset.phi).toFixed(2));
+        setFieldPreview([]);
+        syncControlsFromSetup();
+        recomputeAndRender();
     });
-    clearFieldPreview();
-    document.getElementById('targetRemount').addEventListener('click', (e) => {
+    phiMarks.addEventListener('pointerover', (e) => {
+        const mark = e.target.closest('.phi-mark');
+        if (mark) previewPhiMark(mark);
+        else setFieldPreview([]);
+    });
+    phiMarks.addEventListener('pointerleave', () => setFieldPreview([]));
+    phiMarks.addEventListener('focusin', (e) => {
+        const mark = e.target.closest('.phi-mark');
+        if (mark) previewPhiMark(mark);
+    });
+    phiMarks.addEventListener('focusout', () => setFieldPreview([]));
+
+    // Directions out of reach: a click opens (or closes) the mount that reaches them
+    document.getElementById('phiOff').addEventListener('click', (e) => {
+        const item = e.target.closest('[data-off-id]');
+        if (item) {
+            appState.remountFor = appState.remountFor === item.dataset.offId ? null : item.dataset.offId;
+            recomputeAndRender();
+            return;
+        }
         const btn = e.target.closest('button[data-apply-mount]');
         if (!btn) return;
         const s = getActiveSetup();
@@ -714,20 +728,6 @@ function bindUIEvents() {
         syncControlsFromSetup();
         recomputeAndRender();
     });
-
-    const tU = document.getElementById('targetU');
-    const tV = document.getElementById('targetV');
-    const tT = document.getElementById('targetT');
-    const tW = document.getElementById('targetW');
-    const updateCustomTarget = () => {
-        const u = parseFloat(tU.value) || 0;
-        const v = parseFloat(tV.value) || 0;
-        const w = parseFloat(tW.value) || 0;
-        tT.value = -(u + v);
-        appState.customTargetUVTW = [u, v, -(u + v), w];
-        recomputeAndRender();
-    };
-    [tU, tV, tW].forEach((el) => el.addEventListener('input', updateCustomTarget));
 
     // Frame Lock Pills (View 1): animated transition so one can watch the frames rotate
     document.querySelectorAll('#frameLockPills .frame-pill').forEach((pill) => {
@@ -821,32 +821,6 @@ function showSideTab(name) {
         p.hidden = p.dataset.sidePanel !== name;
     });
     document.getElementById('sidePanels').scrollTop = 0;
-}
-
-function setSolverTarget(targetId) {
-    appState.targetId = targetId;
-    document.querySelectorAll('.target-chip[data-target-id]').forEach((chip) => {
-        chip.classList.toggle('active', chip.dataset.targetId === targetId);
-    });
-    document.getElementById('customTargetMBBox').classList.toggle('hidden', targetId !== 'custom_mb');
-    recomputeAndRender();
-}
-
-function clearSolverTarget() {
-    if (appState.targetId) setSolverTarget(null);
-}
-
-// Best φ_M for a target with the current mount (null if the field cannot get anywhere near it)
-function targetPhiForCurrentMount(targetId) {
-    const fixed = solveTargetAngles(getActiveSetup(), targetId, appState.customTargetUVTW).fixedPsiSweep;
-    return fixed.errorDeg > 89.9 ? null : fixed.bestPhiMDeg;
-}
-
-function driveFieldToTarget(targetId) {
-    const phi = targetPhiForCurrentMount(targetId);
-    if (phi !== null) getActiveSetup().phiMDeg = Number(phi.toFixed(2));
-    syncControlsFromSetup();
-    setSolverTarget(targetId);
 }
 
 // ============================================================================
@@ -1119,16 +1093,12 @@ function driveFieldToCustomDirection() {
     const uvtw = appState.customDir.uvtw;
     if (!uvtw) return;
     appState.customTargetUVTW = [...uvtw];
-    document.getElementById('targetU').value = uvtw[0];
-    document.getElementById('targetV').value = uvtw[1];
-    document.getElementById('targetT').value = uvtw[2];
-    document.getElementById('targetW').value = uvtw[3];
-
-    driveFieldToTarget('custom_mb');
-    const chip = document.querySelector('.target-chip[data-target-id="custom_mb"]');
-    chip.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    chip.classList.add('flash');
-    setTimeout(() => chip.classList.remove('flash'), 1200);
+    const fixed = solveTargetAngles(getActiveSetup(), 'custom_mb', uvtw).fixedPsiSweep;
+    if (fixed.errorDeg <= 89.9) getActiveSetup().phiMDeg = Number(fixed.bestPhiMDeg.toFixed(2));
+    // Not exactly reachable: the magnet dock offers the mount that is
+    appState.remountFor = fixed.errorDeg < 0.05 ? null : 'custom_mb';
+    syncControlsFromSetup();
+    recomputeAndRender();
 }
 
 // ============================================================================
@@ -1182,10 +1152,8 @@ function writeStateToUrl() {
     }
     if (appState.compareActive && appState.activeTab === 'B') params.set('tab', 'B');
     params.set('view', sceneController ? sceneController.lockFrame : 'Sub');
-    if (appState.targetId) params.set('ziel', appState.targetId);
     let hash = params.toString();
     // Index lists are appended by hand so they stay readable (URLSearchParams would escape , and ;)
-    if (appState.targetId === 'custom_mb') hash += `&zu=${appState.customTargetUVTW.join(',')}`;
     if (appState.pinnedDirs.length) hash += `&pins=${appState.pinnedDirs.map((p) => p.uvtw.join(',')).join(';')}`;
     history.replaceState(null, '', `#${hash}`);
 }
@@ -1230,11 +1198,6 @@ function readStateFromUrl() {
     const view = params.get('view');
     if (view && FRAME_METADATA[view] && view !== 'Mount') sceneController.lockFrame = view;
 
-    const target = params.get('ziel');
-    appState.targetId = target && TARGET_PRESETS.some((t) => t.id === target) ? target : null;
-    const zu = parseUvtw(params.get('zu'));
-    if (zu) appState.customTargetUVTW = zu;
-
     // Pinned directions are stored as [uvtw]; they live in the crystal frame, so A's lattice is enough
     const { aLattice: a, cLattice: c } = appState.setupA;
     appState.pinnedDirs = (params.get('pins') || '')
@@ -1249,13 +1212,8 @@ function readStateFromUrl() {
         });
 }
 
-// UI that only exists after bindUIEvents(): selected field direction and the pinned-directions card
+// UI that only exists after bindUIEvents(): the pinned-directions card
 function applyUrlUiState() {
-    const t = appState.customTargetUVTW;
-    ['targetU', 'targetV', 'targetT', 'targetW'].forEach((id, i) => {
-        document.getElementById(id).value = t[i];
-    });
-    setSolverTarget(appState.targetId);
     if (appState.pinnedDirs.length) document.getElementById('customDirCard').open = true;
 }
 
@@ -1335,7 +1293,7 @@ function recomputeAndRender() {
     document.getElementById('badgeSubYs').innerHTML = tex(activeState.millerBravais.ys.latex);
     document.getElementById('badgeSubZs').innerHTML = tex(activeState.millerBravais.zsPlane.latex);
     updateDeviceMillerReadout(activeState);
-    updateTargetChips(activeState);
+    updateFieldMarks(activeState);
 
     // The custom direction depends on the setup (it is drawn in Lab coordinates)
     updateCustomDirection(activeState);
@@ -1597,87 +1555,104 @@ function updateVectorTable(activeState) {
 }
 
 // ============================================================================
-// Magnet dock: field-direction chips
+// Magnet dock: marks on the φ_M slider
 // ============================================================================
 
 const fmtDeg = (deg) => `${Number(deg.toFixed(1))}°`;
 const phiDistDeg = (a, b) => Math.abs((((a - b) % 360) + 540) % 360 - 180);
-
-// Last solution per chip (φ_M with the current mount), shared by the chips, the hover preview and the hint line
-const fieldTargetState = new Map();
-const FIELD_HINT_DEFAULT = 'Klick dreht das Feld dorthin · ≈ nur ungefähr · – nicht erreichbar';
-const MOUNT_WORDS = { IP: 'horizontal (flach)', OOP: 'vertikal (stehend)' };
-
+const MOUNT_WORDS = { IP: 'flach', OOP: 'stehend' };
 const uvtwTex = (uvtw) => uvtw.map((v) => (v < 0 ? `\\bar{${-v}}` : `${v}`)).join('\\,');
-const fieldTargetLabel = (chip) => chip.dataset.targetId === 'custom_mb'
-    ? `\\mathbf{B}\\parallel [${uvtwTex(appState.customTargetUVTW)}]`
-    : chip.dataset.label;
 
-// Each target chip shows the φ_M that reaches it with the current mount ("≈" = closest approach,
-// "–" = out of reach). Only for the selected, not exactly reachable target a remount is offered.
-function updateTargetChips(activeState) {
+// Field directions offered on the slider: along the wave / sample frame or along a crystal axis
+const FIELD_MARKS = [
+    { id: 'B_parallel_k', key: 'k', tex: '+\\hat{k}', title: 'B ∥ +k̂: längs zur Welle' },
+    { id: 'B_antiparallel_k', key: 'k', tex: '-\\hat{k}', title: 'B ∥ −k̂: entgegen der Welle' },
+    { id: 'B_parallel_t', key: 't', tex: '\\hat{t}', title: 'B ∥ t̂: quer zur Welle, in der Probe' },
+    { id: 'B_parallel_n', key: 'n', tex: '\\hat{n}', title: 'B ∥ n̂: senkrecht zur Probe' },
+    { id: 'B_parallel_ea', key: 'ea', tex: 'a', title: 'B ∥ [112̅0]: a-Achse' },
+    { id: 'B_parallel_em', key: 'em', tex: 'm', title: 'B ∥ [11̅00]: m-Achse' },
+    { id: 'B_parallel_ec', key: 'ec', tex: 'c', title: 'B ∥ [0001]: c-Achse' }
+];
+// A direction from the "Eigene Richtung" card, only while its remount hint is open
+const customFieldMark = () => ({ id: 'custom_mb', key: 'custom', tex: `[${uvtwTex(appState.customTargetUVTW)}]`, title: 'eigene Richtung' });
+
+const markLabel = (m) => `<span class="phi-mark-label" style="--tok:${VECTOR_COLORS[m.key]}">${tex(m.tex)}</span>`;
+let phiMarksSignature = '';
+
+// Exactly reachable directions become marks at their φ_M; the others are listed below the slider,
+// where a click shows the mount that reaches them.
+function updateFieldMarks(activeState) {
     const setup = activeState.setup;
-    let selected = null;
+    const marks = appState.remountFor === 'custom_mb' ? [...FIELD_MARKS, customFieldMark()] : FIELD_MARKS;
+    const reach = [];
+    const off = [];
+    for (const m of marks) {
+        const sol = solveTargetAngles(setup, m.id, appState.customTargetUVTW);
+        const exact = sol.fixedPsiSweep.errorDeg < 0.05 && m.id !== 'custom_mb';
+        (exact ? reach : off).push({ ...m, sol, phi: ((sol.fixedPsiSweep.bestPhiMDeg % 360) + 360) % 360 });
+    }
+    renderPhiMarks(reach, setup.phiMDeg);
+    renderPhiOff(off, setup);
+}
 
-    document.querySelectorAll('.target-chip[data-target-id]').forEach((chip) => {
-        const sol = solveTargetAngles(setup, chip.dataset.targetId, appState.customTargetUVTW);
-        const { errorDeg, bestPhiMDeg } = sol.fixedPsiSweep;
-        const reachable = errorDeg <= 89.9;
-        const exact = errorDeg < 0.05;
-        const on = exact && phiDistDeg(setup.phiMDeg, bestPhiMDeg) < 0.05;
-        fieldTargetState.set(chip.dataset.targetId, { phi: bestPhiMDeg, err: errorDeg, reachable, exact, on });
+function renderPhiMarks(reach, phiNow) {
+    // Directions at the same φ_M share one mark; a mark too close to its left neighbour drops to a second row
+    const groups = [];
+    for (const m of [...reach].sort((a, b) => a.phi - b.phi)) {
+        const g = groups.find((x) => phiDistDeg(x.phi, m.phi) < 1);
+        if (g) g.items.push(m);
+        else groups.push({ phi: m.phi, items: [m] });
+    }
+    let lastRow1 = -Infinity;
+    for (const g of groups) {
+        g.row2 = g.phi - lastRow1 < 32;
+        if (!g.row2) lastRow1 = g.phi;
+    }
 
-        chip.classList.toggle('approx', reachable && !exact);
-        chip.classList.toggle('unreachable', !reachable);
-        chip.classList.toggle('on', on);
-        chip.querySelector('.target-phi').textContent = reachable ? `${exact ? '' : '≈ '}${fmtDeg(bestPhiMDeg)}` : '–';
+    const box = document.getElementById('phiMarks');
+    const signature = JSON.stringify(groups.map((g) => [g.phi.toFixed(2), g.row2, g.items.map((m) => m.tex)]));
+    if (signature !== phiMarksSignature) {
+        phiMarksSignature = signature;
+        box.classList.toggle('two-rows', groups.some((g) => g.row2));
+        box.innerHTML = groups.map((g) => `
+            <button type="button" class="phi-mark${g.row2 ? ' row2' : ''}" style="left:${(g.phi / 360) * 100}%" data-phi="${g.phi}"
+                data-emph="preview,${g.items.map((m) => m.key).join(',')}" title="${g.items.map((m) => m.title).join('\n')}\nφ_M = ${fmtDeg(g.phi)}">${g.items.map(markLabel).join('')}</button>`).join('');
+    }
+    box.querySelectorAll('.phi-mark').forEach((el) => el.classList.toggle('on', phiDistDeg(phiNow, Number(el.dataset.phi)) < 0.05));
+}
 
-        if (chip.dataset.targetId === appState.targetId) selected = { chip, sol, exact, reachable };
-    });
-
-    const box = document.getElementById('targetRemount');
-    // In-plane targets are reached exactly by the flat (IP) mount, everything else by the vertical (OOP) one
-    const alt = selected && !selected.exact
-        ? (setup.mountMode === 'OOP' && selected.sol.ipSolutions[0].errorDeg < 0.05 ? selected.sol.ipSolutions[0] : selected.sol.oopSolutions[0])
-        : null;
-    box.hidden = !alt || alt.errorDeg >= 0.05;
-    if (box.hidden) {
+function renderPhiOff(off, setup) {
+    const box = document.getElementById('phiOff');
+    if (!off.some((m) => m.id === appState.remountFor)) appState.remountFor = null;
+    box.hidden = !off.length;
+    if (!off.length) {
         box.innerHTML = '';
         return;
     }
-    const { chip, sol, reachable } = selected;
-    const now = reachable ? `geht so nur auf ${fmtDeg(sol.fixedPsiSweep.errorDeg)} genau` : 'geht mit diesem Einbau nicht';
-    box.innerHTML = `
-        <span class="target-remount-text"><span>${tex(fieldTargetLabel(chip))} ${now}.</span><small>Genau mit Probe ${MOUNT_WORDS[alt.mountMode]}, ${tex(`\\psi_S = ${Number(alt.psiSDeg.toFixed(1))}^\\circ`)}</small></span>
-        <button type="button" class="btn btn-xs btn-secondary" data-apply-mount="${alt.mountMode}" data-psi="${alt.psiSDeg}" data-phi="${alt.phiMDeg}" title="Halterung und Einbauwinkel umstellen und das Feld auf die Richtung drehen">Einbau ändern</button>`;
-}
-
-// Hovering a chip: dashed "B neu" arrow (plus m̂ / l̂ for the spin targets) and a one-line explanation
-function previewFieldTarget(chip) {
-    const id = chip.dataset.targetId;
-    const r = fieldTargetState.get(id);
-    const head = `${tex(fieldTargetLabel(chip))} <span class="ft-hint-desc">${chip.dataset.desc}</span>`;
-    let tail = '';
-    if (r && !r.reachable) tail = ' · mit diesem Einbau nicht erreichbar';
-    else if (r && r.on) tail = ' · ist gerade eingestellt ✓';
-    else if (r) tail = ` · ${tex('\\phi_M')} = ${fmtDeg(r.phi)}${r.exact ? '' : `, bleibt ${fmtDeg(r.err)} daneben`}`;
-    document.getElementById('fieldTargetHint').innerHTML = head + tail;
-
-    const vectors = [];
-    if (r && r.reachable && !r.on) {
-        const st = evaluateSetup({ ...getActiveSetup(), phiMDeg: r.phi });
-        vectors.push({ Lab: st.vectors.bHat.Lab, colorKey: 'B', label: 'B neu' });
-        if (!st.metrics.isEasyPlaneSingular) {
-            if (id === 'm_align_k') vectors.push({ Lab: st.vectors.mHat.Lab, colorKey: 'm', label: 'm̂ neu' });
-            if (id === 'l_align_k') vectors.push({ Lab: st.vectors.lHat.Lab, colorKey: 'l', label: 'l̂ neu' });
-        }
+    const open = off.find((m) => m.id === appState.remountFor);
+    let remount = '';
+    if (open) {
+        // In-plane directions are reached exactly by the flat (IP) mount, everything else by the vertical (OOP) one
+        const ip = open.sol.ipSolutions[0];
+        const alt = setup.mountMode === 'OOP' && ip.errorDeg < 0.05 ? ip : open.sol.oopSolutions[0];
+        remount = alt.errorDeg < 0.05
+            ? `<div class="phi-remount"><span>Geht mit Probe ${MOUNT_WORDS[alt.mountMode]}, ${tex(`\\psi_S = ${Number(alt.psiSDeg.toFixed(1))}^\\circ`)}</span>
+                <button type="button" class="btn btn-xs btn-secondary" data-apply-mount="${alt.mountMode}" data-psi="${alt.psiSDeg}" data-phi="${alt.phiMDeg}" title="Halterung und Einbauwinkel umstellen und das Feld dorthin drehen">Einbau ändern</button></div>`
+            : '<div class="phi-remount"><span>Auch mit anderem Einbau nicht genau erreichbar</span></div>';
     }
-    setFieldPreview(vectors);
+    box.innerHTML = `
+        <div class="phi-off-row"><span class="phi-off-label">Mit diesem Einbau nicht:</span>
+        ${off.map((m) => `<button type="button" class="phi-off-item${m === open ? ' active' : ''}" data-off-id="${m.id}" data-emph="${m.key}" title="${m.title}\nKlick zeigt, mit welchem Einbau es geht">${markLabel(m)}</button>`).join('')}</div>
+        ${remount}`;
 }
 
-function clearFieldPreview() {
-    document.getElementById('fieldTargetHint').textContent = FIELD_HINT_DEFAULT;
-    setFieldPreview([]);
+// Hovering a mark: dashed "B neu" arrow where the field would point
+function previewPhiMark(mark) {
+    const phi = Number(mark.dataset.phi);
+    const setup = getActiveSetup();
+    if (phiDistDeg(setup.phiMDeg, phi) < 0.05) return setFieldPreview([]);
+    const st = evaluateSetup({ ...setup, phiMDeg: phi });
+    setFieldPreview([{ Lab: st.vectors.bHat.Lab, colorKey: 'B', label: 'B neu' }]);
 }
 
 function setFieldPreview(vectors) {

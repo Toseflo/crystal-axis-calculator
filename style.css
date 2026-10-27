@@ -948,153 +948,115 @@ input[type="range"] {
     border-radius: 5px;
 }
 
-/* Magnet dock: field-direction chips, each with the φ_M that reaches it */
-.field-targets {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 5px;
-    margin-top: 12px;
-    padding-top: 10px;
-    border-top: 1px solid var(--border-color);
+/* Magnet dock: marks on the φ_M slider at the angles where B points along k̂, t̂, n̂ or a crystal axis */
+.phi-track {
+    margin-top: 2px;
 }
-.ft-group {
-    grid-column: 1 / -1;
-    margin-top: 5px;
-    font-size: 10.5px;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    color: var(--text-muted);
-}
-.ft-group:first-child {
-    margin-top: 0;
-}
-
-.target-chip {
+.phi-marks {
     position: relative;
+    height: 24px;
+    margin: 0 8px; /* the range thumb's centre never gets closer to the ends than half its width */
+}
+.phi-marks.two-rows {
+    height: 40px;
+}
+.phi-marks:empty {
+    height: 4px;
+}
+.phi-mark {
+    position: absolute;
+    top: 0;
+    transform: translateX(-50%);
     display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 2px;
-    min-width: 0;
-    padding: 6px 4px 5px;
-    font-size: 13px;
-    background: var(--bg-input);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    color: var(--text-primary);
-    cursor: pointer;
-    transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
-}
-.target-chip-wide {
-    grid-column: span 2;
-}
-.target-chip:hover {
-    border-color: var(--border-highlight);
-    transform: translateY(-1px);
-}
-.target-chip:focus-visible {
-    outline: 2px solid var(--border-highlight);
-    outline-offset: 1px;
-}
-.target-chip.active {
-    background: rgba(14, 165, 233, 0.16);
-    border-color: var(--border-highlight);
-    box-shadow: inset 0 0 0 1px var(--border-highlight);
-}
-
-.target-name {
-    display: inline-flex;
-    align-items: baseline;
     gap: 3px;
-    max-width: 100%;
+    padding: 8px 4px 2px;
+    background: none;
+    border: 0;
+    border-radius: 5px;
+    font-size: 12.5px;
+    line-height: 1.1;
     white-space: nowrap;
-    overflow: hidden;
+    cursor: pointer;
 }
-.target-name small {
-    font-size: 10px;
-    color: var(--text-muted);
+.phi-mark::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 2px;
+    height: 6px;
+    background: var(--text-muted);
+    transform: translateX(-50%);
 }
-.target-chip-wide .target-name {
-    font-size: 11.5px;
+.phi-mark.row2 {
+    padding-top: 24px;
+}
+.phi-mark.row2::before {
+    height: 22px;
+    opacity: 0.6;
+}
+.phi-mark-label {
+    color: var(--tok);
     font-weight: 600;
 }
-
-.target-phi {
-    min-height: 14px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10.5px;
-    font-weight: 700;
-    color: var(--border-highlight);
+.phi-mark:hover,
+.phi-mark:focus-visible {
+    background: var(--bg-input);
+    outline: none;
 }
-.target-chip.approx .target-phi {
-    font-weight: 500;
-    color: var(--text-secondary);
+.phi-mark.on::before {
+    background: var(--border-highlight);
 }
-.target-chip.unreachable {
-    border-style: dashed;
-    background: transparent;
-}
-.target-chip.unreachable .target-phi,
-.target-chip.unreachable .target-name {
-    color: var(--text-muted);
-}
-/* The field currently points there */
-.target-chip.on {
-    border-color: rgba(16, 185, 129, 0.6);
-}
-.target-chip.on::after {
-    content: '✓';
-    position: absolute;
-    top: 2px;
-    right: 5px;
-    font-size: 10px;
-    font-weight: 700;
-    color: var(--accent-emerald);
+.phi-mark.on {
+    background: rgba(14, 165, 233, 0.16);
 }
 
-/* Explains the hovered chip; fixed at two lines so the dock never changes height on hover */
-.ft-hint {
-    height: 2.9em;
-    margin: 8px 0 0;
+/* Directions this mount cannot reach; one of them can open the mount that does */
+.phi-off {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-color);
     font-size: 11.5px;
-    line-height: 1.45;
-    color: var(--text-secondary);
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
 }
-.ft-hint-desc {
+.phi-off[hidden] {
+    display: none;
+}
+.phi-off-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+}
+.phi-off-label {
+    margin-right: 2px;
     color: var(--text-muted);
 }
-
-.target-remount {
+.phi-off-item {
+    padding: 1px 7px;
+    background: transparent;
+    border: 1px dashed var(--border-color);
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+}
+.phi-off-item:hover,
+.phi-off-item.active {
+    border-style: solid;
+    border-color: rgba(245, 158, 11, 0.6);
+}
+.phi-remount {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
     margin-top: 6px;
-    padding: 7px 10px;
+    padding: 6px 10px;
     border-radius: 8px;
     background: rgba(245, 158, 11, 0.08);
     border: 1px solid rgba(245, 158, 11, 0.35);
-    font-size: 11.5px;
     color: var(--text-primary);
 }
-.target-remount[hidden] {
-    display: none;
-}
-.target-remount-text {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-.target-remount small {
-    font-size: 11px;
-    color: var(--text-secondary);
-}
-.target-remount .btn {
+.phi-remount .btn {
     flex-shrink: 0;
 }
 
@@ -2130,15 +2092,6 @@ body.theme-light .canvas-pill-btn {
 .pin-remove:hover {
     background: rgba(239, 68, 68, 0.15);
     color: #f87171;
-}
-
-/* The [uvtw] target chip flashes when "Feld dorthin drehen" jumps to it */
-.target-chip.flash {
-    animation: flash-ring 1.2s ease;
-}
-@keyframes flash-ring {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(251, 146, 60, 0); }
-    25% { box-shadow: 0 0 0 3px rgba(251, 146, 60, 0.7); }
 }
 
 /* ==========================================================================
