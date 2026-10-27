@@ -13,9 +13,9 @@
 </head>
 <body>
     <!-- ====================================================================
-         MAIN 2-COLUMN WORKSPACE (Starts directly at top without header bar!)
+         MAIN 3-COLUMN WORKSPACE: Setup | 3D stage | Overview
          ==================================================================== -->
-    <main class="workspace-2col">
+    <main class="workspace-3col">
         <!-- ================================================================
              LEFT COLUMN: Guided Setup Workflow
              ================================================================ -->
@@ -410,427 +410,339 @@
                 </div>
             </div>
 
-            <!-- Compact Export Buttons at bottom of Sidebar -->
+            <!-- Share / Export at the bottom of the sidebar -->
             <div class="sidebar-export-row">
-                <button type="button" id="btnOpenSvgModal" class="btn btn-xs btn-secondary" title="Vektorgrafik (.svg) exportieren">
-                    <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
-                    SVG-Export
+                <button type="button" id="btnCopyLink" class="btn btn-xs btn-secondary" title="Link mit allen aktuellen Einstellungen kopieren (zum Weitergeben an Kollegen)">
+                    <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                    <span>Link kopieren</span>
                 </button>
-                <button type="button" id="btnOpenPythonModal" class="btn btn-xs btn-secondary" title="Setup als Python-Code kopieren">
+                <button type="button" class="btn btn-xs btn-secondary" data-open-export="svg" title="Vektorgrafik (.svg) für Abschlussarbeiten exportieren">
+                    <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+                    SVG
+                </button>
+                <button type="button" class="btn btn-xs btn-secondary" data-open-export="python" title="Setup als Python-Code">
                     <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-                    Python-Snippet
+                    Python
+                </button>
+                <button type="button" class="btn btn-xs btn-secondary" data-open-export="matrix" title="3×3-Rotationsmatrix zwischen zwei Bezugssystemen">
+                    <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4H4v16h3M17 4h3v16h-3"/><path d="M9 9h.01M12 9h.01M15 9h.01M9 15h.01M12 15h.01M15 15h.01"/></svg>
+                    Matrix
                 </button>
             </div>
         </aside>
 
         <!-- ================================================================
-             RIGHT COLUMN: Focus Stage (Single 3D or Optional Dual 3D Side-by-Side)
+             CENTER COLUMN: 3D stage (sticky)
              ================================================================ -->
         <section class="main-stage">
-            <div class="stage-and-options-grid">
-                <!-- Plot Canvases: Single 3D by default, or Dual 3D side-by-side when activated -->
-                <div id="stageContainer" class="stage-container mode-3d">
-                    <!-- Primary 3D Canvas Card -->
-                    <div class="stage-card card-3d" id="card3D">
-                        <div class="canvas-3d-viewport">
-                            <div class="canvas-top-right-controls">
-                                <button type="button" class="canvas-pill-btn" id="btnCamTop1" title="Zwischen 3D-Schrägansicht und exakter 2D-Draufsicht wechseln">
-                                    <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M8 12h8"/></svg>
-                                    Draufsicht (2D)
-                                </button>
-                                <button type="button" class="canvas-pill-btn" id="btnToggleDual3D" title="Zweite unabhängige 3D-Ansicht nebeneinander ein-/ausblenden">
-                                    <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16"/></svg>
-                                    <span id="lblToggleDual3D">+ 2. Ansicht daneben</span>
-                                </button>
-                            </div>
-                            <canvas id="canvas3D"></canvas>
-                            <div class="canvas-hint">Maus ziehen: Drehen · Mausrad: Zoom</div>
+            <div id="stageContainer" class="stage-container mode-3d">
+                <!-- Primary 3D Canvas Card -->
+                <div class="stage-card card-3d" id="card3D">
+                    <div class="canvas-3d-viewport">
+                        <div class="canvas-top-right-controls">
+                            <button type="button" class="canvas-pill-btn canvas-pill-accent" id="btnStartTour" title="Den Aufbau Kristall → Probe → Struktur → Magnet → Feld Schritt für Schritt zeigen">
+                                <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+                                Aufbau erklären
+                            </button>
+                            <button type="button" class="canvas-pill-btn" id="btnCamTop1" title="Zwischen 3D-Schrägansicht und exakter 2D-Draufsicht wechseln">
+                                <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M8 12h8"/></svg>
+                                Draufsicht
+                            </button>
+                            <button type="button" class="canvas-pill-btn" id="btnToggleDual3D" title="Zweite unabhängige 3D-Ansicht nebeneinander ein-/ausblenden">
+                                <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16"/></svg>
+                                <span id="lblToggleDual3D">+ 2. Ansicht</span>
+                            </button>
                         </div>
-                        <div id="bar3DControls" class="frame-lock-bottom-bar">
-                            <div class="bottom-bar-group">
-                                <span class="toolbar-label" id="lblFrameLock1">Was soll im Bild stillstehen?</span>
-                                <div class="frame-pills-lg" id="frameLockPills">
-                                    <button type="button" class="frame-pill active" data-frame="Sub">
-                                        <strong>Sample</strong>
-                                    </button>
-                                    <button type="button" class="frame-pill" data-frame="Lab">
-                                        <strong>Labor-Magnet</strong>
-                                    </button>
-                                    <button type="button" class="frame-pill" data-frame="Wave">
-                                        <strong>Welle <span data-tex="\hat{k}">k̂</span></strong>
-                                    </button>
-                                    <button type="button" class="frame-pill" data-frame="Cryst">
-                                        <strong>Easy-Plane horizontal</strong>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
 
-                    <!-- Optional Secondary 3D Canvas Card (Side-by-Side) -->
-                    <div class="stage-card card-3d card-3d-secondary" id="card3DSecondary">
-                        <div class="canvas-3d-viewport">
-                            <div class="canvas-top-right-controls">
-                                <button type="button" class="canvas-pill-btn active" id="btnCamTop2" title="Zwischen 3D-Schrägansicht und exakter 2D-Draufsicht wechseln">
-                                    <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M8 12h8"/></svg>
-                                    Draufsicht (2D)
-                                </button>
-                                <button type="button" class="canvas-pill-btn canvas-pill-close" id="btnCloseDual3D" title="Zweite Ansicht schließen">
+                        <!-- Legend = layer toggles: click toggles, hover highlights -->
+                        <div class="canvas-legend" id="canvasLegend" aria-label="Legende und Einblendungen">
+                            <button type="button" class="legend-chip" data-vis="showB" data-emph="B" style="--chip:#38bdf8"><i></i>Feld <span data-tex="\mathbf{B}">B</span></button>
+                            <button type="button" class="legend-chip" data-vis="showK" data-emph="k" style="--chip:#e879f9"><i></i>Welle <span data-tex="\hat{k}">k̂</span></button>
+                            <button type="button" class="legend-chip" data-vis="showM" data-emph="m" style="--chip:#fb7185"><i></i>Moment <span data-tex="\hat{m}">m̂</span></button>
+                            <button type="button" class="legend-chip" data-vis="showL" data-emph="l" style="--chip:#34d399"><i></i>Néel <span data-tex="\hat{l}">l̂</span></button>
+                            <button type="button" class="legend-chip" data-vis="showEasyPlane" data-emph="easy" style="--chip:#c084fc"><i></i>Easy-Plane</button>
+                            <button type="button" class="legend-chip" data-vis="showCrystalAxes" data-emph="crystal" style="--chip:#a78bfa"><i></i>Achsen <span data-tex="a,m,c">a,m,c</span></button>
+                            <button type="button" class="legend-chip" data-vis="showLabMagnet" data-emph="magnet" style="--chip:#f87171"><i></i>Magnet</button>
+                            <button type="button" class="legend-chip" data-vis="showCustom" data-emph="custom" style="--chip:#fb923c" id="legendChipCustom"><i></i>Eigene Richtung</button>
+                        </div>
+
+                        <canvas id="canvas3D"></canvas>
+                        <div class="canvas-hint">Ziehen: drehen · Mausrad: Zoom · Legende: klicken = ein/aus</div>
+
+                        <!-- Guided tour caption -->
+                        <div class="tour-caption hidden" id="tourCaption" role="dialog" aria-live="polite">
+                            <div class="tour-caption-head">
+                                <strong id="tourTitle">Aufbau</strong>
+                                <span class="tour-dots" id="tourDots"></span>
+                                <button type="button" class="btn-close btn-close-sm" id="tourExit" title="Tour beenden">
                                     <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                                    Schließen
                                 </button>
                             </div>
-                            <canvas id="canvas3DSecondary"></canvas>
-                            <div class="canvas-hint">Maus ziehen: Drehen · Mausrad: Zoom</div>
+                            <p id="tourText"></p>
+                            <div class="tour-caption-actions">
+                                <button type="button" class="btn btn-xs btn-ghost" id="tourPrev">← Zurück</button>
+                                <button type="button" class="btn btn-xs btn-primary" id="tourNext">Weiter →</button>
+                            </div>
                         </div>
-                        <div id="bar3DControls2" class="frame-lock-bottom-bar">
-                            <div class="bottom-bar-group">
-                                <span class="toolbar-label">Was soll in Ansicht 2 stillstehen?</span>
-                                <div class="frame-pills-lg" id="frameLockPills2">
-                                    <button type="button" class="frame-pill" data-frame="Sub">
-                                        <strong>Sample</strong>
-                                    </button>
-                                    <button type="button" class="frame-pill" data-frame="Lab">
-                                        <strong>Labor-Magnet</strong>
-                                    </button>
-                                    <button type="button" class="frame-pill" data-frame="Wave">
-                                        <strong>Welle <span data-tex="\hat{k}">k̂</span></strong>
-                                    </button>
-                                    <button type="button" class="frame-pill active" data-frame="Cryst">
-                                        <strong>Easy-Plane horizontal</strong>
-                                    </button>
-                                </div>
+                    </div>
+                    <div id="bar3DControls" class="frame-lock-bottom-bar">
+                        <div class="bottom-bar-group">
+                            <span class="toolbar-label" id="lblFrameLock1">Was steht im Bild still?</span>
+                            <div class="frame-pills-lg" id="frameLockPills">
+                                <button type="button" class="frame-pill active" data-frame="Sub" title="Die Probe liegt fest, Magnet und Kristall-Achsen bewegen sich relativ dazu">
+                                    <strong>Probe</strong>
+                                </button>
+                                <button type="button" class="frame-pill" data-frame="Lab" title="Der Magnet steht fest (B zeigt immer nach rechts), die Probe dreht sich im Feld">
+                                    <strong>Magnet</strong>
+                                </button>
+                                <button type="button" class="frame-pill" data-frame="Wave" title="Die Welle k̂ zeigt immer nach rechts">
+                                    <strong>Welle <span data-tex="\hat{k}">k̂</span></strong>
+                                </button>
+                                <button type="button" class="frame-pill" data-frame="Cryst" title="Die Easy-Plane liegt waagerecht, die a-Achse zeigt nach rechts">
+                                    <strong>Kristall</strong>
+                                </button>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Shared Display Toggles Bar directly underneath the 3D view(s) -->
-                <div class="shared-toggles-bar">
-                    <span class="toolbar-label">Zusätzliche Einblendungen (ein/aus):</span>
-                    <input type="checkbox" id="chkShowB" checked class="hidden" />
-                    <input type="checkbox" id="chkShowK" checked class="hidden" />
-                    <input type="checkbox" id="chkShowM" checked class="hidden" />
-                    <input type="checkbox" id="chkShowEasyPlane" checked class="hidden" />
-                    <input type="checkbox" id="chkShowL" checked class="hidden" />
-                    <input type="checkbox" id="chkShowCrystalAxes" class="hidden" />
-                    <input type="checkbox" id="chkShowLabMagnet" checked class="hidden" />
-
-                    <div class="frame-pills-lg" id="displayTogglePills">
-                        <button type="button" class="frame-pill toggle-pill active" data-opt-chk="chkShowEasyPlane">
-                            <strong>Easy-Plane <span data-tex="(0001)">(0001)</span></strong>
-                        </button>
-                        <button type="button" class="frame-pill toggle-pill active" data-opt-chk="chkShowL">
-                            <strong>Néel-Vektor <span data-tex="\hat{l}">l̂</span></strong>
-                        </button>
-                        <button type="button" class="frame-pill toggle-pill" data-opt-chk="chkShowCrystalAxes">
-                            <strong>Kristallachsen <span data-tex="a, m, c">a, m, c</span></strong>
-                        </button>
-                        <button type="button" class="frame-pill toggle-pill active" data-opt-chk="chkShowLabMagnet">
-                            <strong>Elektromagnet</strong>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Calm, Minimal 3-Tile Result Strip (only genuine calculated outputs, no repeated slider inputs) -->
-                <div class="core-results-strip" aria-label="Berechnete Winkel zur Welle">
-                    <div class="core-result-tile">
-                        <div class="core-result-top">
-                            <span class="legend-dot dot-cyan"></span>
-                            <span class="core-result-label">Magnetfeld <span data-tex="\mathbf{B}">B</span> zur Welle <span data-tex="\hat{k}">k̂</span></span>
-                            <strong class="core-result-val" id="valBSampleAngles">0.0°</strong>
+                <!-- Optional Secondary 3D Canvas Card (Side-by-Side) -->
+                <div class="stage-card card-3d card-3d-secondary" id="card3DSecondary">
+                    <div class="canvas-3d-viewport">
+                        <div class="canvas-top-right-controls">
+                            <button type="button" class="canvas-pill-btn active" id="btnCamTop2" title="Zwischen 3D-Schrägansicht und exakter 2D-Draufsicht wechseln">
+                                <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M8 12h8"/></svg>
+                                Draufsicht
+                            </button>
+                            <button type="button" class="canvas-pill-btn canvas-pill-close" id="btnCloseDual3D" title="Zweite Ansicht schließen">
+                                <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                                Schließen
+                            </button>
                         </div>
-                        <div class="core-result-sub" id="valBEasy">In Easy-Plane aktiv: 0.50 T (100%)</div>
-                        <div class="opt-compare hidden" id="cmpBSample"></div>
+                        <canvas id="canvas3DSecondary"></canvas>
+                        <div class="canvas-hint">Ziehen: drehen · Mausrad: Zoom</div>
                     </div>
-
-                    <div class="core-result-tile">
-                        <div class="core-result-top">
-                            <span class="legend-dot dot-rose"></span>
-                            <span class="core-result-label">Magnetisierung <span data-tex="\hat{m}">m̂</span> zur Welle <span data-tex="\hat{k}">k̂</span></span>
-                            <strong class="core-result-val" id="valAngleMK">0.0°</strong>
+                    <div id="bar3DControls2" class="frame-lock-bottom-bar">
+                        <div class="bottom-bar-group">
+                            <span class="toolbar-label">Ansicht 2 – still steht:</span>
+                            <div class="frame-pills-lg" id="frameLockPills2">
+                                <button type="button" class="frame-pill" data-frame="Sub"><strong>Probe</strong></button>
+                                <button type="button" class="frame-pill" data-frame="Lab"><strong>Magnet</strong></button>
+                                <button type="button" class="frame-pill" data-frame="Wave"><strong>Welle <span data-tex="\hat{k}">k̂</span></strong></button>
+                                <button type="button" class="frame-pill active" data-frame="Cryst"><strong>Kristall</strong></button>
+                            </div>
                         </div>
-                        <div class="core-result-sub" id="valMDotK">CPW-Anregung: 100%</div>
-                        <div class="opt-compare hidden" id="cmpAngleMK"></div>
-                    </div>
-
-                    <div class="core-result-tile">
-                        <div class="core-result-top">
-                            <span class="legend-dot dot-emerald"></span>
-                            <span class="core-result-label">Néel-Vektor <span data-tex="\hat{l}">l̂</span> zur Welle <span data-tex="\hat{k}">k̂</span></span>
-                            <strong class="core-result-val" id="valAngleLK">90.0°</strong>
-                        </div>
-                        <div class="core-result-sub" id="valLDotK">90° zu m̂ in der Easy-Plane</div>
-                        <div class="opt-compare hidden" id="cmpAngleLK"></div>
                     </div>
                 </div>
             </div>
+        </section>
+
+        <!-- ================================================================
+             RIGHT COLUMN: live overview (results, explanation, directions, tools)
+             ================================================================ -->
+        <aside class="overview-col" id="overviewCol">
+            <!-- Compact result tiles -->
+            <div class="core-results-strip" aria-label="Berechnete Winkel zur Welle">
+                <div class="core-result-tile" data-emph="B">
+                    <div class="core-result-top">
+                        <span class="legend-dot dot-cyan"></span>
+                        <span class="core-result-label"><span data-tex="\angle(\mathbf{B},\hat{k})">∠(B,k̂)</span></span>
+                        <strong class="core-result-val" id="valBSampleAngles">0.0°</strong>
+                    </div>
+                    <div class="core-result-sub" id="valBEasy"></div>
+                    <div class="opt-compare hidden" id="cmpBSample"></div>
+                </div>
+                <div class="core-result-tile" data-emph="m">
+                    <div class="core-result-top">
+                        <span class="legend-dot dot-rose"></span>
+                        <span class="core-result-label"><span data-tex="\angle(\hat{m},\hat{k})">∠(m̂,k̂)</span></span>
+                        <strong class="core-result-val" id="valAngleMK">0.0°</strong>
+                    </div>
+                    <div class="core-result-sub" id="valMDotK"></div>
+                    <div class="opt-compare hidden" id="cmpAngleMK"></div>
+                </div>
+                <div class="core-result-tile" data-emph="l">
+                    <div class="core-result-top">
+                        <span class="legend-dot dot-emerald"></span>
+                        <span class="core-result-label"><span data-tex="\angle(\hat{l},\hat{k})">∠(l̂,k̂)</span></span>
+                        <strong class="core-result-val" id="valAngleLK">90.0°</strong>
+                    </div>
+                    <div class="core-result-sub" id="valLDotK"></div>
+                    <div class="opt-compare hidden" id="cmpAngleLK"></div>
+                </div>
+            </div>
+
+            <!-- Plain-language explanation -->
+            <section class="overview-card" id="narrativeCard">
+                <header class="overview-card-head">
+                    <h2>Was passiert hier?</h2>
+                    <span class="overview-card-hint">Farbige Begriffe überfahren → im 3D-Bild hervorgehoben</span>
+                </header>
+                <div class="story" id="narrativeBody"></div>
+            </section>
+
+            <!-- Where does everything point? -->
+            <section class="overview-card" id="vectorCard">
+                <header class="overview-card-head">
+                    <h2>Wo zeigt was hin?</h2>
+                    <div class="overview-card-tools">
+                        <select id="selectVectorTableFrame" class="select-xs" title="In welchem Bezugssystem die Richtungen angegeben werden">
+                            <option value="view" selected>wie Ansicht 1</option>
+                            <option value="Sub">Probe (x_s, y_s, n̂)</option>
+                            <option value="Wave">Welle (k̂, t̂, n̂)</option>
+                            <option value="Cryst">Kristall (a, m, c)</option>
+                            <option value="Lab">Magnet/Labor (X, Y, Z)</option>
+                        </select>
+                        <div class="segmented-control seg-xs" id="vectorTableMode">
+                            <button type="button" class="seg-btn active" data-vmode="angles">Winkel</button>
+                            <button type="button" class="seg-btn" data-vmode="xyz">x y z</button>
+                        </div>
+                    </div>
+                </header>
+                <div class="table-scroll">
+                    <table class="data-table vector-table">
+                        <thead><tr id="vectorTableHeaderRow"></tr></thead>
+                        <tbody id="vectorTableBody"></tbody>
+                    </table>
+                </div>
+                <p class="overview-card-foot" id="vectorTableFoot"></p>
+            </section>
+
+            <!-- Custom direction: converter + "where is it?" + drive the field there -->
+            <section class="overview-card" id="customDirCard">
+                <header class="overview-card-head">
+                    <h2>Eigene Richtung</h2>
+                    <span class="overview-card-hint">wird als <span class="tok-inline" style="--tok:#fb923c">oranger Pfeil</span> eingezeichnet</span>
+                </header>
+
+                <div class="segmented-control seg-xs custom-dir-modes" id="customDirModes">
+                    <button type="button" class="seg-btn active" data-cdmode="dir">Richtung <span data-tex="[uvtw]">[uvtw]</span></button>
+                    <button type="button" class="seg-btn" data-cdmode="plane">Ebenen-Normale <span data-tex="(hkil)">(hkil)</span></button>
+                    <button type="button" class="seg-btn" data-cdmode="cross">Senkrecht zu zwei</button>
+                    <button type="button" class="seg-btn" data-cdmode="angles">Winkel θ, φ</button>
+                </div>
+
+                <div class="custom-dir-panel" data-cdpanel="dir plane">
+                    <div class="mb-4input-row">
+                        <div class="mb-field"><label data-cd-lbl="0">u</label><input type="number" id="cdH" value="1" step="1" /></div>
+                        <div class="mb-field"><label data-cd-lbl="1">v</label><input type="number" id="cdK" value="0" step="1" /></div>
+                        <div class="mb-field"><label data-cd-lbl="2">t</label><input type="number" id="cdI" value="-1" disabled /></div>
+                        <div class="mb-field"><label data-cd-lbl="3">w</label><input type="number" id="cdL" value="1" step="1" /></div>
+                    </div>
+                </div>
+
+                <div class="custom-dir-panel hidden" data-cdpanel="cross">
+                    <div class="cross-axis-grid">
+                        <div class="cross-axis-box">
+                            <div class="cross-axis-top">
+                                <strong>1.</strong>
+                                <select id="crossMode1" class="select-xs">
+                                    <option value="direction" selected>Richtung [uvtw]</option>
+                                    <option value="plane">Ebene (hkil)</option>
+                                </select>
+                            </div>
+                            <div class="mb-4input-row">
+                                <input type="number" id="cross1_h" value="1" step="1" />
+                                <input type="number" id="cross1_k" value="1" step="1" />
+                                <input type="number" id="cross1_i" value="-2" disabled />
+                                <input type="number" id="cross1_l" value="0" step="1" />
+                            </div>
+                        </div>
+                        <div class="cross-axis-box">
+                            <div class="cross-axis-top">
+                                <strong>2.</strong>
+                                <select id="crossMode2" class="select-xs">
+                                    <option value="direction">Richtung [uvtw]</option>
+                                    <option value="plane" selected>Ebene (hkil)</option>
+                                </select>
+                            </div>
+                            <div class="mb-4input-row">
+                                <input type="number" id="cross2_h" value="1" step="1" />
+                                <input type="number" id="cross2_k" value="-1" step="1" />
+                                <input type="number" id="cross2_i" value="0" disabled />
+                                <input type="number" id="cross2_l" value="2" step="1" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="custom-dir-panel hidden" data-cdpanel="angles">
+                    <div class="xyz-3input-row">
+                        <div class="mb-field">
+                            <label>System</label>
+                            <select id="cdAngFrame" class="select-xs">
+                                <option value="Sub" selected>Probe</option>
+                                <option value="Wave">Welle</option>
+                                <option value="Lab">Magnet/Labor</option>
+                                <option value="Cryst">Kristall</option>
+                            </select>
+                        </div>
+                        <div class="mb-field"><label>θ zur Normale/z</label><input type="number" id="cdTheta" value="90" step="1" /></div>
+                        <div class="mb-field"><label>φ in der xy-Ebene</label><input type="number" id="cdPhi" value="0" step="1" /></div>
+                    </div>
+                </div>
+
+                <div class="custom-dir-result" id="customDirResult"></div>
+
+                <div class="custom-dir-actions">
+                    <button type="button" class="btn btn-xs btn-primary" id="btnCustomDirDrive" title="Im Ziel-Finder die nötigen Halter- und Magnetwinkel für B ∥ diese Richtung berechnen">
+                        Feld dorthin drehen →
+                    </button>
+                    <label class="inline-check"><input type="checkbox" id="chkCustomDirShow" checked /> im 3D-Bild zeigen</label>
+                </div>
+            </section>
 
             <!-- Side-by-Side Comparison Summary Table (Only shown when Compare A vs. B is active) -->
-            <section id="compareSummarySection" class="data-section hidden">
-                <div class="section-header-compact">
-                    <h2>Direktvergleich: Setup A vs. Setup B</h2>
-                </div>
+            <section id="compareSummarySection" class="overview-card hidden">
+                <header class="overview-card-head">
+                    <h2>Vergleich <span class="badge-a">A</span> vs. <span class="badge-b">B</span></h2>
+                </header>
                 <div class="table-scroll">
                     <table class="data-table compare-table">
                         <thead>
                             <tr>
                                 <th>Größe</th>
-                                <th><span class="badge-a">A</span> Setup A</th>
-                                <th><span class="badge-b">B</span> Setup B</th>
-                                <th>Differenz Δ (B − A)</th>
+                                <th><span class="badge-a">A</span></th>
+                                <th><span class="badge-b">B</span></th>
+                                <th>Δ (B − A)</th>
                             </tr>
                         </thead>
                         <tbody id="compareTableBody"></tbody>
                     </table>
                 </div>
             </section>
-
-            <!-- ============================================================
-                 TABELLEN & UMRECHNER (Clean 3-Tab Drawer, collapsed by default)
-                 ============================================================ -->
-            <details class="expert-drawer" id="expertDrawer">
-                <summary class="expert-drawer-summary">
-                    <span>
-                        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
-                        <strong>Tabellen &amp; Umrechner</strong> (Vektortabelle, Kristall-Umrechner <span data-tex="[uvtw]">[uvtw]</span> &amp; 3×3-Rotationsmatrix)
-                    </span>
-                    <span class="drawer-hint">Aufklappen ▾</span>
-                </summary>
-
-                <div class="drawer-body">
-                    <!-- Clean 3-Tab Bar so only ONE tool is shown at a time -->
-                    <div class="drawer-tabs" id="drawerTabs" role="tablist">
-                        <button type="button" class="drawer-tab active" data-dtab="vectors">
-                            1. Richtungen &amp; Vektortabelle
-                        </button>
-                        <button type="button" class="drawer-tab" data-dtab="converter">
-                            2. Kristall-Umrechner <span data-tex="[uvtw] \leftrightarrow (x,y,z)">[uvtw] ⇄ (x,y,z)</span>
-                        </button>
-                        <button type="button" class="drawer-tab" data-dtab="matrix">
-                            3. 3×3-Rotationsmatrix
-                        </button>
-                    </div>
-
-                    <!-- TAB 1: Vektortabelle (mit (x,y,z), (θ,φ) und [uvtw] inkl. a-, m-, c-Achse) -->
-                    <section class="data-section drawer-panel" data-dpanel="vectors">
-                        <div class="section-header-compact">
-                            <h2>Alle wichtigen Vektoren &amp; Kristallachsen im gewählten System</h2>
-                            <label class="inline-select-label">
-                                Bezugssystem:
-                                <select id="selectVectorTableFrame" class="select-xs">
-                                    <option value="Sub" selected>Sample-System (0°-Kante x, 90°-Kante y, Normale z)</option>
-                                    <option value="Wave">Wellen-System (längs k̂, quer t̂, Normale n̂)</option>
-                                    <option value="Cryst">Kristall-System (a-Achse, m-Achse, c-Achse)</option>
-                                    <option value="Lab">Labor-System (Magnet-Ebene X, Y, Vertikale Z)</option>
-                                </select>
-                            </label>
-                        </div>
-
-                        <div class="table-scroll">
-                            <table class="data-table vector-table">
-                                <thead>
-                                    <tr id="vectorTableHeaderRow">
-                                        <th>Größe / Achse</th>
-                                        <th>x</th>
-                                        <th>y</th>
-                                        <th>z</th>
-                                        <th>θ (zu z)</th>
-                                        <th>φ (in xy)</th>
-                                        <th>Kristall [uvtw]</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="vectorTableBody"></tbody>
-                            </table>
-                        </div>
-                    </section>
-
-                    <!-- TAB 2: Bidirektionaler Kristall-Umrechner [uvtw] / (hkil) <-> Sample / Labor + 3. Achse berechnen -->
-                    <section class="data-section drawer-panel hidden" data-dpanel="converter">
-                        <div class="converter-2col-grid">
-                            <!-- Left Box: Crystal [uvtw] or (hkil) -->
-                            <div class="converter-card">
-                                <div class="converter-card-header">
-                                    <h3>Im Kristallgitter</h3>
-                                    <div class="segmented-control seg-xs" id="convCrystalModeGroup">
-                                        <button type="button" class="seg-btn active" data-cmode="direction">Richtung <span data-tex="[uvtw]">[uvtw]</span></button>
-                                        <button type="button" class="seg-btn" data-cmode="plane">Ebene <span data-tex="(hkil)">(hkil)</span></button>
-                                    </div>
-                                </div>
-                                <div class="mb-4input-row">
-                                    <div class="mb-field">
-                                        <label id="lblConvH">u</label>
-                                        <input type="number" id="convMB_h" value="1" step="1" />
-                                    </div>
-                                    <div class="mb-field">
-                                        <label id="lblConvK">v</label>
-                                        <input type="number" id="convMB_k" value="1" step="1" />
-                                    </div>
-                                    <div class="mb-field">
-                                        <label id="lblConvI">t = −(u+v)</label>
-                                        <input type="number" id="convMB_i" value="-2" disabled />
-                                    </div>
-                                    <div class="mb-field">
-                                        <label id="lblConvL">w</label>
-                                        <input type="number" id="convMB_l" value="0" step="1" />
-                                    </div>
-                                </div>
-                                <div class="calm-inline-status">
-                                    <span>Gekürzte Schreibweise: <strong id="convMBFormatted">[112̄0]</strong></span>
-                                </div>
-                            </div>
-
-                            <!-- Center Transfer Buttons -->
-                            <div class="converter-arrows-col">
-                                <button type="button" class="btn btn-sm btn-primary" id="btnConvToFrame" title="Von Kristall-Indizes in das gewählte Sample-/Labor-System umrechnen">
-                                    In System umrechnen →
-                                </button>
-                                <button type="button" class="btn btn-sm btn-secondary" id="btnConvToCrystal" title="Vom Sample-/Labor-System zurück in ganzzahlige Kristall-Indizes umrechnen">
-                                    ← In Kristall-Indizes
-                                </button>
-                            </div>
-
-                            <!-- Right Box: Sample or Lab Cartesian (x,y,z) & Spherical (theta, phi) -->
-                            <div class="converter-card">
-                                <div class="converter-card-header">
-                                    <h3>Im Ziel-System</h3>
-                                    <select id="selectConvTargetFrame" class="select-xs">
-                                        <option value="Sub" selected>Sample-System (x, y, z)</option>
-                                        <option value="Lab">Labor-System (X, Y, Z)</option>
-                                        <option value="Wave">Wellen-System (k̂, t̂, n̂)</option>
-                                    </select>
-                                </div>
-
-                                <label class="field-label" style="margin-top:0;">Kartesische Koordinaten (Einheitsvektor):</label>
-                                <div class="xyz-3input-row">
-                                    <div class="mb-field">
-                                        <label>x</label>
-                                        <input type="number" id="convCartX" value="1.0000" step="0.05" />
-                                    </div>
-                                    <div class="mb-field">
-                                        <label>y</label>
-                                        <input type="number" id="convCartY" value="0.0000" step="0.05" />
-                                    </div>
-                                    <div class="mb-field">
-                                        <label>z</label>
-                                        <input type="number" id="convCartZ" value="0.0000" step="0.05" />
-                                    </div>
-                                </div>
-
-                                <label class="field-label">Kugelkoordinaten (θ zur z-Achse, φ in der xy-Ebene):</label>
-                                <div class="xyz-2input-row">
-                                    <div class="mb-field">
-                                        <label>Polarwinkel θ (0°…180°)</label>
-                                        <input type="number" id="convSphTheta" value="90.00" step="1" />
-                                    </div>
-                                    <div class="mb-field">
-                                        <label>Azimut φ (0°…360°)</label>
-                                        <input type="number" id="convSphPhi" value="0.00" step="1" />
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Sub-Tool: Missing 3rd Orthogonal Crystal Axis Calculator (from original GitHub app) -->
-                        <details class="sub-details" style="margin-top: 12px;">
-                            <summary>Senkrechte 3. Kristallachse aus 2 bekannten Achsen berechnen (Kreuzprodukt)</summary>
-                            <div class="sub-details-body">
-                                <div class="cross-axis-grid">
-                                    <div class="cross-axis-box">
-                                        <div class="cross-axis-top">
-                                            <strong>1. Kristallachse</strong>
-                                            <select id="crossMode1" class="select-xs">
-                                                <option value="direction" selected>Richtung [uvtw]</option>
-                                                <option value="plane">Ebene (hkil)</option>
-                                            </select>
-                                        </div>
-                                        <div class="mb-4input-row">
-                                            <input type="number" id="cross1_h" value="1" step="1" />
-                                            <input type="number" id="cross1_k" value="1" step="1" />
-                                            <input type="number" id="cross1_i" value="-2" disabled />
-                                            <input type="number" id="cross1_l" value="0" step="1" />
-                                        </div>
-                                    </div>
-
-                                    <div class="cross-axis-box">
-                                        <div class="cross-axis-top">
-                                            <strong>2. Kristallachse</strong>
-                                            <select id="crossMode2" class="select-xs">
-                                                <option value="direction">Richtung [uvtw]</option>
-                                                <option value="plane" selected>Ebene (hkil)</option>
-                                            </select>
-                                        </div>
-                                        <div class="mb-4input-row">
-                                            <input type="number" id="cross2_h" value="1" step="1" />
-                                            <input type="number" id="cross2_k" value="-1" step="1" />
-                                            <input type="number" id="cross2_i" value="0" disabled />
-                                            <input type="number" id="cross2_l" value="2" step="1" />
-                                        </div>
-                                    </div>
-
-                                    <div class="cross-axis-result-box">
-                                        <strong>Senkrechte 3. Achse (1 × 2):</strong>
-                                        <div class="cross-res-line">Als Richtung <span data-tex="[uvtw]">[uvtw]</span>: <strong id="crossResDir">[1̄101]</strong></div>
-                                        <div class="cross-res-line">Als Ebene <span data-tex="(hkil)">(hkil)</span>: <strong id="crossResPlane">(1̄105)</strong></div>
-                                    </div>
-                                </div>
-                            </div>
-                        </details>
-                    </section>
-
-                    <!-- TAB 3: 3x3 Rotation Matrix -->
-                    <section class="data-section drawer-panel hidden" data-dpanel="matrix">
-                        <div class="section-header-compact">
-                            <h2>3×3-Rotationsmatrix <span data-tex="R_{\text{Ziel} \leftarrow \text{Start}}">R_Ziel←Start</span></h2>
-                            <button type="button" id="btnCopyMatrixLatex" class="btn btn-xs btn-secondary">Als LaTeX kopieren</button>
-                        </div>
-
-                        <div class="matrix-selector-row">
-                            <label>Start-System:
-                                <select id="selectMatFrom" class="select-xs">
-                                    <option value="Sub" selected>Sample-System</option>
-                                    <option value="Wave">Wellen-System</option>
-                                    <option value="Cryst">Kristall-System</option>
-                                    <option value="Lab">Labor-System</option>
-                                </select>
-                            </label>
-                            <span class="arrow-sep">→</span>
-                            <label>Ziel-System:
-                                <select id="selectMatTo" class="select-xs">
-                                    <option value="Sub">Sample-System</option>
-                                    <option value="Wave">Wellen-System</option>
-                                    <option value="Cryst" selected>Kristall-System</option>
-                                    <option value="Lab">Labor-System</option>
-                                </select>
-                            </label>
-                        </div>
-
-                        <div id="matrixDisplayGrid" class="matrix-grid"></div>
-                    </section>
-                </div>
-            </details>
-        </section>
+        </aside>
     </main>
 
     <!-- ====================================================================
-         MODAL 1: Thesis SVG Schematic Generator & Live Preview
+         EXPORT MODAL: SVG · Python · Rotation matrix (one dialog, three tabs)
          ==================================================================== -->
-    <div id="modalSvgExport" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div id="modalExport" class="modal-backdrop hidden" role="dialog" aria-modal="true">
         <div class="modal-card modal-xl">
             <div class="modal-header">
-                <div>
-                    <h2>
+                <div class="export-tabs" id="exportTabs" role="tablist">
+                    <button type="button" class="export-tab active" data-etab="svg">
                         <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
-                        Abschlussarbeit-SVG-Generator (Inkscape / LaTeX)
-                    </h2>
-                    <p>Erzeugt eine sauber nach Ebenen gruppierte Vektorgrafik (<code>.svg</code>) für Bachelor-, Master- und Doktorarbeiten.</p>
+                        SVG für die Arbeit
+                    </button>
+                    <button type="button" class="export-tab" data-etab="python">
+                        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                        Python
+                    </button>
+                    <button type="button" class="export-tab" data-etab="matrix">
+                        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4H4v16h3M17 4h3v16h-3"/></svg>
+                        Rotationsmatrix
+                    </button>
                 </div>
-                <button type="button" id="btnCloseSvgModal" class="btn-close">
+                <button type="button" id="btnCloseExportModal" class="btn-close">
                     <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
                 </button>
             </div>
-            <div class="modal-body svg-modal-grid">
+
+            <!-- Tab: SVG -->
+            <div class="modal-body svg-modal-grid export-panel" data-epanel="svg">
                 <div class="svg-options-col">
+                    <p class="export-intro">Nach Ebenen gruppierte Vektorgrafik (<code>.svg</code>) für Inkscape / LaTeX.</p>
                     <label class="field-label">Layout / Projektions-Modus:</label>
                     <select id="svgOptLayout" class="select-input">
                         <option value="combined">Kombi-Grafik (3D + 2D Sample + 2D Easy-Plane)</option>
@@ -839,12 +751,12 @@
                         <option value="2d_easy">Nur 2D-Basalebene (0001) Easy-Plane</option>
                     </select>
 
-                    <label class="field-label">3D-Bezugssystem (Frame Lock):</label>
+                    <label class="field-label">3D-Bezugssystem (was steht still):</label>
                     <select id="svgOptFrame" class="select-input">
-                        <option value="Sub">Sample fixiert</option>
-                        <option value="Wave">Wellenvektor k̂ fixiert</option>
-                        <option value="Cryst">Kristall / Easy-Plane fixiert</option>
-                        <option value="Lab">Labor-Magnet fixiert</option>
+                        <option value="Sub">Probe</option>
+                        <option value="Wave">Welle k̂</option>
+                        <option value="Cryst">Kristall / Easy-Plane</option>
+                        <option value="Lab">Magnet</option>
                     </select>
 
                     <label class="field-label">Sichtbare Ebenen im SVG:</label>
@@ -874,27 +786,10 @@
                     <div id="svgPreviewContainer" class="svg-preview-box"></div>
                 </div>
             </div>
-        </div>
-    </div>
 
-    <!-- ====================================================================
-         MODAL 2: Python Companion Snippet (hematite_coords.py)
-         ==================================================================== -->
-    <div id="modalPythonSnippet" class="modal-backdrop hidden" role="dialog" aria-modal="true">
-        <div class="modal-card modal-lg">
-            <div class="modal-header">
-                <div>
-                    <h2>
-                        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-                        Python-Begleitmodul (<code>hematite_coords.py</code>)
-                    </h2>
-                    <p>Exakt dieselben 3×3-Rotationsmatrizen, 5 Bezugssysteme und Magnet-Sweeps für deine Python-Auswerteskripte.</p>
-                </div>
-                <button type="button" id="btnClosePythonModal" class="btn-close">
-                    <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                </button>
-            </div>
-            <div class="modal-body">
+            <!-- Tab: Python -->
+            <div class="modal-body export-panel hidden" data-epanel="python">
+                <p class="export-intro">Dieselben Rotationsmatrizen, 5 Bezugssysteme und Magnet-Sweeps für eigene Auswerteskripte (<code>hematite_coords.py</code>).</p>
                 <pre id="pythonSnippetCode" class="code-block"></pre>
                 <div class="modal-footer-bar">
                     <button type="button" id="btnCopyPythonSnippet" class="btn btn-primary">
@@ -907,9 +802,43 @@
                     </a>
                 </div>
             </div>
+
+            <!-- Tab: Rotation matrix -->
+            <div class="modal-body export-panel hidden" data-epanel="matrix">
+                <p class="export-intro">
+                    <span data-tex="R">R</span> rechnet Komponenten eines Vektors vom Start- ins Zielsystem um:
+                    <span data-tex="\vec v_{\text{Ziel}} = R\,\vec v_{\text{Start}}">v_Ziel = R v_Start</span>.
+                    Die Spalten von <span data-tex="R">R</span> sind die Achsen des Startsystems, ausgedrückt im Zielsystem.
+                </p>
+                <div class="matrix-selector-row">
+                    <label>Start:
+                        <select id="selectMatFrom" class="select-xs">
+                            <option value="Sub" selected>Probe</option>
+                            <option value="Wave">Welle</option>
+                            <option value="Cryst">Kristall</option>
+                            <option value="Lab">Magnet/Labor</option>
+                            <option value="Mount">Halter</option>
+                        </select>
+                    </label>
+                    <span class="arrow-sep">→</span>
+                    <label>Ziel:
+                        <select id="selectMatTo" class="select-xs">
+                            <option value="Sub">Probe</option>
+                            <option value="Wave">Welle</option>
+                            <option value="Cryst" selected>Kristall</option>
+                            <option value="Lab">Magnet/Labor</option>
+                            <option value="Mount">Halter</option>
+                        </select>
+                    </label>
+                    <button type="button" id="btnCopyMatrixLatex" class="btn btn-xs btn-secondary">Als LaTeX kopieren</button>
+                </div>
+                <div id="matrixDisplayGrid" class="matrix-grid matrix-grid-labeled"></div>
+            </div>
         </div>
     </div>
 
-    <script type="module" src="js/app.js"></script>
+    <div class="toast hidden" id="toast" role="status"></div>
+
+<script type="module" src="js/app.js"></script>
 </body>
 </html>

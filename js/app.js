@@ -1,7 +1,11 @@
 /**
  * app.js
  * Main UI controller for the Hematite (alpha-Fe2O3) Spin-Wave (CPW) & SAW (IDT)
- * Coordinate Transformation Calculator.
+ * orientation tool.
+ *
+ * Layout: setup steps (left) | 3D stage (center) | live overview (right).
+ * Everything that names a physical object carries a data-emph key; hovering it
+ * highlights the same object in the 3D view.
  */
 
 import {
@@ -13,7 +17,6 @@ import {
     DEG2RAD,
     createDefaultSetup,
     evaluateSetup,
-    computeSampleAngleMillerBravais,
     solveTargetAngles,
     solveSweepLandmarksForFixedPsi,
     computeMountingPresetPsiS,
@@ -21,9 +24,11 @@ import {
     crystalToMillerBravaisDirection,
     millerBravaisPlaneToCrystalNormal,
     crystalNormalToMillerBravaisPlane,
+    formatMillerBravais,
     formatMillerBravaisLatex,
     scaleMillerBravaisInts,
     cross3,
+    dot3,
     normalize3,
     matVec3,
     generatePythonSnippet,
@@ -31,8 +36,9 @@ import {
 } from './math_core.js';
 
 import { Scene3DController, VECTOR_COLORS } from './visualizer_3d.js';
-import { SweepChartController } from './sweep_chart.js';
 import { generateThesisSVG } from './svg_exporter.js';
+import { buildNarrative, describeDirection, token } from './narrative.js';
+import { GuidedTour } from './tour.js';
 
 // Application State (Default: c-cut (0001) in IP orientation)
 const appState = {
@@ -65,7 +71,9 @@ const appState = {
         b0Tesla: 0.5
     }),
     targetId: 'B_parallel_k',
-    customTargetUVTW: [1, 1, -2, 0]
+    customTargetUVTW: [1, 1, -2, 0],
+    vectorTableMode: 'angles', // 'angles' | 'xyz'
+    customDir: { mode: 'dir' } // 'dir' | 'plane' | 'cross' | 'angles'
 };
 
 const PRESET_STORAGE_KEY = 'hematite_user_presets_v1';
@@ -137,6 +145,37 @@ const DEFAULT_STARTER_PRESETS = [
     }
 ];
 
+// Which 3D objects a sidebar step / slider is "about" (used for hover emphasis)
+const STEP_EMPHASIS = {
+    stepCard1: ['sample', 'crystal', 'easy', 'nodes'],
+    stepCardDev: ['device', 'k', 't'],
+    stepCard2: ['sample', 'magnet', 'n'],
+    stepCard3: ['B', 'm', 'l', 'magnet']
+};
+const SLIDER_EMPHASIS = {
+    ThetaCut: ['sample', 'crystal', 'easy', 'nodes'],
+    PhiCut: ['sample', 'crystal', 'easy', 'nodes'],
+    AlphaFlat: ['xs', 'ys', 'crystal'],
+    ThetaDev: ['device', 'k', 't'],
+    PsiS: ['sample', 'device', 'k', 'magnet'],
+    PhiM: ['B', 'm', 'l', 'magnet']
+};
+
+// Compact URL keys for sharing a setup as a link
+const URL_KEYS = {
+    cut: 'cutPreset',
+    tc: 'thetaCutDeg',
+    pc: 'phiCutDeg',
+    af: 'alphaFlatDeg',
+    dev: 'deviceType',
+    td: 'thetaDevDeg',
+    mnt: 'mountMode',
+    psi: 'psiSDeg',
+    phi: 'phiMDeg',
+    b0: 'b0Tesla'
+};
+const URL_STRING_PROPS = new Set(['cutPreset', 'deviceType', 'mountMode']);
+
 let savedPresets = [];
 let activePresetId = 'preset_ccut_ip';
 
@@ -195,6 +234,8 @@ function getActiveSetup() {
 // Controllers
 let sceneController = null;
 let sceneController2 = null;
+let tour = null;
+let lastActiveState = null;
 
 function tex(latexStr) {
     if (window.katex) {
@@ -213,23 +254,35 @@ function renderStaticLatex() {
     });
 }
 
+function showToast(msg) {
+    const el = document.getElementById('toast');
+    if (!el) return;
+    el.textContent = msg;
+    el.classList.remove('hidden');
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(() => el.classList.add('hidden'), 1800);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const canvas3d = document.getElementById('canvas3D');
     const canvas3dSec = document.getElementById('canvas3DSecondary');
 
-    sceneController = new Scene3DController(canvas3d, null, null);
-    sceneController2 = new Scene3DController(canvas3dSec, null, null);
+    sceneController = new Scene3DController(canvas3d);
+    sceneController2 = new Scene3DController(canvas3dSec);
     // Share visibility flags between View 1 and View 2; default View 2 to Easy-Plane in Top-Down (2D) mode
     sceneController2.visibility = sceneController.visibility;
     sceneController2.lockFrame = 'Cryst';
     sceneController2.setTopDown2D(true);
 
+    readStateFromUrl();
     renderStaticLatex();
     loadPresetsFromStorage();
     renderPresetDropdown();
     populateTargetSelect();
     bindUIEvents();
     syncControlsFromSetup();
+    syncLegend();
+    syncFramePills();
     recomputeAndRender();
 
     window.addEventListener('load', () => {
@@ -264,12 +317,6 @@ function syncControlsFromSetup() {
     document.getElementById('btnToggleCompare').classList.toggle('active', appState.compareActive);
     document.getElementById('compareSetupBox').classList.toggle('hidden', !appState.compareActive);
     document.getElementById('inputSetupName').value = s.name;
-
-    const readoutBadge = document.getElementById('activeReadoutBadge');
-    if (readoutBadge) {
-        readoutBadge.textContent = s.name || `Setup ${appState.activeTab}`;
-        readoutBadge.className = appState.activeTab === 'A' ? 'badge-a' : 'badge-b';
-    }
 
     // Mount Mode
     document.getElementById('btnMountOOP').classList.toggle('active', s.mountMode === 'OOP');
@@ -321,6 +368,86 @@ function bindSliderPair(suffix, propName, wrap360 = false) {
     };
     if (sl) sl.addEventListener('input', (e) => updateVal(e.target.value));
     if (nm) nm.addEventListener('input', (e) => updateVal(e.target.value));
+
+    // While a slider is dragged, highlight what it moves
+    if (sl && SLIDER_EMPHASIS[suffix]) {
+        sl.addEventListener('pointerdown', () => {
+            emphasisLock = true;
+            setEmphasis(SLIDER_EMPHASIS[suffix]);
+            const release = () => {
+                emphasisLock = false;
+                setEmphasis(null);
+                window.removeEventListener('pointerup', release);
+                window.removeEventListener('pointercancel', release);
+            };
+            window.addEventListener('pointerup', release);
+            window.addEventListener('pointercancel', release);
+        });
+    }
+}
+
+// ============================================================================
+// Emphasis (hover anywhere → highlight in 3D)
+// ============================================================================
+
+let emphasisLock = false;
+let currentEmphasisSig = '';
+
+function setEmphasis(keys) {
+    const sig = keys ? keys.join(',') : '';
+    if (sig === currentEmphasisSig) return;
+    currentEmphasisSig = sig;
+    sceneController.setEmphasis(keys);
+    if (sceneController2) sceneController2.setEmphasis(keys);
+}
+
+function emphasisKeysFor(target) {
+    const el = target.closest('[data-emph], .story-step-title, .step-card-header');
+    if (!el) return null;
+    if (el.dataset.emph) return el.dataset.emph.split(',');
+    if (el.classList.contains('story-step-title')) {
+        const group = el.closest('[data-emph-group]');
+        return group ? group.dataset.emphGroup.split(',') : null;
+    }
+    const card = el.closest('.step-card');
+    return card ? STEP_EMPHASIS[card.id] || null : null;
+}
+
+function bindEmphasisHover() {
+    document.addEventListener('pointerover', (e) => {
+        if (emphasisLock || !(e.target instanceof Element)) return;
+        setEmphasis(emphasisKeysFor(e.target));
+    });
+    document.addEventListener('pointerleave', () => {
+        if (!emphasisLock) setEmphasis(null);
+    });
+}
+
+// ============================================================================
+// Legend chips (= layer toggles) & frame pills
+// ============================================================================
+
+function syncLegend() {
+    const vis = sceneController.visibility;
+    document.querySelectorAll('#canvasLegend .legend-chip[data-vis]').forEach((chip) => {
+        chip.classList.toggle('off', !vis[chip.dataset.vis]);
+    });
+    const chk = document.getElementById('chkCustomDirShow');
+    if (chk) chk.checked = !!vis.showCustom;
+}
+
+function syncFramePills() {
+    document.querySelectorAll('#frameLockPills .frame-pill').forEach((p) => {
+        p.classList.toggle('active', p.dataset.frame === sceneController.lockFrame);
+    });
+    if (lastActiveState && document.getElementById('selectVectorTableFrame').value === 'view') {
+        updateVectorTable(lastActiveState);
+    }
+}
+
+function rerenderScenes() {
+    sceneController.render();
+    if (sceneController2) sceneController2.render();
 }
 
 function bindUIEvents() {
@@ -358,34 +485,24 @@ function bindUIEvents() {
         if (btnToggleDual3D) {
             btnToggleDual3D.classList.toggle('active', enable);
             const lbl = document.getElementById('lblToggleDual3D');
-            if (lbl) {
-                lbl.textContent = enable ? '2. Ansicht aktiv' : '+ 2. Ansicht daneben';
-            }
+            if (lbl) lbl.textContent = enable ? '2. Ansicht aktiv' : '+ 2. Ansicht';
         }
         if (lblFrameLock1) {
-            lblFrameLock1.textContent = enable
-                ? 'Was soll in Ansicht 1 stillstehen?'
-                : 'Was soll im Bild stillstehen?';
+            lblFrameLock1.textContent = enable ? 'Ansicht 1 – still steht:' : 'Was steht im Bild still?';
         }
-        requestAnimationFrame(() => {
-            sceneController.render();
-            if (sceneController2) sceneController2.render();
-        });
+        requestAnimationFrame(rerenderScenes);
     };
 
     if (btnToggleDual3D) {
         btnToggleDual3D.addEventListener('click', () => {
-            const isDual = stageContainer.classList.contains('mode-dual-3d');
-            setDual3DActive(!isDual);
+            setDual3DActive(!stageContainer.classList.contains('mode-dual-3d'));
         });
     }
     if (btnCloseDual3D) {
-        btnCloseDual3D.addEventListener('click', () => {
-            setDual3DActive(false);
-        });
+        btnCloseDual3D.addEventListener('click', () => setDual3DActive(false));
     }
 
-    if (btnCamTop1 && sceneController) {
+    if (btnCamTop1) {
         sceneController.onCameraChange = () => {
             btnCamTop1.classList.toggle('active', sceneController.isTopDown2D());
         };
@@ -393,7 +510,6 @@ function bindUIEvents() {
             sceneController.setTopDown2D(!sceneController.isTopDown2D());
         });
     }
-
     if (btnCamTop2 && sceneController2) {
         sceneController2.onCameraChange = () => {
             btnCamTop2.classList.toggle('active', sceneController2.isTopDown2D());
@@ -414,17 +530,14 @@ function bindUIEvents() {
 
     if (scenarioSelect) {
         scenarioSelect.addEventListener('change', (e) => {
-            if (e.target.value) {
-                applySavedPreset(e.target.value);
-            }
+            if (e.target.value) applySavedPreset(e.target.value);
         });
     }
 
     if (btnOpenSave && saveRow && inputPresetName) {
         btnOpenSave.addEventListener('click', () => {
             const s = getActiveSetup();
-            const suggested = `${s.cutPreset} · ${s.mountMode} · ${s.deviceType} (${s.thetaDevDeg.toFixed(0)}°)`;
-            inputPresetName.value = suggested;
+            inputPresetName.value = `${s.cutPreset} · ${s.mountMode} · ${s.deviceType} (${s.thetaDevDeg.toFixed(0)}°)`;
             saveRow.classList.remove('hidden');
             inputPresetName.focus();
             inputPresetName.select();
@@ -439,13 +552,9 @@ function bindUIEvents() {
         if (saveRow) saveRow.classList.add('hidden');
     };
 
-    if (btnConfirmSave) {
-        btnConfirmSave.addEventListener('click', confirmSavePreset);
-    }
+    if (btnConfirmSave) btnConfirmSave.addEventListener('click', confirmSavePreset);
     if (btnCancelSave && saveRow) {
-        btnCancelSave.addEventListener('click', () => {
-            saveRow.classList.add('hidden');
-        });
+        btnCancelSave.addEventListener('click', () => saveRow.classList.add('hidden'));
     }
     if (inputPresetName && saveRow) {
         inputPresetName.addEventListener('keydown', (e) => {
@@ -457,11 +566,7 @@ function bindUIEvents() {
             }
         });
     }
-    if (btnDeletePreset) {
-        btnDeletePreset.addEventListener('click', () => {
-            deleteSelectedPreset();
-        });
-    }
+    if (btnDeletePreset) btnDeletePreset.addEventListener('click', deleteSelectedPreset);
 
     // Compare mode toggle
     document.getElementById('btnToggleCompare').addEventListener('click', () => {
@@ -485,10 +590,7 @@ function bindUIEvents() {
 
     // Copy A -> B
     document.getElementById('btnCopyAtoB').addEventListener('click', () => {
-        appState.setupB = {
-            ...appState.setupA,
-            name: `${appState.setupA.name} (Kopie B)`
-        };
+        appState.setupB = { ...appState.setupA, name: `${appState.setupA.name} (Kopie B)` };
         appState.activeTab = 'B';
         appState.compareActive = true;
         syncControlsFromSetup();
@@ -524,24 +626,17 @@ function bindUIEvents() {
     bindSliderPair('ThetaDev', 'thetaDevDeg', false);
 
     document.getElementById('numB0').addEventListener('input', (e) => {
-        const v = Math.max(0.001, parseFloat(e.target.value) || 0.5);
-        getActiveSetup().b0Tesla = v;
+        getActiveSetup().b0Tesla = Math.max(0.001, parseFloat(e.target.value) || 0.5);
         recomputeAndRender();
     });
 
     // Quick-Value Chips
+    const chipPropMap = { PhiM: 'phiMDeg', PsiS: 'psiSDeg', ThetaDev: 'thetaDevDeg' };
     document.querySelectorAll('.quick-chips').forEach((group) => {
         const target = group.dataset.target;
-        const propMap = {
-            PhiM: 'phiMDeg',
-            PsiS: 'psiSDeg',
-            ThetaDev: 'thetaDevDeg'
-        };
         group.querySelectorAll('button').forEach((btn) => {
             btn.addEventListener('click', () => {
-                const val = parseFloat(btn.dataset.val);
-                const s = getActiveSetup();
-                s[propMap[target]] = val;
+                getActiveSetup()[chipPropMap[target]] = parseFloat(btn.dataset.val);
                 syncControlsFromSetup();
                 recomputeAndRender();
             });
@@ -567,9 +662,7 @@ function bindUIEvents() {
     // Popular 0°-Edge Presets per Cut (alpha_flat = 0° vs. 90°)
     document.querySelectorAll('#edgePresetGrid .edge-preset-card[data-alpha]').forEach((btn) => {
         btn.addEventListener('click', () => {
-            const alpha = parseFloat(btn.dataset.alpha) || 0;
-            const s = getActiveSetup();
-            s.alphaFlatDeg = alpha;
+            getActiveSetup().alphaFlatDeg = parseFloat(btn.dataset.alpha) || 0;
             syncControlsFromSetup();
             recomputeAndRender();
         });
@@ -581,9 +674,7 @@ function bindUIEvents() {
     const iInput = document.getElementById('hkilI');
     const lInput = document.getElementById('hkilL');
     const syncI = () => {
-        const h = parseFloat(hInput.value) || 0;
-        const k = parseFloat(kInput.value) || 0;
-        iInput.value = -(h + k);
+        iInput.value = -((parseFloat(hInput.value) || 0) + (parseFloat(kInput.value) || 0));
     };
     hInput.addEventListener('input', syncI);
     kInput.addEventListener('input', syncI);
@@ -593,12 +684,10 @@ function bindUIEvents() {
         const k = parseFloat(kInput.value) || 0;
         const l = parseFloat(lInput.value) || 0;
         const nCryst = millerBravaisPlaneToCrystalNormal([h, k, -(h + k), l]);
-        const thetaDeg = Math.acos(Math.max(-1, Math.min(1, nCryst[2]))) * RAD2DEG;
-        const phiDeg = wrapDeg360(Math.atan2(nCryst[1], nCryst[0]) * RAD2DEG);
         const s = getActiveSetup();
         s.cutPreset = 'custom';
-        s.thetaCutDeg = Number(thetaDeg.toFixed(3));
-        s.phiCutDeg = Number(phiDeg.toFixed(2));
+        s.thetaCutDeg = Number((Math.acos(Math.max(-1, Math.min(1, nCryst[2]))) * RAD2DEG).toFixed(3));
+        s.phiCutDeg = Number(wrapDeg360(Math.atan2(nCryst[1], nCryst[0]) * RAD2DEG).toFixed(2));
         syncControlsFromSetup();
         recomputeAndRender();
     });
@@ -616,46 +705,12 @@ function bindUIEvents() {
     });
 
     // Inverse Solver Controls (Modular Category Tabs + Target Cards)
-    const setSolverTarget = (targetId) => {
-        appState.targetId = targetId;
-        const selEl = document.getElementById('selectTargetPreset');
-        if (selEl) selEl.value = targetId;
-        document.querySelectorAll('.solver-target-card[data-target-id]').forEach((card) => {
-            card.classList.toggle('active', card.dataset.targetId === targetId);
-        });
-        document
-            .getElementById('customTargetMBBox')
-            .classList.toggle('hidden', targetId !== 'custom_mb');
-        recomputeAndRender();
-    };
-
     document.querySelectorAll('#solverCatTabs .solver-cat-tab').forEach((tab) => {
-        tab.addEventListener('click', () => {
-            const cat = tab.dataset.solverCat;
-            document
-                .querySelectorAll('#solverCatTabs .solver-cat-tab')
-                .forEach((t) => t.classList.toggle('active', t === tab));
-            document.querySelectorAll('.solver-target-grid[data-solver-panel]').forEach((panel) => {
-                const isActivePanel = panel.dataset.solverPanel === cat;
-                panel.classList.toggle('hidden', !isActivePanel);
-                if (isActivePanel) {
-                    const activeCard =
-                        panel.querySelector('.solver-target-card.active') ||
-                        panel.querySelector('.solver-target-card');
-                    if (activeCard && activeCard.dataset.targetId) {
-                        setSolverTarget(activeCard.dataset.targetId);
-                    }
-                }
-            });
-        });
+        tab.addEventListener('click', () => selectSolverCategory(tab.dataset.solverCat, true));
     });
-
     document.querySelectorAll('.solver-target-card[data-target-id]').forEach((card) => {
-        card.addEventListener('click', () => {
-            setSolverTarget(card.dataset.targetId);
-        });
+        card.addEventListener('click', () => setSolverTarget(card.dataset.targetId));
     });
-
     document.getElementById('selectTargetPreset').addEventListener('change', (e) => {
         setSolverTarget(e.target.value);
     });
@@ -674,298 +729,385 @@ function bindUIEvents() {
     };
     [tU, tV, tW].forEach((el) => el.addEventListener('input', updateCustomTarget));
 
-    // Frame Lock Pills (View 1)
+    // Frame Lock Pills (View 1): animated transition so one can watch the frames rotate
     document.querySelectorAll('#frameLockPills .frame-pill').forEach((pill) => {
         pill.addEventListener('click', () => {
-            document
-                .querySelectorAll('#frameLockPills .frame-pill')
-                .forEach((p) => p.classList.remove('active'));
-            pill.classList.add('active');
-            sceneController.lockFrame = pill.dataset.frame;
+            sceneController.setLockFrame(pill.dataset.frame, true);
             const svgOpt = document.getElementById('svgOptFrame');
             if (svgOpt) svgOpt.value = pill.dataset.frame;
-            sceneController.render();
+            syncFramePills();
         });
     });
 
     // Frame Lock Pills (View 2)
     document.querySelectorAll('#frameLockPills2 .frame-pill').forEach((pill) => {
         pill.addEventListener('click', () => {
-            document
-                .querySelectorAll('#frameLockPills2 .frame-pill')
-                .forEach((p) => p.classList.remove('active'));
-            pill.classList.add('active');
-            if (sceneController2) {
-                sceneController2.lockFrame = pill.dataset.frame;
-                sceneController2.render();
-            }
+            document.querySelectorAll('#frameLockPills2 .frame-pill').forEach((p) => p.classList.toggle('active', p === pill));
+            if (sceneController2) sceneController2.setLockFrame(pill.dataset.frame, true);
         });
     });
 
-    // Clickable Display Toggle Buttons (Shared below 3D Plot)
-    const propByChkId = {
-        chkShowB: 'showB',
-        chkShowM: 'showM',
-        chkShowL: 'showL',
-        chkShowK: 'showK',
-        chkShowEasyPlane: 'showEasyPlane',
-        chkShowCrystalAxes: 'showCrystalAxes',
-        chkShowLabMagnet: 'showLabMagnet'
-    };
+    // Legend chips toggle layers (shared by both views)
+    document.querySelectorAll('#canvasLegend .legend-chip[data-vis]').forEach((chip) => {
+        chip.addEventListener('click', () => {
+            const prop = chip.dataset.vis;
+            sceneController.visibility[prop] = !sceneController.visibility[prop];
+            syncLegend();
+            rerenderScenes();
+        });
+    });
 
-    document.querySelectorAll('[data-opt-chk]').forEach((btn) => {
-        const chkId = btn.dataset.optChk;
-        const chk = document.getElementById(chkId);
-        const prop = propByChkId[chkId];
-        if (!chk || !prop) return;
-
+    // Vector table: frame & display mode
+    document.getElementById('selectVectorTableFrame').addEventListener('change', () => {
+        if (lastActiveState) updateVectorTable(lastActiveState);
+    });
+    document.querySelectorAll('#vectorTableMode .seg-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
-            chk.checked = !chk.checked;
-            sceneController.visibility[prop] = chk.checked;
-            btn.classList.toggle('active', chk.checked);
-            sceneController.render();
-            if (sceneController2) sceneController2.render();
+            appState.vectorTableMode = btn.dataset.vmode;
+            document.querySelectorAll('#vectorTableMode .seg-btn').forEach((b) => b.classList.toggle('active', b === btn));
+            if (lastActiveState) updateVectorTable(lastActiveState);
         });
-    });
-
-    // Drawer 3-Tab Switcher (Tabellen & Umrechner)
-    document.querySelectorAll('#drawerTabs .drawer-tab').forEach((tab) => {
-        tab.addEventListener('click', () => {
-            const target = tab.dataset.dtab;
-            document.querySelectorAll('#drawerTabs .drawer-tab').forEach((t) => {
-                t.classList.toggle('active', t === tab);
-            });
-            document.querySelectorAll('.drawer-panel[data-dpanel]').forEach((panel) => {
-                panel.classList.toggle('hidden', panel.dataset.dpanel !== target);
-            });
-        });
-    });
-
-    // Vector Table Frame & 3x3 Matrix Frame Selectors
-    document.getElementById('selectVectorTableFrame').addEventListener('change', recomputeAndRender);
-    document.getElementById('selectMatFrom').addEventListener('change', recomputeAndRender);
-    document.getElementById('selectMatTo').addEventListener('change', recomputeAndRender);
-
-    // Copy 3x3 Matrix as LaTeX
-    document.getElementById('btnCopyMatrixLatex').addEventListener('click', () => {
-        const st = evaluateSetup(getActiveSetup());
-        const fromF = document.getElementById('selectMatFrom').value;
-        const toF = document.getElementById('selectMatTo').value;
-        const R = st.matrices.getRotationMatrix(toF, fromF);
-        const rows = R.map((r) => r.map((v) => v.toFixed(4)).join(' & ')).join(' \\\\\n  ');
-        const texStr = `R_{\\text{${toF}}\\leftarrow\\text{${fromF}}} = \\begin{pmatrix}\n  ${rows}\n\\end{pmatrix}`;
-        navigator.clipboard.writeText(texStr);
-        const btn = document.getElementById('btnCopyMatrixLatex');
-        const old = btn.innerHTML;
-        btn.textContent = 'Kopiert';
-        setTimeout(() => (btn.innerHTML = old), 1400);
     });
 
     // 1A: Sample Mounting Preset Buttons (if present)
     document.querySelectorAll('.mount-preset-btn[data-mpreset]').forEach((btn) => {
         btn.addEventListener('click', () => {
             const s = getActiveSetup();
-            const newPsi = computeMountingPresetPsiS(s, btn.dataset.mpreset);
-            s.psiSDeg = Number(newPsi.toFixed(2));
+            s.psiSDeg = Number(computeMountingPresetPsiS(s, btn.dataset.mpreset).toFixed(2));
             syncControlsFromSetup();
             recomputeAndRender();
         });
     });
 
-    // Bidirectional Crystal [uvtw] <-> Sample/Lab Converter & Cross-Product Axis Tool
-    bindCrystalConverterEvents();
+    // Share link
+    document.getElementById('btnCopyLink').addEventListener('click', () => {
+        writeStateToUrl();
+        navigator.clipboard.writeText(window.location.href).then(
+            () => showToast('Link mit allen Einstellungen kopiert'),
+            () => showToast('Kopieren nicht möglich – Link steht in der Adresszeile')
+        );
+    });
 
-    // Modals: SVG Generator & Python Snippet
-    bindModals();
+    bindCustomDirection();
+    bindEmphasisHover();
+    bindExportModal();
+    bindTour();
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        if (tour && tour.active) tour.stop();
+        document.getElementById('modalExport').classList.add('hidden');
+    });
 }
 
-let convCrystalMode = 'direction'; // 'direction' | 'plane'
+// ============================================================================
+// Target finder helpers
+// ============================================================================
 
-function bindCrystalConverterEvents() {
-    const hIn = document.getElementById('convMB_h');
-    const kIn = document.getElementById('convMB_k');
-    const iIn = document.getElementById('convMB_i');
-    const lIn = document.getElementById('convMB_l');
-    const targetFrameSel = document.getElementById('selectConvTargetFrame');
-    const xIn = document.getElementById('convCartX');
-    const yIn = document.getElementById('convCartY');
-    const zIn = document.getElementById('convCartZ');
-    const thIn = document.getElementById('convSphTheta');
-    const phIn = document.getElementById('convSphPhi');
+function setSolverTarget(targetId) {
+    appState.targetId = targetId;
+    const selEl = document.getElementById('selectTargetPreset');
+    if (selEl) selEl.value = targetId;
+    document.querySelectorAll('.solver-target-card[data-target-id]').forEach((card) => {
+        card.classList.toggle('active', card.dataset.targetId === targetId);
+    });
+    document.getElementById('customTargetMBBox').classList.toggle('hidden', targetId !== 'custom_mb');
+    recomputeAndRender();
+}
 
-    const updateMBPreview = () => {
-        if (!hIn || !kIn || !iIn || !lIn) return;
-        const h = parseFloat(hIn.value) || 0;
-        const k = parseFloat(kIn.value) || 0;
-        const l = parseFloat(lIn.value) || 0;
-        const i = -(h + k);
-        iIn.value = Number.isInteger(i) ? i : i.toFixed(2);
-        const badge = document.getElementById('convMBFormatted');
-        if (badge) {
-            badge.innerHTML = tex(formatMillerBravaisLatex([h, k, i, l], convCrystalMode === 'plane'));
+function selectSolverCategory(cat, pickTarget) {
+    document.querySelectorAll('#solverCatTabs .solver-cat-tab').forEach((t) => {
+        t.classList.toggle('active', t.dataset.solverCat === cat);
+    });
+    document.querySelectorAll('.solver-target-grid[data-solver-panel]').forEach((panel) => {
+        const isActivePanel = panel.dataset.solverPanel === cat;
+        panel.classList.toggle('hidden', !isActivePanel);
+        if (isActivePanel && pickTarget) {
+            const activeCard = panel.querySelector('.solver-target-card.active') || panel.querySelector('.solver-target-card');
+            if (activeCard && activeCard.dataset.targetId) setSolverTarget(activeCard.dataset.targetId);
         }
+    });
+}
+
+// ============================================================================
+// "Eigene Richtung": any crystal direction / plane normal / cross product / angles
+// ============================================================================
+
+function readInt(id) {
+    return parseFloat(document.getElementById(id).value) || 0;
+}
+
+function bindCustomDirection() {
+    const labels = {
+        dir: ['u', 'v', 't', 'w'],
+        plane: ['h', 'k', 'i', 'l']
     };
-
-    const syncAnglesFromCart = () => {
-        const x = parseFloat(xIn.value) || 0;
-        const y = parseFloat(yIn.value) || 0;
-        const z = parseFloat(zIn.value) || 0;
-        const r = Math.hypot(x, y, z);
-        if (r < 1e-9) {
-            thIn.value = '0.00';
-            phIn.value = '0.00';
-            return;
-        }
-        const theta = Math.acos(Math.max(-1, Math.min(1, z / r))) * RAD2DEG;
-        let phi = wrapDeg360(Math.atan2(y, x) * RAD2DEG);
-        if (Math.abs(phi - 360) < 1e-4) phi = 0;
-        thIn.value = theta.toFixed(2);
-        phIn.value = phi.toFixed(2);
-    };
-
-    const syncCartFromAngles = () => {
-        const thetaRad = (parseFloat(thIn.value) || 0) * DEG2RAD;
-        const phiRad = (parseFloat(phIn.value) || 0) * DEG2RAD;
-        const x = Math.sin(thetaRad) * Math.cos(phiRad);
-        const y = Math.sin(thetaRad) * Math.sin(phiRad);
-        const z = Math.cos(thetaRad);
-        xIn.value = x.toFixed(4);
-        yIn.value = y.toFixed(4);
-        zIn.value = z.toFixed(4);
-    };
-
-    const convertCrystalToFrame = () => {
-        if (!hIn) return;
-        updateMBPreview();
-        const h = parseFloat(hIn.value) || 0;
-        const k = parseFloat(kIn.value) || 0;
-        const l = parseFloat(lIn.value) || 0;
-        const mb = [h, k, -(h + k), l];
-
-        const vCryst = convCrystalMode === 'plane'
-            ? millerBravaisPlaneToCrystalNormal(mb)
-            : millerBravaisDirectionToCrystal(mb);
-
-        const st = evaluateSetup(getActiveSetup());
-        const targetF = targetFrameSel ? targetFrameSel.value : 'Sub';
-        const R = st.matrices.getRotationMatrix(targetF, 'Cryst');
-        const vTarget = normalize3(matVec3(R, vCryst));
-
-        xIn.value = vTarget[0].toFixed(4);
-        yIn.value = vTarget[1].toFixed(4);
-        zIn.value = vTarget[2].toFixed(4);
-        syncAnglesFromCart();
-    };
-
-    const convertFrameToCrystal = () => {
-        if (!xIn) return;
-        const x = parseFloat(xIn.value) || 0;
-        const y = parseFloat(yIn.value) || 0;
-        const z = parseFloat(zIn.value) || 0;
-        const vTarget = normalize3([x, y, z]);
-
-        const st = evaluateSetup(getActiveSetup());
-        const targetF = targetFrameSel ? targetFrameSel.value : 'Sub';
-        const R = st.matrices.getRotationMatrix('Cryst', targetF);
-        const vCryst = matVec3(R, vTarget);
-
-        const rawMB = convCrystalMode === 'plane'
-            ? crystalNormalToMillerBravaisPlane(vCryst)
-            : crystalToMillerBravaisDirection(vCryst);
-        const ints = scaleMillerBravaisInts(rawMB);
-
-        hIn.value = ints[0];
-        kIn.value = ints[1];
-        iIn.value = ints[2];
-        lIn.value = ints[3];
-        updateMBPreview();
-    };
-
-    document.querySelectorAll('#convCrystalModeGroup .seg-btn').forEach((btn) => {
+    document.querySelectorAll('#customDirModes .seg-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
-            document.querySelectorAll('#convCrystalModeGroup .seg-btn').forEach((b) => b.classList.remove('active'));
-            btn.classList.add('active');
-            convCrystalMode = btn.dataset.cmode;
-            const isPlane = convCrystalMode === 'plane';
-            document.getElementById('lblConvH').textContent = isPlane ? 'h' : 'u';
-            document.getElementById('lblConvK').textContent = isPlane ? 'k' : 'v';
-            document.getElementById('lblConvI').textContent = isPlane ? 'i = −(h+k)' : 't = −(u+v)';
-            document.getElementById('lblConvL').textContent = isPlane ? 'l' : 'w';
-            updateMBPreview();
+            const mode = btn.dataset.cdmode;
+            appState.customDir.mode = mode;
+            document.querySelectorAll('#customDirModes .seg-btn').forEach((b) => b.classList.toggle('active', b === btn));
+            document.querySelectorAll('.custom-dir-panel[data-cdpanel]').forEach((p) => {
+                p.classList.toggle('hidden', !p.dataset.cdpanel.split(' ').includes(mode));
+            });
+            if (labels[mode]) {
+                document.querySelectorAll('[data-cd-lbl]').forEach((lbl) => {
+                    lbl.textContent = labels[mode][Number(lbl.dataset.cdLbl)];
+                });
+            }
+            sceneController.visibility.showCustom = true;
+            syncLegend();
+            if (lastActiveState) updateCustomDirection(lastActiveState);
         });
     });
 
-    if (hIn && kIn && lIn) {
-        [hIn, kIn, lIn].forEach((el) => el.addEventListener('input', updateMBPreview));
-    }
-    if (xIn && yIn && zIn) {
-        [xIn, yIn, zIn].forEach((el) => el.addEventListener('input', syncAnglesFromCart));
-    }
-    if (thIn && phIn) {
-        [thIn, phIn].forEach((el) => el.addEventListener('input', syncCartFromAngles));
-    }
-    if (targetFrameSel) {
-        targetFrameSel.addEventListener('change', convertCrystalToFrame);
-    }
-
-    const btnToFrame = document.getElementById('btnConvToFrame');
-    const btnToCrystal = document.getElementById('btnConvToCrystal');
-    if (btnToFrame) btnToFrame.addEventListener('click', convertCrystalToFrame);
-    if (btnToCrystal) btnToCrystal.addEventListener('click', convertFrameToCrystal);
-
-    // Sub-Tool: Orthogonal 3rd Crystal Axis Calculator (1 x 2)
-    const updateCrossAxisTool = () => {
-        const c1h = document.getElementById('cross1_h');
-        if (!c1h) return;
-        const h1 = parseFloat(c1h.value) || 0;
-        const k1 = parseFloat(document.getElementById('cross1_k').value) || 0;
-        const l1 = parseFloat(document.getElementById('cross1_l').value) || 0;
-        const i1 = -(h1 + k1);
-        document.getElementById('cross1_i').value = i1;
-        const m1 = document.getElementById('crossMode1').value;
-
-        const h2 = parseFloat(document.getElementById('cross2_h').value) || 0;
-        const k2 = parseFloat(document.getElementById('cross2_k').value) || 0;
-        const l2 = parseFloat(document.getElementById('cross2_l').value) || 0;
-        const i2 = -(h2 + k2);
-        document.getElementById('cross2_i').value = i2;
-        const m2 = document.getElementById('crossMode2').value;
-
-        const v1 = m1 === 'plane'
-            ? millerBravaisPlaneToCrystalNormal([h1, k1, i1, l1])
-            : millerBravaisDirectionToCrystal([h1, k1, i1, l1]);
-        const v2 = m2 === 'plane'
-            ? millerBravaisPlaneToCrystalNormal([h2, k2, i2, l2])
-            : millerBravaisDirectionToCrystal([h2, k2, i2, l2]);
-
-        const v3 = normalize3(cross3(v1, v2));
-        const dirMB = crystalToMillerBravaisDirection(v3);
-        const planeMB = crystalNormalToMillerBravaisPlane(v3);
-
-        document.getElementById('crossResDir').innerHTML = tex(formatMillerBravaisLatex(dirMB, false));
-        document.getElementById('crossResPlane').innerHTML = tex(formatMillerBravaisLatex(planeMB, true));
-    };
-
-    ['cross1_h', 'cross1_k', 'cross1_l', 'cross2_h', 'cross2_k', 'cross2_l', 'crossMode1', 'crossMode2'].forEach((id) => {
+    const ids = ['cdH', 'cdK', 'cdL', 'cross1_h', 'cross1_k', 'cross1_l', 'cross2_h', 'cross2_k', 'cross2_l', 'crossMode1', 'crossMode2', 'cdAngFrame', 'cdTheta', 'cdPhi'];
+    ids.forEach((id) => {
         const el = document.getElementById(id);
-        if (el) el.addEventListener('input', updateCrossAxisTool);
-        if (el) el.addEventListener('change', updateCrossAxisTool);
+        if (!el) return;
+        const handler = () => {
+            if (lastActiveState) {
+                updateCustomDirection(lastActiveState);
+                rerenderScenes();
+            }
+        };
+        el.addEventListener('input', handler);
+        el.addEventListener('change', handler);
     });
 
-    updateMBPreview();
-    updateCrossAxisTool();
+    document.getElementById('chkCustomDirShow').addEventListener('change', (e) => {
+        sceneController.visibility.showCustom = e.target.checked;
+        syncLegend();
+        rerenderScenes();
+    });
+
+    document.getElementById('btnCustomDirDrive').addEventListener('click', driveFieldToCustomDirection);
 }
+
+// Returns the custom direction as a unit vector in the crystal frame (or null).
+function computeCustomDirCryst(state) {
+    const s = state.setup;
+    const a = s.aLattice;
+    const c = s.cLattice;
+    const mode = appState.customDir.mode;
+
+    if (mode === 'dir' || mode === 'plane') {
+        const h = readInt('cdH');
+        const k = readInt('cdK');
+        const l = readInt('cdL');
+        document.getElementById('cdI').value = -(h + k);
+        const mb = [h, k, -(h + k), l];
+        if (mb.every((x) => x === 0)) return null;
+        return mode === 'plane' ? millerBravaisPlaneToCrystalNormal(mb, a, c) : millerBravaisDirectionToCrystal(mb, a, c);
+    }
+
+    if (mode === 'cross') {
+        const read = (n) => {
+            const h = readInt(`cross${n}_h`);
+            const k = readInt(`cross${n}_k`);
+            const l = readInt(`cross${n}_l`);
+            document.getElementById(`cross${n}_i`).value = -(h + k);
+            const mb = [h, k, -(h + k), l];
+            return document.getElementById(`crossMode${n}`).value === 'plane'
+                ? millerBravaisPlaneToCrystalNormal(mb, a, c)
+                : millerBravaisDirectionToCrystal(mb, a, c);
+        };
+        const v = cross3(read(1), read(2));
+        return Math.hypot(...v) < 1e-9 ? null : normalize3(v);
+    }
+
+    // mode === 'angles'
+    const frame = document.getElementById('cdAngFrame').value;
+    const th = (parseFloat(document.getElementById('cdTheta').value) || 0) * DEG2RAD;
+    const ph = (parseFloat(document.getElementById('cdPhi').value) || 0) * DEG2RAD;
+    const vF = [Math.sin(th) * Math.cos(ph), Math.sin(th) * Math.sin(ph), Math.cos(th)];
+    return normalize3(matVec3(state.matrices.getRotationMatrix('Cryst', frame), vF));
+}
+
+// Miller-Bravais indices; integers if they reproduce the direction within 0.5°, else scaled decimals.
+// (formatMillerBravais* would silently round decimals to small integers, so decimals are formatted here.)
+function bestMillerBravais(vCryst, a, c, isPlane) {
+    const raw = isPlane ? crystalNormalToMillerBravaisPlane(vCryst, a, c) : crystalToMillerBravaisDirection(vCryst, a, c);
+    const ints = scaleMillerBravaisInts(raw);
+    const back = isPlane ? millerBravaisPlaneToCrystalNormal(ints, a, c) : millerBravaisDirectionToCrystal(ints, a, c);
+    const errDeg = Math.acos(Math.max(-1, Math.min(1, dot3(back, vCryst)))) * RAD2DEG;
+    if (errDeg < 0.5) {
+        return {
+            indices: ints,
+            exact: true,
+            latex: formatMillerBravaisLatex(ints, isPlane),
+            text: formatMillerBravais(ints, isPlane)
+        };
+    }
+    const maxAbs = Math.max(...raw.map(Math.abs)) || 1;
+    const indices = raw.map((x) => Number((x / maxAbs).toFixed(4)));
+    const vals = indices.map((x) => (Math.abs(x) < 0.005 ? 0 : x));
+    const [open, close] = isPlane ? ['(', ')'] : ['[', ']'];
+    const dec = (x) => String(Number(x.toFixed(2)));
+    return {
+        indices,
+        exact: false,
+        latex: `${open}${vals.map((x) => (x < 0 ? `\\overline{${dec(-x)}}` : dec(x))).join('\\;')}${close}`,
+        text: `${open}${vals.map(dec).join(' ')}${close}`
+    };
+}
+
+const angleDeg = (u, v) => Math.acos(Math.max(-1, Math.min(1, dot3(normalize3(u), normalize3(v))))) * RAD2DEG;
+
+function updateCustomDirection(state) {
+    const out = document.getElementById('customDirResult');
+    const vCryst = computeCustomDirCryst(state);
+    if (!vCryst) {
+        sceneController.customVector = null;
+        if (sceneController2) sceneController2.customVector = null;
+        out.innerHTML = '<p class="muted">Bitte eine Richtung ungleich null eingeben.</p>';
+        return;
+    }
+    const s = state.setup;
+    const v = state.vectors;
+    const R = (to) => state.matrices.getRotationMatrix(to, 'Cryst');
+    const vLab = matVec3(R('Lab'), vCryst);
+    const vSub = matVec3(R('Sub'), vCryst);
+
+    const dir = bestMillerBravais(vCryst, s.aLattice, s.cLattice, false);
+    const plane = bestMillerBravais(vCryst, s.aLattice, s.cLattice, true);
+    appState.customDir.uvtw = dir.indices;
+    appState.customDir.latex = dir.latex;
+
+    sceneController.customVector = { Lab: vLab, label: dir.text };
+    if (sceneController2) sceneController2.customVector = sceneController.customVector;
+
+    const thetaSub = Math.acos(Math.max(-1, Math.min(1, vSub[2]))) * RAD2DEG;
+    const phiSub = wrapDeg360(Math.atan2(vSub[1], vSub[0]) * RAD2DEG);
+    const inSample = Math.abs(90 - thetaSub) < 0.5;
+
+    const row = (keyHtml, val) => `<div class="cd-row"><span>${keyHtml}</span><strong>${val}</strong></div>`;
+    out.innerHTML = `
+        <div class="cd-headline">
+            ${token('custom', `Richtung ${tex(dir.latex)}`)}
+            ${dir.exact ? '' : '<span class="muted">(nicht ganzzahlig)</span>'}
+            <span class="cd-sep">·</span>
+            Ebene senkrecht dazu: ${tex(plane.latex)}
+        </div>
+        <p class="cd-desc">Die Richtung ${describeDirection(vCryst, tex)}.</p>
+        <div class="cd-grid">
+            ${row(`zur ${token('ec', 'c-Achse')}`, `${angleDeg(vCryst, [0, 0, 1]).toFixed(1)}°`)}
+            ${row(`zur Normale ${token('n', tex('\\hat{n}'))}`, `${angleDeg(vSub, [0, 0, 1]).toFixed(1)}°`)}
+            ${row(`zur Welle ${token('k', tex('\\hat{k}'))}`, `${angleDeg(vSub, v.kHat.Sub).toFixed(1)}°`)}
+            ${row(`zum Feld ${token('B', tex('\\mathbf{B}'))}`, `${angleDeg(vSub, v.bHat.Sub).toFixed(1)}°`)}
+            ${row('in der Probe (θ, φ)', `${thetaSub.toFixed(1)}°, ${phiSub.toFixed(1)}°`)}
+            ${row('liegt in Probenebene?', inSample ? 'ja' : 'nein')}
+        </div>`;
+}
+
+function driveFieldToCustomDirection() {
+    const uvtw = appState.customDir.uvtw;
+    if (!uvtw) return;
+    appState.customTargetUVTW = [...uvtw];
+    document.getElementById('targetU').value = uvtw[0];
+    document.getElementById('targetV').value = uvtw[1];
+    document.getElementById('targetT').value = uvtw[2];
+    document.getElementById('targetW').value = uvtw[3];
+
+    selectSolverCategory('crystal', false);
+    setSolverTarget('custom_mb');
+
+    const stepCard3 = document.getElementById('stepCard3');
+    stepCard3.classList.add('step-card-active');
+    const details = stepCard3.querySelector('.solver-details');
+    details.open = true;
+    details.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    details.classList.add('flash');
+    setTimeout(() => details.classList.remove('flash'), 1200);
+}
+
+// ============================================================================
+// Guided tour
+// ============================================================================
+
+function bindTour() {
+    tour = new GuidedTour({
+        scene: sceneController,
+        getSetup: getActiveSetup,
+        evaluate: evaluateSetup,
+        tex,
+        refresh: recomputeAndRender,
+        onVisibilityChange: () => {
+            syncLegend();
+            syncFramePills();
+        },
+        els: {
+            root: document.getElementById('tourCaption'),
+            title: document.getElementById('tourTitle'),
+            text: document.getElementById('tourText'),
+            step: document.getElementById('tourDots'),
+            prev: document.getElementById('tourPrev'),
+            next: document.getElementById('tourNext'),
+            exit: document.getElementById('tourExit')
+        }
+    });
+    document.getElementById('btnStartTour').addEventListener('click', () => {
+        if (tour.active) tour.stop();
+        else tour.start();
+    });
+}
+
+// ============================================================================
+// Shareable URL (#cut=r-cut&tc=…&b.cut=…&cmp=1)
+// ============================================================================
+
+function writeStateToUrl() {
+    const params = new URLSearchParams();
+    const put = (prefix, setup) => {
+        for (const [key, prop] of Object.entries(URL_KEYS)) {
+            const val = setup[prop];
+            if (val === undefined) continue;
+            params.set(prefix + key, URL_STRING_PROPS.has(prop) ? val : String(Number(Number(val).toFixed(3))));
+        }
+    };
+    put('', appState.setupA);
+    if (appState.compareActive) {
+        put('b.', appState.setupB);
+        params.set('cmp', '1');
+    }
+    params.set('view', sceneController ? sceneController.lockFrame : 'Sub');
+    history.replaceState(null, '', `#${params.toString()}`);
+}
+
+function readStateFromUrl() {
+    if (!window.location.hash || window.location.hash.length < 2) return;
+    const params = new URLSearchParams(window.location.hash.slice(1));
+    const apply = (prefix, setup) => {
+        let found = false;
+        for (const [key, prop] of Object.entries(URL_KEYS)) {
+            if (!params.has(prefix + key)) continue;
+            const raw = params.get(prefix + key);
+            if (URL_STRING_PROPS.has(prop)) {
+                setup[prop] = raw;
+            } else if (Number.isFinite(parseFloat(raw))) {
+                setup[prop] = parseFloat(raw);
+            }
+            found = true;
+        }
+        if (found) setup.name = prefix ? 'Setup B (aus Link)' : 'Setup A (aus Link)';
+    };
+    apply('', appState.setupA);
+    apply('b.', appState.setupB);
+    appState.compareActive = params.get('cmp') === '1';
+    const view = params.get('view');
+    if (view && FRAME_METADATA[view] && view !== 'Mount') sceneController.lockFrame = view;
+}
+
+// ============================================================================
+// Presets
+// ============================================================================
 
 function applySavedPreset(presetId) {
     const found = savedPresets.find((p) => p.id === presetId);
     if (!found) return;
     activePresetId = found.id;
 
-    const targetSetup = createDefaultSetup({
-        ...found.setup,
-        name: found.name
-    });
-
+    const targetSetup = createDefaultSetup({ ...found.setup, name: found.name });
     if (appState.activeTab === 'B') {
         appState.setupB = targetSetup;
     } else {
@@ -979,7 +1121,7 @@ function applySavedPreset(presetId) {
 function saveCurrentAsPreset(name) {
     const s = getActiveSetup();
     const id = `preset_${Date.now()}`;
-    const newPreset = {
+    savedPresets.push({
         id,
         name,
         setup: {
@@ -994,9 +1136,8 @@ function saveCurrentAsPreset(name) {
             phiMDeg: s.phiMDeg,
             b0Tesla: s.b0Tesla
         }
-    };
+    });
     s.name = name;
-    savedPresets.push(newPreset);
     activePresetId = id;
     savePresetsToStorage();
     renderPresetDropdown();
@@ -1013,9 +1154,7 @@ function deleteSelectedPreset() {
     activePresetId = savedPresets.length > 0 ? savedPresets[0].id : '';
     savePresetsToStorage();
     renderPresetDropdown();
-    if (activePresetId) {
-        applySavedPreset(activePresetId);
-    }
+    if (activePresetId) applySavedPreset(activePresetId);
 }
 
 // ============================================================================
@@ -1027,46 +1166,36 @@ function recomputeAndRender() {
     const stateB = evaluateSetup(appState.setupB);
     const activeState = appState.activeTab === 'A' ? stateA : stateB;
     const otherState = appState.activeTab === 'A' ? stateB : stateA;
+    lastActiveState = activeState;
 
-    // 0. Update Step Card Header Summaries
+    // Sidebar
     updateStepSummaries(activeState);
-
-    // 1. Update Substrate & Wave Miller-Bravais Badges (rendered with KaTeX overbars!)
     document.getElementById('badgeSubXs').innerHTML = tex(activeState.millerBravais.xs.latex);
     document.getElementById('badgeSubYs').innerHTML = tex(activeState.millerBravais.ys.latex);
     document.getElementById('badgeSubZs').innerHTML = tex(activeState.millerBravais.zsPlane.latex);
-    document.getElementById('badgeWaveK').innerHTML = tex(activeState.millerBravais.k.latex);
-    document.getElementById('badgeWaveT').innerHTML = tex(activeState.millerBravais.t.latex);
-    document.getElementById('badgeAngleKC').textContent = `${activeState.metrics.angleKCDeg.toFixed(1)}°`;
-
-    // 1a. Update Live Miller-Bravais Readout & Quick-Angle Buttons on the Device Rotation Slider
     updateDeviceMillerReadout(activeState);
-
-    // 1b. Update Sample Mounting Summary & Smart Magnet Jumps for FIXED psi_S
     updateMountingAndSmartJumps(activeState);
+    updateInverseSolver(activeState);
 
-    // 2. Update Primary & Optional Secondary 3D Visualizers
-    // Primary rendered setup is activeState; if compareActive, pass the other setup as overlay
-    sceneController.updateStates(activeState, otherState, appState.compareActive);
-    if (sceneController2) {
-        sceneController2.updateStates(activeState, otherState, appState.compareActive);
+    // The custom direction depends on the setup (it is drawn in Lab coordinates)
+    updateCustomDirection(activeState);
+
+    // 3D views (paused while the tour animates its own temporary field sweep)
+    if (!(tour && tour.active && tour._raf)) {
+        sceneController.updateStates(activeState, otherState, appState.compareActive);
     }
+    if (sceneController2) sceneController2.updateStates(activeState, otherState, appState.compareActive);
 
-    // 3. Update Key Physical Metric Cards & Bidirectional Angle Translator
+    // Overview column
     updateMetricsCards(activeState, stateA, stateB);
-    updateAngleTranslatorInputs(activeState);
-
-    // 4. Update Side-by-Side Compare Table
+    document.getElementById('narrativeBody').innerHTML = buildNarrative(activeState, tex);
+    updateVectorTable(activeState);
     updateCompareTable(stateA, stateB);
 
-    // 5. Update 5-Frame Vector Table
-    updateVectorTable(activeState);
+    const exportModal = document.getElementById('modalExport');
+    if (exportModal && !exportModal.classList.contains('hidden')) refreshExportPanel();
 
-    // 6. Update 3x3 Rotation Matrix & Custom Vector Transformer
-    updateMatrixInspector(activeState);
-
-    // 7. Update Inverse Target Finder
-    updateInverseSolver(activeState);
+    writeStateToUrl();
 }
 
 function updateStepSummaries(activeState) {
@@ -1083,64 +1212,31 @@ function updateStepSummaries(activeState) {
 }
 
 function updateMountingAndSmartJumps(activeState) {
-    const s = activeState.setup;
-    const landmarks = solveSweepLandmarksForFixedPsi(s);
+    const landmarks = solveSweepLandmarksForFixedPsi(activeState.setup);
 
-    const jumpsContainer = document.getElementById('smartMagnetJumps');
     const jumpItems = [
-        {
-            label: `Feld ${tex('\\parallel')} Welle ${tex('\\hat{k}')}`,
-            phi: landmarks.bParallelK.phiMDeg
-        },
-        {
-            label: `Feld ${tex('\\perp')} Welle ${tex('\\hat{k}')}`,
-            phi: landmarks.bPerpK.phiMDeg
-        },
-        {
-            label: `Feld in Easy-Plane`,
-            phi: landmarks.bInEasyPlane.phiM1
-        },
-        {
-            label: `Moment ${tex('\\hat{m} \\parallel')} Welle ${tex('\\hat{k}')}`,
-            phi: landmarks.mAlignK.phiMDeg
-        }
+        { label: `Feld ${tex('\\parallel')} Welle ${tex('\\hat{k}')}`, phi: landmarks.bParallelK.phiMDeg, emph: 'B,k' },
+        { label: `Feld ${tex('\\perp')} Welle ${tex('\\hat{k}')}`, phi: landmarks.bPerpK.phiMDeg, emph: 'B,k' },
+        { label: 'Feld in Easy-Plane', phi: landmarks.bInEasyPlane.phiM1, emph: 'B,easy' },
+        { label: `Moment ${tex('\\hat{m} \\parallel')} Welle ${tex('\\hat{k}')}`, phi: landmarks.mAlignK.phiMDeg, emph: 'm,k' }
     ];
 
+    const jumpsContainer = document.getElementById('smartMagnetJumps');
     jumpsContainer.innerHTML = jumpItems
-        .map(
-            (j) => `
-        <button type="button" class="smart-jump-btn" data-jump-phi="${j.phi}">
+        .map((j) => `
+        <button type="button" class="smart-jump-btn" data-jump-phi="${j.phi}" data-emph="${j.emph}">
             <span>${j.label}</span>
             <code>${j.phi.toFixed(1)}°</code>
-        </button>`
-        )
+        </button>`)
         .join('');
 
     jumpsContainer.querySelectorAll('button[data-jump-phi]').forEach((btn) => {
         btn.addEventListener('click', () => {
-            const targetPhi = parseFloat(btn.dataset.jumpPhi);
-            getActiveSetup().phiMDeg = Number(targetPhi.toFixed(2));
+            getActiveSetup().phiMDeg = Number(parseFloat(btn.dataset.jumpPhi).toFixed(2));
             syncControlsFromSetup();
             recomputeAndRender();
         });
     });
-}
-
-function updateAngleTranslatorInputs(activeState) {
-    const m = activeState.metrics;
-    const setIfNotFocused = (id, val) => {
-        const el = document.getElementById(id);
-        if (el && document.activeElement !== el) {
-            el.value = Number(val).toFixed(1);
-        }
-    };
-    setIfNotFocused('transPhiWave', m.phiBWaveDeg);
-    setIfNotFocused('transElevSub', m.elevationSampleDeg);
-    setIfNotFocused('transPhiSub', m.phiBSubDeg);
-    setIfNotFocused('transThetaBN', m.angleBNDeg);
-    setIfNotFocused('transPhiEasyM', m.phiEasyMDeg);
-    setIfNotFocused('transPhiEasyL', m.phiEasyLDeg);
-    setIfNotFocused('transThetaBC', m.angleBCDeg);
 }
 
 function updateDeviceMillerReadout(activeState) {
@@ -1149,14 +1245,9 @@ function updateDeviceMillerReadout(activeState) {
 
     const elK = document.getElementById('liveDevMillerK');
     const elT = document.getElementById('liveDevMillerT');
-    const elEdge0 = document.getElementById('liveChipEdge0');
-    const elEdge90 = document.getElementById('liveChipEdge90');
     const sumEdge0 = document.getElementById('summaryEdge0');
-
     if (elK) elK.innerHTML = tex(mb.k.latex);
     if (elT) elT.innerHTML = tex(mb.t.latex);
-    if (elEdge0) elEdge0.innerHTML = tex(mb.xs.latex);
-    if (elEdge90) elEdge90.innerHTML = tex(mb.ys.latex);
     if (sumEdge0) sumEdge0.innerHTML = tex(mb.xs.latex);
 
     // Update the 2 popular 0°-edge preset cards for the active cut
@@ -1201,82 +1292,52 @@ function updateDeviceMillerReadout(activeState) {
     };
     const info = cutLabels[s.cutPreset] || cutLabels.custom;
 
-    const t0El = document.getElementById('lblEdgePreset0Title');
-    const s0El = document.getElementById('lblEdgePreset0Sub');
-    const t90El = document.getElementById('lblEdgePreset90Title');
-    const s90El = document.getElementById('lblEdgePreset90Sub');
-    const btn0 = document.getElementById('btnEdgePreset0');
-    const btn90 = document.getElementById('btnEdgePreset90');
-
-    if (t0El) t0El.innerHTML = info.t0;
-    if (s0El) s0El.innerHTML = info.s0;
-    if (t90El) t90El.innerHTML = info.t90;
-    if (s90El) s90El.innerHTML = info.s90;
-    if (btn0) btn0.classList.toggle('active', Math.abs(s.alphaFlatDeg) < 0.25);
-    if (btn90) btn90.classList.toggle('active', Math.abs(s.alphaFlatDeg - 90) < 0.25);
+    const setHtml = (id, html) => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = html;
+    };
+    setHtml('lblEdgePreset0Title', info.t0);
+    setHtml('lblEdgePreset0Sub', info.s0);
+    setHtml('lblEdgePreset90Title', info.t90);
+    setHtml('lblEdgePreset90Sub', info.s90);
+    document.getElementById('btnEdgePreset0').classList.toggle('active', Math.abs(s.alphaFlatDeg) < 0.25);
+    document.getElementById('btnEdgePreset90').classList.toggle('active', Math.abs(s.alphaFlatDeg - 90) < 0.25);
 
     const quickGroup = document.getElementById('deviceQuickAngleChips');
     if (quickGroup) {
         quickGroup.querySelectorAll('button[data-val]').forEach((btn) => {
-            const deg = parseFloat(btn.dataset.val);
-            btn.textContent = `${deg}°`;
-            btn.classList.toggle('active', Math.abs(s.thetaDevDeg - deg) < 0.25);
+            btn.classList.toggle('active', Math.abs(s.thetaDevDeg - parseFloat(btn.dataset.val)) < 0.25);
         });
     }
 }
 
 function updateMetricsCards(activeState, stateA, stateB) {
     const m = activeState.metrics;
+    const isCPW = activeState.setup.deviceType === 'CPW';
 
-    // 1. Magnetfeld B zur Welle k & aktiver Anteil in der Easy-Plane
-    const elBAngle = document.getElementById('valBSampleAngles');
-    const elBEasy = document.getElementById('valBEasy');
-    if (elBAngle) {
-        elBAngle.textContent = `${m.angleBKDeg.toFixed(1)}°`;
-    }
-    if (elBEasy) {
-        elBEasy.innerHTML = `In Easy-Plane aktiv: <strong>${m.bEasyTesla.toFixed(2)} T</strong> (${(m.bEasyRatio * 100).toFixed(0)}%)`;
-    }
+    document.getElementById('valBSampleAngles').textContent = `${m.angleBKDeg.toFixed(1)}°`;
+    document.getElementById('valBEasy').innerHTML =
+        `in Easy-Plane: <strong>${m.bEasyTesla.toFixed(2)} T</strong> (${(m.bEasyRatio * 100).toFixed(0)} %)`;
 
-    // 2. Magnetisierung m zur Welle k & CPW-Anregung
-    const elAngleMK = document.getElementById('valAngleMK');
-    const elMDotK = document.getElementById('valMDotK');
-    if (elAngleMK) {
-        elAngleMK.textContent = m.isEasyPlaneSingular
-            ? '–'
-            : `${m.angleMKDeg.toFixed(1)}°`;
-    }
-    if (elMDotK) {
-        elMDotK.innerHTML = `CPW-Anregung: <strong>${(m.cpwTorqueM * 100).toFixed(0)}%</strong>`;
-    }
+    document.getElementById('valAngleMK').textContent = m.isEasyPlaneSingular ? '–' : `${m.angleMKDeg.toFixed(1)}°`;
+    document.getElementById('valMDotK').innerHTML = isCPW
+        ? `CPW-Kopplung ${tex('|\\hat{k}\\times\\hat{m}|')}: <strong>${(m.cpwTorqueM * 100).toFixed(0)} %</strong>`
+        : `${tex('|\\hat{m}\\cdot\\hat{k}|')}: <strong>${(Math.abs(Math.cos(m.angleMKDeg * DEG2RAD)) * 100).toFixed(0)} %</strong>`;
 
-    // 3. Néel-Vektor l zur Welle k
-    const elAngleLK = document.getElementById('valAngleLK');
-    const elLDotK = document.getElementById('valLDotK');
-    if (elAngleLK) {
-        elAngleLK.textContent = m.isEasyPlaneSingular
-            ? '–'
-            : `${m.angleLKDeg.toFixed(1)}°`;
-    }
-    if (elLDotK) {
-        elLDotK.innerHTML = `Projektion auf ${tex('\\hat{k}')}: <strong>${(Math.abs(m.lDotK) * 100).toFixed(0)}%</strong>`;
-    }
+    document.getElementById('valAngleLK').textContent = m.isEasyPlaneSingular ? '–' : `${m.angleLKDeg.toFixed(1)}°`;
+    document.getElementById('valLDotK').innerHTML =
+        `${tex('|\\hat{l}\\cdot\\hat{k}|')}: <strong>${(Math.abs(m.lDotK) * 100).toFixed(0)} %</strong>`;
 
     // Compare delta badges on result tiles
-    const cmpIds = ['cmpBSample', 'cmpAngleMK', 'cmpAngleLK'];
-    cmpIds.forEach((id) => {
-        const el = document.getElementById(id);
-        if (el) el.classList.toggle('hidden', !appState.compareActive);
+    ['cmpBSample', 'cmpAngleMK', 'cmpAngleLK'].forEach((id) => {
+        document.getElementById(id).classList.toggle('hidden', !appState.compareActive);
     });
     if (appState.compareActive) {
         const mA = stateA.metrics;
         const mB = stateB.metrics;
-        const cmpB = document.getElementById('cmpBSample');
-        const cmpM = document.getElementById('cmpAngleMK');
-        const cmpL = document.getElementById('cmpAngleLK');
-        if (cmpB) cmpB.textContent = `A: ${mA.angleBKDeg.toFixed(1)}° vs. B: ${mB.angleBKDeg.toFixed(1)}°`;
-        if (cmpM) cmpM.textContent = `A: ${mA.angleMKDeg.toFixed(1)}° vs. B: ${mB.angleMKDeg.toFixed(1)}°`;
-        if (cmpL) cmpL.textContent = `A: ${mA.angleLKDeg.toFixed(1)}° vs. B: ${mB.angleLKDeg.toFixed(1)}°`;
+        document.getElementById('cmpBSample').textContent = `A ${mA.angleBKDeg.toFixed(1)}° · B ${mB.angleBKDeg.toFixed(1)}°`;
+        document.getElementById('cmpAngleMK').textContent = `A ${mA.angleMKDeg.toFixed(1)}° · B ${mB.angleMKDeg.toFixed(1)}°`;
+        document.getElementById('cmpAngleLK').textContent = `A ${mA.angleLKDeg.toFixed(1)}° · B ${mB.angleLKDeg.toFixed(1)}°`;
     }
 }
 
@@ -1291,100 +1352,116 @@ function updateCompareTable(stateA, stateB) {
     const sB = stateB.setup;
 
     const rows = [
-        ['Einbaulage / Schnitt', `${sA.mountMode} / ${sA.cutPreset}`, `${sB.mountMode} / ${sB.cutPreset}`, '—'],
-        [`Winkel (${tex('\\psi_S, \\phi_M')})`, `${sA.psiSDeg.toFixed(1)}°, ${sA.phiMDeg.toFixed(1)}°`, `${sB.psiSDeg.toFixed(1)}°, ${sB.phiMDeg.toFixed(1)}°`, `${(sB.phiMDeg - sA.phiMDeg).toFixed(1)}°`],
-        [`Wellenrichtung ${tex('\\hat{k}')}`, tex(stateA.millerBravais.k.latex), tex(stateB.millerBravais.k.latex), `${(sB.thetaDevDeg - sA.thetaDevDeg).toFixed(1)}°`],
-        [`Anteil in Easy-Plane`, `${(mA.bEasyRatio * 100).toFixed(1)}%`, `${(mB.bEasyRatio * 100).toFixed(1)}%`, `${((mB.bEasyRatio - mA.bEasyRatio) * 100).toFixed(1)}%`],
-        [`Anteil in Sample-Ebene`, `${(mA.bInSampleRatio * 100).toFixed(1)}%`, `${(mB.bInSampleRatio * 100).toFixed(1)}%`, `${((mB.bInSampleRatio - mA.bInSampleRatio) * 100).toFixed(1)}%`],
-        [`Winkel Feld zu Welle ${tex('\\angle(\\mathbf{B}, \\hat{k})')}`, `${mA.angleBKDeg.toFixed(2)}°`, `${mB.angleBKDeg.toFixed(2)}°`, `${(mB.angleBKDeg - mA.angleBKDeg).toFixed(2)}°`],
-        [`Winkel Moment zu Welle ${tex('\\angle(\\hat{m}, \\hat{k})')}`, `${mA.angleMKDeg.toFixed(2)}°`, `${mB.angleMKDeg.toFixed(2)}°`, `${(mB.angleMKDeg - mA.angleMKDeg).toFixed(2)}°`],
-        [`Winkel Néel zu Welle ${tex('\\angle(\\hat{l}, \\hat{k})')}`, `${mA.angleLKDeg.toFixed(2)}°`, `${mB.angleLKDeg.toFixed(2)}°`, `${(mB.angleLKDeg - mA.angleLKDeg).toFixed(2)}°`],
-        [`CPW-Anregung ${tex('|\\hat{k}\\times\\hat{m}|')}`, mA.cpwTorqueM.toFixed(3), mB.cpwTorqueM.toFixed(3), (mB.cpwTorqueM - mA.cpwTorqueM).toFixed(3)]
+        ['Einbau / Schnitt', `${sA.mountMode} / ${sA.cutPreset}`, `${sB.mountMode} / ${sB.cutPreset}`, '—'],
+        [tex('\\psi_S, \\phi_M'), `${sA.psiSDeg.toFixed(1)}°, ${sA.phiMDeg.toFixed(1)}°`, `${sB.psiSDeg.toFixed(1)}°, ${sB.phiMDeg.toFixed(1)}°`, `${(sB.phiMDeg - sA.phiMDeg).toFixed(1)}°`],
+        [`Welle ${tex('\\hat{k}')}`, tex(stateA.millerBravais.k.latex), tex(stateB.millerBravais.k.latex), `${(sB.thetaDevDeg - sA.thetaDevDeg).toFixed(1)}°`],
+        ['in Easy-Plane', `${(mA.bEasyRatio * 100).toFixed(1)} %`, `${(mB.bEasyRatio * 100).toFixed(1)} %`, `${((mB.bEasyRatio - mA.bEasyRatio) * 100).toFixed(1)} %`],
+        ['in Probenebene', `${(mA.bInSampleRatio * 100).toFixed(1)} %`, `${(mB.bInSampleRatio * 100).toFixed(1)} %`, `${((mB.bInSampleRatio - mA.bInSampleRatio) * 100).toFixed(1)} %`],
+        [tex('\\angle(\\mathbf{B}, \\hat{k})'), `${mA.angleBKDeg.toFixed(1)}°`, `${mB.angleBKDeg.toFixed(1)}°`, `${(mB.angleBKDeg - mA.angleBKDeg).toFixed(1)}°`],
+        [tex('\\angle(\\hat{m}, \\hat{k})'), `${mA.angleMKDeg.toFixed(1)}°`, `${mB.angleMKDeg.toFixed(1)}°`, `${(mB.angleMKDeg - mA.angleMKDeg).toFixed(1)}°`],
+        [tex('\\angle(\\hat{l}, \\hat{k})'), `${mA.angleLKDeg.toFixed(1)}°`, `${mB.angleLKDeg.toFixed(1)}°`, `${(mB.angleLKDeg - mA.angleLKDeg).toFixed(1)}°`],
+        [tex('|\\hat{k}\\times\\hat{m}|'), mA.cpwTorqueM.toFixed(3), mB.cpwTorqueM.toFixed(3), (mB.cpwTorqueM - mA.cpwTorqueM).toFixed(3)]
     ];
 
     document.getElementById('compareTableBody').innerHTML = rows
-        .map(
-            (r) => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`
-        )
+        .map((r) => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`)
         .join('');
 }
 
+// ============================================================================
+// "Wo zeigt was hin?" vector table
+// ============================================================================
+
+const TABLE_AXIS_TEX = {
+    Sub: ['x_s', 'y_s', '\\hat{n}'],
+    Wave: ['\\hat{k}', '\\hat{t}', '\\hat{n}'],
+    Cryst: ['a', 'm', 'c'],
+    Lab: ['X_L', 'Y_L', 'Z_L']
+};
+const TABLE_FOOT = {
+    Sub: 'θ: Winkel zur Probennormale n̂ (90° = liegt in der Probe) · φ: Azimut ab der 0°-Kante.',
+    Wave: 'θ: Winkel zur Probennormale n̂ · φ: Azimut ab der Welle k̂ (90° = t̂).',
+    Cryst: 'θ: Winkel zur c-Achse (90° = liegt in der Easy-Plane) · φ: Azimut ab der a-Achse [11-20].',
+    Lab: 'θ: Winkel zur Vertikalen Z_L · φ: Azimut ab der Magnetrichtung bei φ_M = 0°.'
+};
+
 function updateVectorTable(activeState) {
-    const frame = document.getElementById('selectVectorTableFrame').value;
-    const meta = FRAME_METADATA[frame] || FRAME_METADATA.Sub;
-    const headerRow = document.getElementById('vectorTableHeaderRow');
-    headerRow.innerHTML = `
-        <th>Größe / Achse</th>
-        <th>${meta.axesShort[0]}</th>
-        <th>${meta.axesShort[1]}</th>
-        <th>${meta.axesShort[2]}</th>
-        <th>θ (zu ${meta.axesShort[2]})</th>
-        <th>φ (in ${meta.axesShort[0]}–${meta.axesShort[1]})</th>
-        <th>Kristall [uvtw]</th>
-    `;
+    const sel = document.getElementById('selectVectorTableFrame').value;
+    const frame = sel === 'view' ? sceneController.lockFrame : sel;
+    const axes = TABLE_AXIS_TEX[frame] || TABLE_AXIS_TEX.Sub;
+    const angles = appState.vectorTableMode === 'angles';
+
+    document.getElementById('vectorTableHeaderRow').innerHTML = angles
+        ? `<th>Richtung</th><th>θ zu ${tex(axes[2])}</th><th>φ ab ${tex(axes[0])}</th><th>Kristall</th>`
+        : `<th>Richtung</th><th>${tex(axes[0])}</th><th>${tex(axes[1])}</th><th>${tex(axes[2])}</th><th>Kristall</th>`;
+    document.getElementById('vectorTableFoot').textContent = angles
+        ? `${TABLE_FOOT[frame] || ''}${sel === 'view' ? ' (System folgt Ansicht 1.)' : ''}`
+        : `Einheitsvektoren im System ${FRAME_METADATA[frame].name}.`;
 
     const v = activeState.vectors;
     const mb = activeState.millerBravais;
+    const s = activeState.setup;
+    const singular = activeState.metrics.isEasyPlaneSingular;
+    const tiltNC = Math.min(activeState.metrics.angleNCDeg, 180 - activeState.metrics.angleNCDeg);
 
     const entries = [
-        { name: `Magnetfeld ${tex('\\mathbf{B}')}`, color: VECTOR_COLORS.B, vec: v.bHat[frame], mb: tex(mb.B.latex) },
-        { name: `Magnetisierung ${tex('\\hat{m}')}`, color: VECTOR_COLORS.m, vec: v.mHat[frame], mb: tex(mb.m.latex) },
-        { name: `Néel-Vektor ${tex('\\hat{l}')}`, color: VECTOR_COLORS.l, vec: v.lHat[frame], mb: tex(mb.l.latex) },
-        { name: `Welle ${tex('\\hat{k}')}`, color: VECTOR_COLORS.k, vec: v.kHat[frame], mb: tex(mb.k.latex) },
-        { name: `Quer zur Welle ${tex('\\hat{t}')}`, color: VECTOR_COLORS.t, vec: v.tHat[frame], mb: tex(mb.t.latex) },
-        { name: `Sample-Normale ${tex('\\hat{n}')}`, color: VECTOR_COLORS.n, vec: v.nHat[frame], mb: tex(mb.zsDir.latex) },
-        { name: `Kristall ${tex('a')}-Achse (Easy-Axis)`, color: VECTOR_COLORS.ea, vec: v.eaHat[frame], mb: tex('[11\\bar{2}0]') },
-        { name: `Kristall ${tex('m')}-Achse`, color: VECTOR_COLORS.em, vec: v.emHat[frame], mb: tex('[1\\bar{1}00]') },
-        { name: `Kristall ${tex('c')}-Achse`, color: VECTOR_COLORS.ec, vec: v.ecHat[frame], mb: tex('[0001]') }
+        { key: 'B', name: `Feld ${tex('\\mathbf{B}')}`, vec: v.bHat, mb: mb.B.latex },
+        { key: 'm', name: `Moment ${tex('\\hat{m}')}`, vec: v.mHat, mb: mb.m.latex, skip: singular },
+        { key: 'l', name: `Néel ${tex('\\hat{l}')}`, vec: v.lHat, mb: mb.l.latex, skip: singular },
+        { key: 'k', name: `Welle ${tex('\\hat{k}')}`, vec: v.kHat, mb: mb.k.latex },
+        { key: 't', name: `Leiter ${tex('\\hat{t}')}`, vec: v.tHat, mb: mb.t.latex },
+        { key: 'n', name: `Normale ${tex('\\hat{n}')}`, vec: v.nHat, mb: mb.zsDir.latex },
+        { key: 'xs', name: '0°-Kante', vec: v.xsHat, mb: mb.xs.latex },
+        { key: 'ys', name: '90°-Kante', vec: v.ysHat, mb: mb.ys.latex },
+        { key: 'ea', name: `${tex('a')}-Achse`, vec: v.eaHat, mb: '[11\\bar{2}0]' },
+        { key: 'em', name: `${tex('m')}-Achse`, vec: v.emHat, mb: '[1\\bar{1}00]' },
+        { key: 'ec', name: `${tex('c')}-Achse`, vec: v.ecHat, mb: '[0001]' },
+        {
+            key: 'nodes',
+            name: 'Schnittlinie',
+            vec: v.nodesHat,
+            mb: formatMillerBravaisLatex(crystalToMillerBravaisDirection(v.nodesHat.Cryst, s.aLattice, s.cLattice)),
+            skip: tiltNC < 1
+        }
     ];
+    if (sceneController.customVector && appState.customDir.uvtw) {
+        const lab = sceneController.customVector.Lab;
+        const R = activeState.matrices.getRotationMatrix(frame, 'Lab');
+        entries.push({
+            key: 'custom',
+            name: 'Eigene',
+            vecInFrame: matVec3(R, lab),
+            mb: appState.customDir.latex
+        });
+    }
 
     const fmtComp = (x) => {
-        const val = Math.abs(x) < 1e-9 ? 0 : x;
-        return (val >= 0 ? '+' : '') + val.toFixed(4);
+        const val = Math.abs(x) < 5e-5 ? 0 : x;
+        return (val >= 0 ? '+' : '−') + Math.abs(val).toFixed(3);
     };
-
-    const calcSph = (vec) => {
-        const r = Math.hypot(vec[0], vec[1], vec[2]);
-        if (r < 1e-9) return { th: '–', ph: '–' };
-        const th = Math.acos(Math.max(-1, Math.min(1, vec[2] / r))) * RAD2DEG;
-        let ph = wrapDeg360(Math.atan2(vec[1], vec[0]) * RAD2DEG);
-        if (Math.abs(ph - 360) < 1e-3) ph = 0;
-        return { th: `${th.toFixed(1)}°`, ph: `${ph.toFixed(1)}°` };
-    };
+    const color = (key) => (key === 'xs' || key === 'ys' ? VECTOR_COLORS.edge : VECTOR_COLORS[key]);
 
     document.getElementById('vectorTableBody').innerHTML = entries
+        .filter((e) => !e.skip)
         .map((e) => {
-            const sph = calcSph(e.vec);
-            return `
-        <tr>
-            <td><span style="color:${e.color}">●</span> ${e.name}</td>
-            <td>${fmtComp(e.vec[0])}</td>
-            <td>${fmtComp(e.vec[1])}</td>
-            <td>${fmtComp(e.vec[2])}</td>
-            <td>${sph.th}</td>
-            <td>${sph.ph}</td>
-            <td>${e.mb}</td>
-        </tr>`;
+            const vec = e.vecInFrame || e.vec[frame];
+            const th = Math.acos(Math.max(-1, Math.min(1, vec[2]))) * RAD2DEG;
+            let ph = wrapDeg360(Math.atan2(vec[1], vec[0]) * RAD2DEG);
+            if (Math.abs(ph - 360) < 0.05) ph = 0;
+            const phTxt = Math.hypot(vec[0], vec[1]) < 1e-6 ? '–' : `${ph.toFixed(1)}°`;
+            const cells = angles
+                ? `<td class="num">${th.toFixed(1)}°</td><td class="num">${phTxt}</td>`
+                : `<td class="num">${fmtComp(vec[0])}</td><td class="num">${fmtComp(vec[1])}</td><td class="num">${fmtComp(vec[2])}</td>`;
+            return `<tr data-emph="${e.key}"><td><span class="vt-dot" style="background:${color(e.key)}"></span>${e.name}</td>${cells}<td>${tex(e.mb)}</td></tr>`;
         })
         .join('');
 }
 
-function updateMatrixInspector(activeState) {
-    const fromF = document.getElementById('selectMatFrom').value;
-    const toF = document.getElementById('selectMatTo').value;
-    const R = activeState.matrices.getRotationMatrix(toF, fromF);
+// ============================================================================
+// Target finder results
+// ============================================================================
 
-    const cells = [];
-    for (let i = 0; i < 3; i++) {
-        for (let j = 0; j < 3; j++) {
-            const val = Math.abs(R[i][j]) < 1e-9 ? 0 : R[i][j];
-            cells.push(`<div class="matrix-cell">${(val >= 0 ? '+' : '') + val.toFixed(4)}</div>`);
-        }
-    }
-    document.getElementById('matrixDisplayGrid').innerHTML = cells.join('');
-}
-
-function updateInverseSolver(activeState) {
+function updateInverseSolver() {
     const setup = getActiveSetup();
     const sol = solveTargetAngles(setup, appState.targetId, appState.customTargetUVTW);
     const container = document.getElementById('solverResultsContainer');
@@ -1440,39 +1517,101 @@ function updateInverseSolver(activeState) {
 }
 
 // ============================================================================
-// Modals: Thesis SVG Generator & Python Snippet
+// Export dialog: SVG · Python · Rotation matrix
 // ============================================================================
 
-function bindModals() {
-    const modalSvg = document.getElementById('modalSvgExport');
-    const modalPy = document.getElementById('modalPythonSnippet');
+let activeExportTab = 'svg';
 
-    const refreshSvgPreview = () => {
-        const st = evaluateSetup(getActiveSetup());
-        const svgStr = generateThesisSVG(st, {
-            layout: document.getElementById('svgOptLayout').value,
-            lockFrame: document.getElementById('svgOptFrame').value,
-            cameraAzimuthDeg: sceneController.camera.azimuthDeg,
-            cameraElevationDeg: sceneController.camera.elevationDeg,
-            showEasyPlane: document.getElementById('svgOptEasyPlane').checked,
-            showMicrostructure: document.getElementById('svgOptMicro').checked,
-            showCrystalAxes: document.getElementById('svgOptCrystalAxes').checked,
-            showEquilibrium: document.getElementById('svgOptEquilibrium').checked,
-            showAngleArcs: document.getElementById('svgOptArcs').checked,
-            showLegend: document.getElementById('svgOptLegend').checked,
-            latexLabels: document.getElementById('svgOptLatex').checked,
-            transparentBg: document.getElementById('svgOptTransparent').checked
-        });
-        document.getElementById('svgPreviewContainer').innerHTML = svgStr;
-        return svgStr;
-    };
-
-    document.getElementById('btnOpenSvgModal').addEventListener('click', () => {
-        modalSvg.classList.remove('hidden');
-        refreshSvgPreview();
+function refreshSvgPreview() {
+    const st = evaluateSetup(getActiveSetup());
+    const svgStr = generateThesisSVG(st, {
+        layout: document.getElementById('svgOptLayout').value,
+        lockFrame: document.getElementById('svgOptFrame').value,
+        cameraAzimuthDeg: sceneController.camera.azimuthDeg,
+        cameraElevationDeg: sceneController.camera.elevationDeg,
+        showEasyPlane: document.getElementById('svgOptEasyPlane').checked,
+        showMicrostructure: document.getElementById('svgOptMicro').checked,
+        showCrystalAxes: document.getElementById('svgOptCrystalAxes').checked,
+        showEquilibrium: document.getElementById('svgOptEquilibrium').checked,
+        showAngleArcs: document.getElementById('svgOptArcs').checked,
+        showLegend: document.getElementById('svgOptLegend').checked,
+        latexLabels: document.getElementById('svgOptLatex').checked,
+        transparentBg: document.getElementById('svgOptTransparent').checked
     });
-    document.getElementById('btnCloseSvgModal').addEventListener('click', () => {
-        modalSvg.classList.add('hidden');
+    document.getElementById('svgPreviewContainer').innerHTML = svgStr;
+    return svgStr;
+}
+
+const FRAME_SHORT_DE = { Sub: 'Probe', Wave: 'Welle', Cryst: 'Kristall', Lab: 'Labor', Mount: 'Halter' };
+const MATRIX_AXIS_TEX = {
+    Sub: ['x_s', 'y_s', 'z_s'],
+    Wave: ['\\hat{k}', '\\hat{t}', '\\hat{n}'],
+    Cryst: ['\\hat{e}_a', '\\hat{e}_m', '\\hat{e}_c'],
+    Lab: ['X_L', 'Y_L', 'Z_L'],
+    Mount: ['x_m', 'y_m', 'z_m']
+};
+
+function updateMatrixInspector() {
+    const st = evaluateSetup(getActiveSetup());
+    const fromF = document.getElementById('selectMatFrom').value;
+    const toF = document.getElementById('selectMatTo').value;
+    const R = st.matrices.getRotationMatrix(toF, fromF);
+
+    const cells = ['<div class="matrix-cell matrix-head"></div>'];
+    MATRIX_AXIS_TEX[fromF].forEach((ax) => cells.push(`<div class="matrix-cell matrix-head">${tex(ax)}</div>`));
+    for (let i = 0; i < 3; i++) {
+        cells.push(`<div class="matrix-cell matrix-head">${tex(MATRIX_AXIS_TEX[toF][i])}</div>`);
+        for (let j = 0; j < 3; j++) {
+            const val = Math.abs(R[i][j]) < 1e-9 ? 0 : R[i][j];
+            cells.push(`<div class="matrix-cell">${(val >= 0 ? '+' : '') + val.toFixed(4)}</div>`);
+        }
+    }
+    document.getElementById('matrixDisplayGrid').innerHTML = cells.join('');
+}
+
+function refreshExportPanel() {
+    if (activeExportTab === 'svg') {
+        refreshSvgPreview();
+    } else if (activeExportTab === 'python') {
+        document.getElementById('pythonSnippetCode').textContent = generatePythonSnippet(
+            appState.setupA,
+            appState.setupB,
+            appState.compareActive
+        );
+    } else {
+        updateMatrixInspector();
+    }
+}
+
+function openExportTab(tab) {
+    activeExportTab = tab;
+    document.querySelectorAll('#exportTabs .export-tab').forEach((t) => t.classList.toggle('active', t.dataset.etab === tab));
+    document.querySelectorAll('.export-panel[data-epanel]').forEach((p) => p.classList.toggle('hidden', p.dataset.epanel !== tab));
+    refreshExportPanel();
+}
+
+function flashButton(btn, text) {
+    const old = btn.innerHTML;
+    btn.textContent = text;
+    setTimeout(() => (btn.innerHTML = old), 1400);
+}
+
+function bindExportModal() {
+    const modal = document.getElementById('modalExport');
+
+    document.querySelectorAll('[data-open-export]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            document.getElementById('svgOptFrame').value = sceneController.lockFrame;
+            modal.classList.remove('hidden');
+            openExportTab(btn.dataset.openExport);
+        });
+    });
+    document.querySelectorAll('#exportTabs .export-tab').forEach((t) => {
+        t.addEventListener('click', () => openExportTab(t.dataset.etab));
+    });
+    document.getElementById('btnCloseExportModal').addEventListener('click', () => modal.classList.add('hidden'));
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.classList.add('hidden');
     });
 
     [
@@ -1486,9 +1625,7 @@ function bindModals() {
         'svgOptLegend',
         'svgOptLatex',
         'svgOptTransparent'
-    ].forEach((id) => {
-        document.getElementById(id).addEventListener('change', refreshSvgPreview);
-    });
+    ].forEach((id) => document.getElementById(id).addEventListener('change', refreshSvgPreview));
 
     document.getElementById('btnDownloadSvg').addEventListener('click', () => {
         const svgStr = refreshSvgPreview();
@@ -1504,41 +1641,26 @@ function bindModals() {
         URL.revokeObjectURL(url);
     });
 
-    document.getElementById('btnCopySvgCode').addEventListener('click', () => {
-        const svgStr = refreshSvgPreview();
-        navigator.clipboard.writeText(svgStr);
-        const btn = document.getElementById('btnCopySvgCode');
-        const old = btn.innerHTML;
-        btn.textContent = 'SVG-Code kopiert';
-        setTimeout(() => (btn.innerHTML = old), 1500);
+    document.getElementById('btnCopySvgCode').addEventListener('click', (e) => {
+        navigator.clipboard.writeText(refreshSvgPreview());
+        flashButton(e.currentTarget, 'SVG-Code kopiert');
     });
 
-    // Python Snippet Modal
-    document.getElementById('btnOpenPythonModal').addEventListener('click', () => {
-        const code = generatePythonSnippet(
-            appState.setupA,
-            appState.setupB,
-            appState.compareActive
-        );
-        document.getElementById('pythonSnippetCode').textContent = code;
-        modalPy.classList.remove('hidden');
-    });
-    document.getElementById('btnClosePythonModal').addEventListener('click', () => {
-        modalPy.classList.add('hidden');
-    });
-    document.getElementById('btnCopyPythonSnippet').addEventListener('click', () => {
-        const code = document.getElementById('pythonSnippetCode').textContent;
-        navigator.clipboard.writeText(code);
-        const btn = document.getElementById('btnCopyPythonSnippet');
-        const old = btn.innerHTML;
-        btn.textContent = 'Python-Code kopiert';
-        setTimeout(() => (btn.innerHTML = old), 1500);
+    document.getElementById('btnCopyPythonSnippet').addEventListener('click', (e) => {
+        navigator.clipboard.writeText(document.getElementById('pythonSnippetCode').textContent);
+        flashButton(e.currentTarget, 'Python-Code kopiert');
     });
 
-    // Close modals on backdrop click
-    [modalSvg, modalPy].forEach((m) => {
-        m.addEventListener('click', (e) => {
-            if (e.target === m) m.classList.add('hidden');
-        });
+    document.getElementById('selectMatFrom').addEventListener('change', updateMatrixInspector);
+    document.getElementById('selectMatTo').addEventListener('change', updateMatrixInspector);
+    document.getElementById('btnCopyMatrixLatex').addEventListener('click', (e) => {
+        const st = evaluateSetup(getActiveSetup());
+        const fromF = document.getElementById('selectMatFrom').value;
+        const toF = document.getElementById('selectMatTo').value;
+        const R = st.matrices.getRotationMatrix(toF, fromF);
+        const rows = R.map((r) => r.map((v) => v.toFixed(4)).join(' & ')).join(' \\\\\n  ');
+        const texStr = `R_{\\text{${FRAME_SHORT_DE[toF]}}\\leftarrow\\text{${FRAME_SHORT_DE[fromF]}}} = \\begin{pmatrix}\n  ${rows}\n\\end{pmatrix}`;
+        navigator.clipboard.writeText(texStr);
+        flashButton(e.currentTarget, 'Kopiert');
     });
 }

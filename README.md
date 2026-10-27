@@ -9,12 +9,16 @@ Link zur Anwendung: [Hematite Crystal Calculator](https://toseflo.github.io/crys
 - **Sample & Kristallschnitt**: Vorauswahl für `c-cut (0001)`, `a-cut (11-20)`, `m-cut (10-10)`, `r-cut (1-102)` oder beliebige Ebenen `(hkil)` inkl. frei wählbarer 0°-Bezugskante des Samples.
 - **Struktur & Welle**: Drehwinkel von CPW oder IDT auf dem Sample und direkte Anzeige der zugehörigen Miller-Bravais-Richtung von $\hat{k}$.
 - **Einbau & Messung im Magneten**: Horizontale (In-Plane) oder vertikale (Out-of-Plane) Halterung mit Einbauwinkel $\psi_S$ und drehbarem Magnetfeld $\phi_M$, inklusive Ziel-Finder für bestimmte Feld-, Easy-Plane- oder Kristallrichtungen.
-- **3D-Ansicht**: Frei drehbare 3D-Darstellung (mit einblendbarer zweiter Ansicht daneben und 2D-Draufsicht) sowie umschaltbarem festem Bezugssystem (Sample, Labor-Magnet, Welle $\hat{k}$, Easy-Plane).
-- **Tabellen & Umrechner**:
-  - Vektortabelle mit kartesischen Koordinaten $(x,y,z)$, Kugelwinkeln $(\theta,\phi)$ und $[uvtw]$-Richtungen.
-  - Hin- und Rück-Umrechner zwischen Kristall-Indizes (`[uvtw]` / `(hkil)`) und Sample-/Labor-Koordinaten sowie Berechnung einer senkrechten 3. Kristallachse per Kreuzprodukt.
-  - 3×3-Rotationsmatrizen zwischen den Systemen.
-- **Export**: SVG-Export für Grafiken und [`hematite_coords.py`](hematite_coords.py) für Auswerteskripte in Python.
+- **3D-Ansicht** (Mitte, bleibt beim Scrollen stehen): frei drehbar, mit 2D-Draufsicht und optionaler zweiter Ansicht. „Was steht im Bild still?“ wählt das feste Bezugssystem (Probe, Magnet, Welle $\hat{k}$, Kristall); der Wechsel ist animiert, damit man sieht, wie die Systeme gegeneinander verdreht sind. Die Legende im Bild ist zugleich der Ein/Aus-Schalter der Ebenen.
+- **Aufbau erklären**: geführte Tour Kristall → Probe → Struktur → Einbau → Feld drehen, gebaut aus dem aktuellen Setup.
+- **Hervorhebung**: Fährt man mit der Maus über einen Begriff, eine Tabellenzeile oder einen Setup-Schritt, wird das zugehörige Objekt im 3D-Bild hervorgehoben (alles andere wird blass).
+- **Übersicht** (rechts):
+  - Ergebnis-Kacheln für $\angle(\mathbf{B},\hat{k})$, $\angle(\hat{m},\hat{k})$, $\angle(\hat{l},\hat{k})$.
+  - „Was passiert hier?“: Klartext-Erklärung des aktuellen Setups (Probe, Welle, Einbau, Feld & Spins).
+  - „Wo zeigt was hin?“: alle wichtigen Richtungen als Winkel $(\theta,\phi)$ oder $(x,y,z)$ im gewählten System plus $[uvtw]$.
+  - „Eigene Richtung“: beliebige Richtung $[uvtw]$, Ebenennormale $(hkil)$, Kreuzprodukt zweier Richtungen/Ebenen oder Winkel $(\theta,\phi)$ eingeben → wird eingezeichnet, eingeordnet, und per Klick dreht der Ziel-Finder das Feld dorthin.
+- **Link kopieren**: Das komplette Setup (inkl. Vergleich A/B) steht in der URL und lässt sich an Kollegen weitergeben.
+- **Export**: SVG-Grafik, [`hematite_coords.py`](hematite_coords.py) für Python-Auswerteskripte und 3×3-Rotationsmatrizen zwischen allen Systemen (auch als LaTeX).
 
 ## Lokal starten
 
@@ -22,6 +26,7 @@ Da ES-Module genutzt werden, reicht ein lokaler Webserver im Projektordner:
 
 ```bash
 python -m http.server 8000
+# oder: npx http-server -p 8000
 ```
 
 Danach `http://localhost:8000` im Browser öffnen.

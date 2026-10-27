@@ -1,27 +1,115 @@
 /**
  * visualizer_3d.js
- * Clean, didactic 3D & 2D visualization engine for the Hematite
+ * Clean, didactic 3D visualization engine for the Hematite
  * Spin-Wave (CPW) & SAW (IDT) Coordinate Calculator.
  *
  * Designed to avoid visual overload:
  *   - Progressive layer toggles (essential vectors B & k_hat first, optional
  *     easy-plane moments m_hat & l_hat, optional crystal axes & magnet coils).
- *   - High-clarity 2D Compass Rose views for the Sample Surface (F_Sub / F_Wave)
- *     and the Hematite Basal Easy-Plane (0001) (F_Cryst).
- *   - Frame-Lock support (Sub, Wave, Cryst, Lab) in 3D.
+ *   - Emphasis system: hovering an item anywhere in the UI dims everything else
+ *     in the 3D scene (and temporarily shows hidden helper vectors like t_hat, n_hat).
+ *   - Frame-Lock support (Sub, Wave, Cryst, Lab) with smooth animated transitions,
+ *     so one can literally watch how the frames are rotated against each other.
  */
 
 import {
     DEG2RAD,
-    RAD2DEG,
     add3,
     scale3,
     dot3,
     norm3,
     normalize3,
     matVec3,
+    rotZ,
     FRAME_METADATA
 } from './math_core.js';
+
+// Which visibility flag an emphasized key forces on (so hovering e.g. "t̂" in the
+// vector table shows t̂ in 3D even though it is normally hidden).
+const EMPHASIS_FORCES_VISIBILITY = {
+    B: 'showB',
+    m: 'showM',
+    l: 'showL',
+    k: 'showK',
+    t: 'showT',
+    n: 'showN',
+    xs: 'showEdges',
+    ys: 'showEdges',
+    easy: 'showEasyPlane',
+    nodes: 'showEasyPlane',
+    crystal: 'showCrystalAxes',
+    ea: 'showCrystalAxes',
+    em: 'showCrystalAxes',
+    ec: 'showCrystalAxes',
+    magnet: 'showLabMagnet',
+    sample: 'showSampleSlab',
+    device: 'showMicrostructure',
+    custom: 'showCustom'
+};
+
+// --- Small quaternion helpers for smooth frame-lock transitions ---------------
+function matToQuat(M) {
+    const tr = M[0][0] + M[1][1] + M[2][2];
+    let w, x, y, z;
+    if (tr > 0) {
+        const s = Math.sqrt(tr + 1.0) * 2;
+        w = 0.25 * s;
+        x = (M[2][1] - M[1][2]) / s;
+        y = (M[0][2] - M[2][0]) / s;
+        z = (M[1][0] - M[0][1]) / s;
+    } else if (M[0][0] > M[1][1] && M[0][0] > M[2][2]) {
+        const s = Math.sqrt(1.0 + M[0][0] - M[1][1] - M[2][2]) * 2;
+        w = (M[2][1] - M[1][2]) / s;
+        x = 0.25 * s;
+        y = (M[0][1] + M[1][0]) / s;
+        z = (M[0][2] + M[2][0]) / s;
+    } else if (M[1][1] > M[2][2]) {
+        const s = Math.sqrt(1.0 + M[1][1] - M[0][0] - M[2][2]) * 2;
+        w = (M[0][2] - M[2][0]) / s;
+        x = (M[0][1] + M[1][0]) / s;
+        y = 0.25 * s;
+        z = (M[1][2] + M[2][1]) / s;
+    } else {
+        const s = Math.sqrt(1.0 + M[2][2] - M[0][0] - M[1][1]) * 2;
+        w = (M[1][0] - M[0][1]) / s;
+        x = (M[0][2] + M[2][0]) / s;
+        y = (M[1][2] + M[2][1]) / s;
+        z = 0.25 * s;
+    }
+    const n = Math.hypot(w, x, y, z) || 1;
+    return [w / n, x / n, y / n, z / n];
+}
+
+function quatToMat([w, x, y, z]) {
+    return [
+        [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+        [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+        [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]
+    ];
+}
+
+function slerpQuat(a, b, t) {
+    let cosHalf = a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3];
+    let bb = b;
+    if (cosHalf < 0) {
+        bb = b.map((v) => -v);
+        cosHalf = -cosHalf;
+    }
+    if (cosHalf > 0.9995) {
+        const out = a.map((v, i) => v + t * (bb[i] - v));
+        const n = Math.hypot(...out) || 1;
+        return out.map((v) => v / n);
+    }
+    const half = Math.acos(cosHalf);
+    const sinHalf = Math.sqrt(1 - cosHalf * cosHalf);
+    const ra = Math.sin((1 - t) * half) / sinHalf;
+    const rb = Math.sin(t * half) / sinHalf;
+    return a.map((v, i) => v * ra + bb[i] * rb);
+}
+
+function easeInOutCubic(t) {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
 
 export const VECTOR_COLORS = {
     B: '#38bdf8',        // Sky cyan: Applied magnetic field B
@@ -34,16 +122,25 @@ export const VECTOR_COLORS = {
     n: '#60a5fa',        // Blue: Substrate surface normal n_hat = z_s
     ec: '#a78bfa',       // Violet: Crystal c-axis [0001] (e_c)
     ea: '#c084fc',       // Light purple: Crystal a-axis [11-20]
-    em: '#818cf8'        // Indigo: Crystal m-axis [1-100]
+    em: '#818cf8',       // Indigo: Crystal m-axis [1-100]
+    edge: '#cbd5e1',     // Light slate: sample edges x_s / y_s
+    nodes: '#c084fc',    // Purple: intersection line sample plane ∩ easy plane
+    custom: '#fb923c'    // Orange: user-defined direction ("Eigene Richtung")
 };
 
 export class Scene3DController {
-    constructor(canvas3d, canvas2dSample, canvas2dEasy) {
+    constructor(canvas3d) {
         this.canvas3d = canvas3d;
-        this.canvas2dSample = canvas2dSample;
-        this.canvas2dEasy = canvas2dEasy;
 
         this.lockFrame = 'Sub'; // 'Sub' | 'Wave' | 'Cryst' | 'Lab'
+        this._lockAnim = null;
+
+        // null or Set of keys ('B','m','l','k','t','n','xs','ys','easy','nodes',
+        // 'crystal','ea','em','ec','magnet','sample','device','custom')
+        this.emphasis = null;
+
+        // Optional user-defined direction { Lab: [x,y,z], label: '[uvtw]' }
+        this.customVector = null;
         this.camera = {
             azimuthDeg: -38,
             elevationDeg: 28,
@@ -65,11 +162,14 @@ export class Scene3DController {
             showLabMagnet: true,
             showSampleSlab: true,
             showMicrostructure: true,
-            showAngleArcs: true,
-            showCompareOverlay: true
+            showCompareOverlay: true,
+            showCustom: true,
+            // Helper vectors that normally stay hidden and only appear when emphasized
+            showT: false,
+            showN: false,
+            showEdges: false
         };
 
-        this.sample2dLockWave = false; // false -> x_s right, true -> k_hat right
         this.isDragging = false;
         this.lastMouse = { x: 0, y: 0 };
 
@@ -183,6 +283,68 @@ export class Scene3DController {
         this.render();
     }
 
+    /**
+     * Switches the frame that stands still in the picture. With animate=true the
+     * scene smoothly rotates (quaternion slerp) from the old to the new lock frame.
+     */
+    setLockFrame(frame, animate = true) {
+        if (frame === this.lockFrame && !this._lockAnim) return;
+        const fromMatrix = this._currentLockMatrix();
+        this.lockFrame = frame;
+        if (!animate || !fromMatrix) {
+            this._lockAnim = null;
+            this.render();
+            return;
+        }
+        this._lockAnim = { qFrom: matToQuat(fromMatrix), t0: performance.now(), duration: 700 };
+        const step = () => {
+            if (!this._lockAnim) return;
+            const done = performance.now() - this._lockAnim.t0 >= this._lockAnim.duration;
+            if (done) this._lockAnim = null;
+            this.render();
+            if (!done) requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+    }
+
+    setEmphasis(keys) {
+        this.emphasis = keys && keys.length ? new Set(keys) : null;
+        this.render();
+    }
+
+    // Rotation L that maps Lab coordinates into the coordinates of the "standing still" frame.
+    _targetLockMatrix(state, frame) {
+        if (frame === 'Lab') {
+            // Lock the rotating electromagnet: B always points along +X on screen
+            return rotZ(-(state.setup.phiMDeg || 0));
+        }
+        return state.matrices.getRotationMatrix(frame, 'Lab');
+    }
+
+    _currentLockMatrix() {
+        if (!this.stateA) return null;
+        const target = this._targetLockMatrix(this.stateA, this.lockFrame);
+        if (!this._lockAnim) return target;
+        const t = Math.min(1, (performance.now() - this._lockAnim.t0) / this._lockAnim.duration);
+        return quatToMat(slerpQuat(this._lockAnim.qFrom, matToQuat(target), easeInOutCubic(t)));
+    }
+
+    _effectiveVisibility() {
+        const vis = { ...this.visibility };
+        if (this.emphasis) {
+            for (const key of this.emphasis) {
+                const prop = EMPHASIS_FORCES_VISIBILITY[key];
+                if (prop) vis[prop] = true;
+            }
+        }
+        return vis;
+    }
+
+    _alphaFor(keys) {
+        if (!this.emphasis || !keys) return 1;
+        return keys.some((k) => this.emphasis.has(k)) ? 1 : 0.12;
+    }
+
     _prepareCanvas(canvas) {
         if (!canvas) return null;
         const rect = canvas.getBoundingClientRect();
@@ -226,10 +388,8 @@ export class Scene3DController {
     }
 
     render() {
-        if (!this.stateA) return;
-        if (this.canvas3d) this._render3DScene();
-        if (this.canvas2dSample) this._render2DSample();
-        if (this.canvas2dEasy) this._render2DEasyPlane();
+        if (!this.stateA || !this.canvas3d) return;
+        this._render3DScene();
     }
 
     // ========================================================================
@@ -258,24 +418,17 @@ export class Scene3DController {
 
         const F = this.lockFrame;
         const stA = this.stateA;
-        const phiMRad = (stA.setup.phiMDeg || 0) * DEG2RAD;
-        const cosNegPhi = Math.cos(-phiMRad);
-        const sinNegPhi = Math.sin(-phiMRad);
+        const vis = this._effectiveVisibility();
+        this._vis = vis;
 
-        // When F === 'Lab' ("Labor-Magnet"), lock the rotating Electromagnet (poles N/S & B)
-        // along the fixed +X axis so the Magnet stands still and the Sample rotates when phi_M changes!
+        // L maps Lab coordinates into the frame that currently stands still
+        // (interpolated while a frame-lock transition is animating).
+        const L = this._currentLockMatrix();
+        const labFrom = {};
         const toLock = (vec, srcFrame) => {
-            if (F === 'Lab') {
-                const vLab = srcFrame === 'Lab'
-                    ? vec
-                    : matVec3(stA.matrices.getRotationMatrix('Lab', srcFrame), vec);
-                return [
-                    cosNegPhi * vLab[0] - sinNegPhi * vLab[1],
-                    sinNegPhi * vLab[0] + cosNegPhi * vLab[1],
-                    vLab[2]
-                ];
-            }
-            return matVec3(stA.matrices.getRotationMatrix(F, srcFrame), vec);
+            if (srcFrame === 'Lab') return matVec3(L, vec);
+            if (!labFrom[srcFrame]) labFrom[srcFrame] = stA.matrices.getRotationMatrix('Lab', srcFrame);
+            return matVec3(L, matVec3(labFrom[srcFrame], vec));
         };
         const vecInLock = (vecObj) => toLock(vecObj.Lab, 'Lab');
         const proj = (pt3) => this._project3D(pt3, cx, cy, baseScale);
@@ -285,68 +438,89 @@ export class Scene3DController {
 
         // 2. Depth-sorted 3D surfaces
         const renderQueue = [];
-        if (this.visibility.showLabMagnet) {
+        if (vis.showLabMagnet) {
             this._enqueueLabMagnet(renderQueue, toLock, proj, stA, isLight);
         }
-        if (this.visibility.showEasyPlane) {
+        if (vis.showEasyPlane) {
             this._enqueueEasyPlaneDisk(renderQueue, toLock, proj, isLight);
         }
-        if (this.visibility.showSampleSlab) {
+        if (vis.showSampleSlab) {
             this._enqueueSubstrateAndDevice(renderQueue, toLock, proj, stA, isLight);
         }
 
         renderQueue.sort((a, b) => b.depth - a.depth);
         for (const item of renderQueue) {
+            ctx.save();
+            ctx.globalAlpha = this._alphaFor(item.keys);
             item.draw(ctx);
+            ctx.restore();
         }
 
-        // 3. Collect ONLY the essential 3D arrows (transformed via vecInLock so 'Lab' locks the Magnet!)
+        // 3. Arrows (all transformed into the locked frame)
         const arrows3D = [];
 
-        // Optional Crystal Basis Axes with Miller-Bravais notation (when toggled on)
-        if (this.visibility.showCrystalAxes) {
-            const ea = vecInLock(stA.vectors.eaHat);
-            const em = vecInLock(stA.vectors.emHat);
-            const ec = vecInLock(stA.vectors.ecHat);
-            arrows3D.push({ vec: ea, baseLen: 0.92, color: VECTOR_COLORS.ea, label: 'a [112\u03050]', width: 2.0, dashed: true });
-            arrows3D.push({ vec: em, baseLen: 0.88, color: VECTOR_COLORS.em, label: 'm [11\u030500]', width: 1.8, dashed: true });
-            arrows3D.push({ vec: ec, baseLen: 1.00, color: VECTOR_COLORS.ec, label: 'c [0001]', width: 2.3, dashed: false });
+        if (vis.showCrystalAxes) {
+            arrows3D.push({ vec: vecInLock(stA.vectors.eaHat), baseLen: 0.92, color: VECTOR_COLORS.ea, label: 'a [112̅0]', width: 2.0, dashed: true, keys: ['ea', 'crystal'] });
+            arrows3D.push({ vec: vecInLock(stA.vectors.emHat), baseLen: 0.88, color: VECTOR_COLORS.em, label: 'm [11̅00]', width: 1.8, dashed: true, keys: ['em', 'crystal'] });
+            arrows3D.push({ vec: vecInLock(stA.vectors.ecHat), baseLen: 1.00, color: VECTOR_COLORS.ec, label: 'c [0001]', width: 2.3, dashed: false, keys: ['ec', 'crystal'] });
+        }
+        if (vis.showEdges) {
+            arrows3D.push({ vec: vecInLock(stA.vectors.xsHat), baseLen: 0.8, color: VECTOR_COLORS.edge, label: 'x_s', width: 2.0, dashed: true, keys: ['xs', 'sample'] });
+            arrows3D.push({ vec: vecInLock(stA.vectors.ysHat), baseLen: 0.8, color: VECTOR_COLORS.edge, label: 'y_s', width: 2.0, dashed: true, keys: ['ys', 'sample'] });
+        }
+        if (vis.showN) {
+            arrows3D.push({ vec: vecInLock(stA.vectors.nHat), baseLen: 0.9, color: VECTOR_COLORS.n, label: 'n̂', width: 2.4, dashed: false, keys: ['n', 'sample'] });
+        }
+        if (vis.showT) {
+            arrows3D.push({ vec: vecInLock(stA.vectors.tHat), baseLen: 0.85, color: VECTOR_COLORS.t, label: 't̂', width: 2.4, dashed: false, keys: ['t', 'device'] });
         }
 
         const bHat = vecInLock(stA.vectors.bHat);
         const bEasy = scale3(vecInLock(stA.vectors.bEasyProjVec), 1 / (stA.metrics.b0Tesla || 1));
         const bEasyLen = norm3(bEasy);
 
-        // Dashed orthogonal projection line from the exact tip of B (1.00 * bHat)
-        // to the exact tip of the Easy-Plane projection / m̂ arrow (bEasyLen * mHat)
+        // Dashed projection line from the tip of B to the tip of its easy-plane projection (= m̂ tip)
         const diffOutPlane = Math.hypot(bHat[0] - bEasy[0], bHat[1] - bEasy[1], bHat[2] - bEasy[2]);
-        if (this.visibility.showB && (this.visibility.showM || this.visibility.showEasyPlane) && bEasyLen > 0.04 && diffOutPlane > 0.05) {
+        if (vis.showB && (vis.showM || vis.showEasyPlane) && bEasyLen > 0.04 && diffOutPlane > 0.05) {
+            ctx.save();
+            ctx.globalAlpha = this._alphaFor(['B', 'm', 'easy']);
             this._drawProjectionDropLine3D(ctx, proj, bHat, bEasy, VECTOR_COLORS.B_easy, 1.3);
+            ctx.restore();
         }
 
-        if (this.visibility.showK) {
-            arrows3D.push({ vec: vecInLock(stA.vectors.kHat), baseLen: 1.00, color: VECTOR_COLORS.k, label: 'k̂', width: 3.0, dashed: false });
+        if (vis.showK) {
+            arrows3D.push({ vec: vecInLock(stA.vectors.kHat), baseLen: 1.00, color: VECTOR_COLORS.k, label: 'k̂', width: 3.0, dashed: false, keys: ['k', 'device'] });
         }
-        if (this.visibility.showL && !stA.metrics.isEasyPlaneSingular) {
-            arrows3D.push({ vec: vecInLock(stA.vectors.lHat), baseLen: 1.00, color: VECTOR_COLORS.l, label: 'l̂', width: 2.8, dashed: false });
+        if (vis.showL && !stA.metrics.isEasyPlaneSingular) {
+            arrows3D.push({ vec: vecInLock(stA.vectors.lHat), baseLen: 1.00, color: VECTOR_COLORS.l, label: 'l̂', width: 2.8, dashed: false, keys: ['l'] });
         }
-        if (this.visibility.showM && !stA.metrics.isEasyPlaneSingular && bEasyLen > 0.04) {
-            // Scale m̂ arrow with the Easy-Plane projection length (bEasyLen = sin ∠(B, c))
-            // so its tip always sits right where the dashed projection line from B lands!
-            arrows3D.push({ vec: vecInLock(stA.vectors.mHat), baseLen: bEasyLen, color: VECTOR_COLORS.m, label: 'm̂', width: 2.9, dashed: false });
+        if (vis.showM && !stA.metrics.isEasyPlaneSingular && bEasyLen > 0.04) {
+            // m̂ is scaled with |B_easy|/|B| so its tip sits where the projection line from B lands
+            arrows3D.push({ vec: vecInLock(stA.vectors.mHat), baseLen: bEasyLen, color: VECTOR_COLORS.m, label: 'm̂', width: 2.9, dashed: false, keys: ['m'] });
         }
-        if (this.visibility.showB) {
-            arrows3D.push({ vec: bHat, baseLen: 1.00, color: VECTOR_COLORS.B, label: 'B', width: 3.5, dashed: false });
+        if (vis.showB) {
+            arrows3D.push({ vec: bHat, baseLen: 1.00, color: VECTOR_COLORS.B, label: 'B', width: 3.5, dashed: false, keys: ['B'] });
+        }
+        if (vis.showCustom && this.customVector && this.customVector.Lab && norm3(this.customVector.Lab) > 1e-9) {
+            arrows3D.push({
+                vec: toLock(normalize3(this.customVector.Lab), 'Lab'),
+                baseLen: 0.95,
+                color: VECTOR_COLORS.custom,
+                label: this.customVector.label || 'eigene',
+                width: 3.0,
+                dashed: false,
+                keys: ['custom']
+            });
         }
 
-        // Compare Overlay (Setup B)
-        if (this.compareActive && this.stateB && this.visibility.showCompareOverlay) {
+        // Compare overlay (Setup B)
+        if (this.compareActive && this.stateB && vis.showCompareOverlay) {
             const stB = this.stateB;
-            if (this.visibility.showK) {
-                arrows3D.push({ vec: toLock(stB.vectors.kHat.Lab, 'Lab'), baseLen: 0.92, color: '#f0abfc', label: 'k̂(B)', width: 2.0, dashed: true });
+            if (vis.showK) {
+                arrows3D.push({ vec: toLock(stB.vectors.kHat.Lab, 'Lab'), baseLen: 0.92, color: '#f0abfc', label: 'k̂(B)', width: 2.0, dashed: true, keys: ['k'] });
             }
-            if (this.visibility.showB) {
-                arrows3D.push({ vec: toLock(stB.vectors.bHat.Lab, 'Lab'), baseLen: 0.96, color: '#7dd3fc', label: 'B(B)', width: 2.2, dashed: true });
+            if (vis.showB) {
+                arrows3D.push({ vec: toLock(stB.vectors.bHat.Lab, 'Lab'), baseLen: 0.96, color: '#7dd3fc', label: 'B(B)', width: 2.2, dashed: true, keys: ['B'] });
             }
         }
 
@@ -421,6 +595,7 @@ export class Scene3DController {
             const depth = pts.reduce((a, p) => a + p.depth, 0) / 4;
             queue.push({
                 depth,
+                keys: ['magnet', 'B'],
                 draw: (ctx) => {
                     ctx.save();
                     ctx.beginPath();
@@ -455,6 +630,7 @@ export class Scene3DController {
 
         queue.push({
             depth,
+            keys: ['easy', 'm', 'l', 'nodes'],
             draw: (ctx) => {
                 ctx.save();
                 ctx.beginPath();
@@ -499,6 +675,7 @@ export class Scene3DController {
             const d = sidePoly.reduce((a, p) => a + p.depth, 0) / 4;
             queue.push({
                 depth: d + 0.02,
+                keys: ['sample'],
                 draw: (ctx) => {
                     ctx.save();
                     ctx.beginPath();
@@ -516,8 +693,11 @@ export class Scene3DController {
 
         queue.push({
             depth: topDepth,
+            keys: null, // alpha is handled per part below
             draw: (ctx) => {
+                const vis = this._vis || this.visibility;
                 ctx.save();
+                ctx.globalAlpha = this._alphaFor(['sample', 'device', 'k', 'nodes']);
                 ctx.beginPath();
                 topPts.forEach((p, idx) => (idx === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
                 ctx.closePath();
@@ -527,11 +707,13 @@ export class Scene3DController {
                 ctx.fill();
                 ctx.stroke();
 
-                if (this.visibility.showMicrostructure) {
+                if (vis.showMicrostructure) {
+                    ctx.globalAlpha = this._alphaFor(['device', 'k', 't']);
                     this._drawMicrostructure3D(ctx, toLock, proj, state.setup.deviceType);
                 }
 
-                if (this.visibility.showEasyPlane && Math.abs(state.setup.thetaCutDeg) > 1e-3) {
+                if (vis.showEasyPlane && Math.abs(state.setup.thetaCutDeg) > 1e-3) {
+                    ctx.globalAlpha = this._alphaFor(['nodes', 'easy', 'sample']);
                     const nodeSub = state.vectors.nodesHat.Sub;
                     const pN1 = proj(toLock(scale3(nodeSub, -0.58), 'Sub'));
                     const pN2 = proj(toLock(scale3(nodeSub, 0.58), 'Sub'));
@@ -540,7 +722,7 @@ export class Scene3DController {
                     ctx.lineTo(pN2.x, pN2.y);
                     ctx.strokeStyle = isLight ? '#9333ea' : '#c084fc';
                     ctx.setLineDash([5, 3]);
-                    ctx.lineWidth = 1.6;
+                    ctx.lineWidth = this.emphasis && this.emphasis.has('nodes') ? 2.6 : 1.6;
                     ctx.stroke();
                     ctx.setLineDash([]);
                 }
@@ -745,7 +927,12 @@ export class Scene3DController {
                 maxTipLen = Math.max(maxTipLen, actualLen);
                 const end3D = scale3(normalize3(it.vec), actualLen);
                 const p2 = proj(end3D);
-                this._drawSingleShaftAndHead(ctx, origin.x, origin.y, p2.x, p2.y, it.color, it.width, it.dashed);
+                const alpha = this._alphaFor(it.keys);
+                const emphasized = this.emphasis && alpha === 1;
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                this._drawSingleShaftAndHead(ctx, origin.x, origin.y, p2.x, p2.y, it.color, it.width * (emphasized ? 1.35 : 1), it.dashed);
+                ctx.restore();
             });
             const tipPt = proj(scale3(g.uRef, maxTipLen));
             const outerEnd = scale3(g.uRef, maxTipLen + 0.04);
@@ -757,6 +944,7 @@ export class Scene3DController {
                 x: pOuter.x,
                 y: pOuter.y,
                 ang,
+                alpha: Math.max(...g.items.map((it) => this._alphaFor(it.keys))),
                 tokens: g.items.map((it) => ({ text: it.label, color: it.color }))
             });
         }
@@ -877,6 +1065,7 @@ export class Scene3DController {
                 }
             }
             placedBoxes.push({ x: lx, y: ly, w: boxW, h: boxH });
+            ctx.globalAlpha = m.alpha ?? 1;
 
             // If nudged to avoid another badge, draw a subtle leader line to the arrowhead tip
             if (nudged && m.tipX !== undefined && m.tipY !== undefined) {
@@ -887,7 +1076,7 @@ export class Scene3DController {
                 ctx.moveTo(m.tipX, m.tipY);
                 ctx.lineTo(boxCenterX, boxCenterY);
                 ctx.strokeStyle = m.tokens[0]?.color || '#94a3b8';
-                ctx.globalAlpha = 0.55;
+                ctx.globalAlpha = 0.55 * (m.alpha ?? 1);
                 ctx.lineWidth = 1.1;
                 ctx.setLineDash([2, 2]);
                 ctx.stroke();
@@ -928,8 +1117,8 @@ export class Scene3DController {
 
     _draw3DHUD(ctx, w, h, state, lockFrame, isLight) {
         const lockNames = {
-            Sub: 'Sample steht still (Magnet dreht sich mit φ_M)',
-            Lab: 'Labor-Magnet & Feld B stehen still (Sample dreht sich)',
+            Sub: 'Probe steht still (Magnet dreht sich mit φ_M)',
+            Lab: 'Magnet & Feld B stehen still (Probe dreht sich)',
             Wave: 'Wellenrichtung k̂ steht still',
             Cryst: '(0001) Easy-Plane liegt fest horizontal'
         };
@@ -937,320 +1126,8 @@ export class Scene3DController {
         ctx.save();
         ctx.font = '600 11.5px "Inter", sans-serif';
         ctx.fillStyle = isLight ? '#475569' : '#94a3b8';
-        ctx.fillText(`Ansicht: ${subtitle}`, 14, 21);
+        // Bottom-left: the top-left corner belongs to the legend chips
+        ctx.fillText(`Ansicht: ${subtitle}`, 14, h - 14);
         ctx.restore();
-    }
-
-    // ========================================================================
-    // 2D Sample Surface Compass View (Chip Plane)
-    // ========================================================================
-    _render2DSample() {
-        const prep = this._prepareCanvas(this.canvas2dSample);
-        if (!prep) return;
-        const { ctx, w, h } = prep;
-        const isLight = document.body.classList.contains('theme-light');
-        const cx = w * 0.5;
-        const cy = h * 0.56;
-        const rMax = Math.min(w, h) * 0.30;
-
-        ctx.clearRect(0, 0, w, h);
-        ctx.fillStyle = isLight ? '#f8fafc' : '#0b1120';
-        ctx.fillRect(0, 0, w, h);
-
-        const st = this.stateA;
-        const frame2D = this.sample2dLockWave ? 'Wave' : 'Sub';
-
-        // 1. Chip outline rectangle
-        ctx.save();
-        ctx.translate(cx, cy);
-        const chipRotRad = this.sample2dLockWave ? -st.setup.thetaDevDeg * DEG2RAD : 0;
-        ctx.rotate(chipRotRad);
-        const cw = rMax * 1.44;
-        const ch = rMax * 1.22;
-        ctx.fillStyle = isLight ? 'rgba(226, 232, 240, 0.9)' : 'rgba(30, 41, 59, 0.78)';
-        ctx.strokeStyle = isLight ? '#64748b' : '#475569';
-        ctx.lineWidth = 1.8;
-        ctx.fillRect(-cw / 2, -ch / 2, cw, ch);
-        ctx.strokeRect(-cw / 2, -ch / 2, cw, ch);
-        ctx.restore();
-
-        // 2. Compass Rose Circle & Degree Ticks with explicit axis meaning
-        const lbl0 = this.sample2dLockWave ? '0° (∥ k̂)' : '0° (Sample)';
-        const lbl90 = this.sample2dLockWave ? '90° (⊥ k̂)' : '90° (Sample)';
-        this._drawCompassRing(ctx, cx, cy, rMax, isLight, lbl0, lbl90);
-
-        // 3. Center Microstructure Schematic (CPW or IDT) rotated along k_hat
-        const k2D = st.vectors.kHat[frame2D];
-        const kAngleRad = Math.atan2(-k2D[1], k2D[0]);
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(kAngleRad);
-        const polyScale = rMax * 0.85;
-        ctx.fillStyle = 'rgba(251, 191, 36, 0.85)';
-        const polys = this._getMicrostructurePolygonsWave(st.setup.deviceType);
-        for (const poly of polys) {
-            ctx.beginPath();
-            poly.forEach(([xk, yt], idx) => {
-                const px = xk * polyScale;
-                const py = -yt * polyScale;
-                if (idx === 0) ctx.moveTo(px, py);
-                else ctx.lineTo(px, py);
-            });
-            ctx.closePath();
-            ctx.fill();
-        }
-        ctx.restore();
-
-        // 4. Line of nodes (Intersection of (0001) Easy-Plane with sample surface)
-        const nodes2D = st.vectors.nodesHat[frame2D];
-        if (this.visibility.showEasyPlane && Math.abs(st.setup.thetaCutDeg) > 1e-3) {
-            ctx.beginPath();
-            ctx.moveTo(cx - nodes2D[0] * rMax * 1.0, cy + nodes2D[1] * rMax * 1.0);
-            ctx.lineTo(cx + nodes2D[0] * rMax * 1.0, cy - nodes2D[1] * rMax * 1.0);
-            ctx.strokeStyle = isLight ? '#9333ea' : '#c084fc';
-            ctx.setLineDash([5, 4]);
-            ctx.lineWidth = 1.6;
-            ctx.stroke();
-            ctx.setLineDash([]);
-        }
-
-        // 5. Vectors projected onto the Sample Chip Plane
-        const bEasyLen = st.metrics.bEasyRatio;
-        const vecItems = [];
-        if (this.visibility.showCrystalAxes) {
-            vecItems.push({ v: st.vectors.eaHat[frame2D], color: VECTOR_COLORS.ea, label: 'a [112\u03050]', width: 2.0, dashed: true });
-            vecItems.push({ v: st.vectors.emHat[frame2D], color: VECTOR_COLORS.em, label: 'm [11\u030500]', width: 1.8, dashed: true });
-            vecItems.push({ v: st.vectors.ecHat[frame2D], color: VECTOR_COLORS.ec, label: 'c [0001]', width: 2.2, dashed: false });
-        }
-        if (this.visibility.showK) {
-            vecItems.push({ v: st.vectors.kHat[frame2D], color: VECTOR_COLORS.k, label: 'k̂', width: 3.0, dashed: false });
-        }
-        if (!st.metrics.isEasyPlaneSingular) {
-            if (this.visibility.showL) {
-                vecItems.push({ v: st.vectors.lHat[frame2D], color: VECTOR_COLORS.l, label: 'l̂', width: 2.6, dashed: false });
-            }
-            if (this.visibility.showM && bEasyLen > 0.04) {
-                vecItems.push({ v: scale3(st.vectors.mHat[frame2D], bEasyLen), color: VECTOR_COLORS.m, label: 'm̂', width: 2.6, dashed: false });
-            }
-        }
-        if (this.visibility.showB) {
-            vecItems.push({ v: st.vectors.bHat[frame2D], color: VECTOR_COLORS.B, label: 'B', width: 3.4, dashed: false });
-        }
-
-        this._draw2DVectorsDeCollided(ctx, cx, cy, rMax, vecItems, isLight);
-
-        ctx.font = '700 12.5px "Inter", sans-serif';
-        ctx.fillStyle = isLight ? '#0f172a' : '#f8fafc';
-        ctx.fillText('1. Draufsicht auf das Sample', 14, 21);
-        ctx.font = '500 11px "Inter", sans-serif';
-        ctx.fillStyle = isLight ? '#64748b' : '#94a3b8';
-        ctx.fillText(`Blick senkrecht auf die Sample-Oberfläche (${st.setup.cutPreset})`, 14, 37);
-
-        ctx.fillStyle = isLight ? '#475569' : '#94a3b8';
-        ctx.fillText(
-            `Feld im Sample: ${(st.metrics.bInSampleRatio * 100).toFixed(0)}%  ·  Winkel zur Welle: ${st.metrics.phiBWaveDeg.toFixed(1)}°`,
-            14,
-            h - 12
-        );
-    }
-
-    // ========================================================================
-    // 2D Basal Easy-Plane (0001) Compass View
-    // ========================================================================
-    _render2DEasyPlane() {
-        const prep = this._prepareCanvas(this.canvas2dEasy);
-        if (!prep) return;
-        const { ctx, w, h } = prep;
-        const isLight = document.body.classList.contains('theme-light');
-        const cx = w * 0.5;
-        const cy = h * 0.56;
-        const rMax = Math.min(w, h) * 0.30;
-
-        ctx.clearRect(0, 0, w, h);
-        ctx.fillStyle = isLight ? '#f8fafc' : '#0b1120';
-        ctx.fillRect(0, 0, w, h);
-
-        const st = this.stateA;
-
-        // 1. Hexagonal Basal Plane (0001) & Compass Ring with Crystal Axis Labels
-        this._drawCompassRing(ctx, cx, cy, rMax, isLight, '0° (a)', '90° (m)');
-
-        ctx.save();
-        ctx.beginPath();
-        for (let i = 0; i < 6; i++) {
-            const ang = i * 60 * DEG2RAD;
-            const x = cx + rMax * Math.cos(ang);
-            const y = cy - rMax * Math.sin(ang);
-            if (i === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
-        }
-        ctx.closePath();
-        ctx.fillStyle = isLight ? 'rgba(168, 85, 247, 0.11)' : 'rgba(168, 85, 247, 0.15)';
-        ctx.strokeStyle = isLight ? 'rgba(147, 51, 234, 0.6)' : 'rgba(192, 132, 252, 0.6)';
-        ctx.lineWidth = 1.8;
-        ctx.fill();
-        ctx.stroke();
-
-        // Three C2 crystal symmetry axes at 0, 60, 120 deg
-        ctx.strokeStyle = isLight ? 'rgba(100, 116, 139, 0.25)' : 'rgba(148, 163, 184, 0.2)';
-        ctx.setLineDash([3, 3]);
-        for (const deg of [0, 60, 120]) {
-            const rad = deg * DEG2RAD;
-            ctx.beginPath();
-            ctx.moveTo(cx - rMax * Math.cos(rad), cy + rMax * Math.sin(rad));
-            ctx.lineTo(cx + rMax * Math.cos(rad), cy - rMax * Math.sin(rad));
-            ctx.stroke();
-        }
-        ctx.setLineDash([]);
-        ctx.restore();
-
-        const bEasyLen = st.metrics.bEasyRatio;
-        const vecItems = [];
-        if (this.visibility.showCrystalAxes) {
-            vecItems.push({ v: st.vectors.eaHat.Cryst, color: VECTOR_COLORS.ea, label: 'a [112\u03050]', width: 2.0, dashed: true });
-            vecItems.push({ v: st.vectors.emHat.Cryst, color: VECTOR_COLORS.em, label: 'm [11\u030500]', width: 1.8, dashed: true });
-        }
-        if (this.visibility.showK) {
-            vecItems.push({ v: st.vectors.kHat.Cryst, color: VECTOR_COLORS.k, label: 'k̂', width: 2.6, dashed: true });
-        }
-        if (!st.metrics.isEasyPlaneSingular) {
-            if (this.visibility.showL) {
-                vecItems.push({ v: st.vectors.lHat.Cryst, color: VECTOR_COLORS.l, label: 'l̂', width: 2.9, dashed: false });
-            }
-            if (this.visibility.showM && bEasyLen > 0.04) {
-                vecItems.push({ v: scale3(st.vectors.mHat.Cryst, bEasyLen), color: VECTOR_COLORS.m, label: 'm̂', width: 2.9, dashed: false });
-            }
-        }
-        if (this.visibility.showB) {
-            vecItems.push({ v: st.vectors.bHat.Cryst, color: VECTOR_COLORS.B, label: 'B', width: 3.3, dashed: false });
-        }
-
-        this._draw2DVectorsDeCollided(ctx, cx, cy, rMax, vecItems, isLight);
-
-        ctx.font = '700 12.5px "Inter", sans-serif';
-        ctx.fillStyle = isLight ? '#0f172a' : '#f8fafc';
-        ctx.fillText('2. Blick in die (0001) Kristall-Easy-Plane', 14, 21);
-
-        const isSamePlaneAsSample = Math.abs(st.setup.thetaCutDeg) < 0.5;
-        ctx.font = '600 11px "Inter", sans-serif';
-        ctx.fillStyle = isSamePlaneAsSample
-            ? (isLight ? '#7e22ce' : '#d8b4fe')
-            : (isLight ? '#64748b' : '#94a3b8');
-        ctx.fillText(
-            isSamePlaneAsSample
-                ? 'Beim c-cut identisch mit der Sample-Ebene (0° Verkippung)'
-                : `Um ${st.setup.thetaCutDeg.toFixed(1)}° gegen die Sample-Ebene verkippt (${st.setup.cutPreset})`,
-            14,
-            37
-        );
-
-        ctx.font = '500 11px "Inter", sans-serif';
-        ctx.fillStyle = isLight ? '#475569' : '#94a3b8';
-        ctx.fillText(
-            `Feld in Easy-Plane: ${(st.metrics.bEasyRatio * 100).toFixed(0)}%  ·  Richtung m̂: ${st.metrics.phiEasyMDeg.toFixed(1)}°`,
-            14,
-            h - 12
-        );
-    }
-
-    _drawCompassRing(ctx, cx, cy, rMax, isLight, label0 = '0°', label90 = '90°') {
-        ctx.save();
-        // Subtle crosshair
-        ctx.strokeStyle = isLight ? 'rgba(100, 116, 139, 0.22)' : 'rgba(148, 163, 184, 0.16)';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([3, 3]);
-        ctx.beginPath();
-        ctx.moveTo(cx - rMax, cy);
-        ctx.lineTo(cx + rMax, cy);
-        ctx.moveTo(cx, cy - rMax);
-        ctx.lineTo(cx, cy + rMax);
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        ctx.beginPath();
-        ctx.arc(cx, cy, rMax, 0, Math.PI * 2);
-        ctx.strokeStyle = isLight ? 'rgba(100, 116, 139, 0.34)' : 'rgba(148, 163, 184, 0.26)';
-        ctx.lineWidth = 1.2;
-        ctx.stroke();
-
-        ctx.font = '500 9.5px "JetBrains Mono", monospace';
-        ctx.fillStyle = isLight ? '#64748b' : '#64748b';
-        ctx.textAlign = 'center';
-        for (let deg = 0; deg < 360; deg += 30) {
-            const rad = deg * DEG2RAD;
-            const x1 = cx + rMax * Math.cos(rad);
-            const y1 = cy - rMax * Math.sin(rad);
-            const x2 = cx + (rMax + 5) * Math.cos(rad);
-            const y2 = cy - (rMax + 5) * Math.sin(rad);
-            ctx.beginPath();
-            ctx.moveTo(x1, y1);
-            ctx.lineTo(x2, y2);
-            ctx.stroke();
-            if (deg === 0) {
-                ctx.textAlign = 'left';
-                ctx.fillText(label0, cx + rMax + 7, cy + 3);
-                ctx.textAlign = 'center';
-            } else if (deg === 90) {
-                ctx.fillText(label90, cx, cy - rMax - 8);
-            } else if (deg === 180) {
-                ctx.textAlign = 'right';
-                ctx.fillText('180°', cx - rMax - 7, cy + 3);
-                ctx.textAlign = 'center';
-            } else if (deg === 270) {
-                ctx.fillText('270°', cx, cy + rMax + 15);
-            }
-        }
-        ctx.restore();
-    }
-
-    _draw2DVectorsDeCollided(ctx, cx, cy, rMax, items, isLight) {
-        // Group ONLY vectors that are truly parallel in 3D (dot3 > 0.999) into a '∥' badge!
-        const groups = [];
-        for (const it of items) {
-            const len2 = Math.hypot(it.v[0], it.v[1]);
-            if (len2 < 0.04) continue;
-            const ux = it.v[0] / len2;
-            const uy = it.v[1] / len2;
-            const u3 = normalize3(it.v);
-            let found = null;
-            for (const g of groups) {
-                if (dot3(u3, g.u3Ref) > 0.999) {
-                    found = g;
-                    break;
-                }
-            }
-            if (!found) {
-                found = { ux, uy, u3Ref: u3, maxLen: len2, items: [] };
-                groups.push(found);
-            }
-            found.maxLen = Math.max(found.maxLen, len2);
-            found.items.push({ ...it, len2 });
-        }
-
-        const labelClusters = [];
-        for (const g of groups) {
-            g.items.forEach((it, idx) => {
-                const stagger = g.items.length > 1 ? 0.96 - idx * 0.16 : 0.94;
-                const r = Math.min(1, it.len2) * stagger * rMax;
-                const x2 = cx + g.ux * r;
-                const y2 = cy - g.uy * r;
-                this._drawSingleShaftAndHead(ctx, cx, cy, x2, y2, it.color, it.width || 2.6, it.dashed);
-            });
-            const rTip = Math.min(1, g.maxLen) * 0.94 * rMax;
-            const rOuter = Math.min(1, g.maxLen) * 0.98 * rMax;
-            const xOut = cx + g.ux * rOuter;
-            const yOut = cy - g.uy * rOuter;
-            const ang = Math.atan2(-g.uy, g.ux);
-            labelClusters.push({
-                tipX: cx + g.ux * rTip,
-                tipY: cy - g.uy * rTip,
-                x: xOut,
-                y: yOut,
-                ang,
-                tokens: g.items.map((it) => ({ text: it.label, color: it.color }))
-            });
-        }
-
-        this._drawGroupedPillBadges(ctx, labelClusters, isLight);
     }
 }
