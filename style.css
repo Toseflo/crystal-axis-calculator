@@ -1668,6 +1668,15 @@ body.theme-light .canvas-pill-btn {
 .fig-grid .field-label {
     margin: 0;
 }
+.seg-xs.fig-seg {
+    display: grid;
+    grid-auto-columns: 1fr;
+    gap: 3px;
+}
+.seg-xs.fig-seg .seg-btn {
+    padding: 5px 6px;
+    white-space: nowrap;
+}
 .fig-range {
     display: flex;
     gap: 6px;

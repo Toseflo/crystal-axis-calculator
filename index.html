@@ -693,11 +693,11 @@
                     </details>
 
                     <div class="fig-grid">
-                        <label class="field-label" for="figView">Ansicht</label>
-                        <select id="figView" class="select-input" data-fopt="view">
-                            <option value="oblique">Schräg</option>
-                            <option value="top">Draufsicht</option>
-                        </select>
+                        <span class="field-label">Ansicht</span>
+                        <div class="segmented-control seg-xs fig-seg" data-fseg="view" role="group" aria-label="Ansicht">
+                            <button type="button" class="seg-btn" data-val="oblique">Schräg</button>
+                            <button type="button" class="seg-btn" data-val="top">Draufsicht</button>
+                        </div>
                         <label class="field-label" for="figDevices">Antennen</label>
                         <select id="figDevices" class="select-input" data-fopt="devices" title="Sender links, Empfänger rechts; „Antenne“ = kurzgeschlossene Koplanarleitung">
                             <option value="pair">Zwei wie im Setup</option>
@@ -705,23 +705,23 @@
                             <option value="IDT-CPW">IDT → Antenne</option>
                             <option value="CPW-IDT">Antenne → IDT</option>
                         </select>
-                        <label class="field-label" for="figAngleRef">Feldwinkel ab</label>
-                        <select id="figAngleRef" class="select-input" data-fopt="angleRef">
-                            <option value="wave">Welle k̂</option>
-                            <option value="edge">0°-Kante</option>
-                        </select>
-                        <label class="field-label" for="figAngleLabels">Winkel</label>
-                        <select id="figAngleLabels" class="select-input" data-fopt="angleLabels">
-                            <option value="value">30°</option>
-                            <option value="symbol">φ</option>
-                            <option value="both">φ = 30°</option>
-                        </select>
-                        <label class="field-label" for="figSweep">Sweep</label>
-                        <select id="figSweep" class="select-input" data-fopt="sweep" title="Feld drehen: blasser Bogen ab dem Feldpfeil in der Drehebene des Magneten, Pfeil = Drehsinn; unter der Probe gestrichelt">
-                            <option value="none">Keiner</option>
-                            <option value="angle">Feld drehen</option>
-                            <option value="field">Feldstärke B₀</option>
-                        </select>
+                        <span class="field-label">Feldwinkel ab</span>
+                        <div class="segmented-control seg-xs fig-seg" data-fseg="angleRef" role="group" aria-label="Feldwinkel ab">
+                            <button type="button" class="seg-btn" data-val="wave">Welle k̂</button>
+                            <button type="button" class="seg-btn" data-val="edge">0°-Kante</button>
+                        </div>
+                        <span class="field-label">Winkel</span>
+                        <div class="segmented-control seg-xs fig-seg" data-fseg="angleLabels" role="group" aria-label="Winkel">
+                            <button type="button" class="seg-btn" data-val="value">30°</button>
+                            <button type="button" class="seg-btn" data-val="symbol">φ</button>
+                            <button type="button" class="seg-btn" data-val="both">φ = 30°</button>
+                        </div>
+                        <span class="field-label">Sweep</span>
+                        <div class="segmented-control seg-xs fig-seg" data-fseg="sweep" role="group" aria-label="Sweep">
+                            <button type="button" class="seg-btn" data-val="none" title="Feld wie in der 3D-Ansicht">Keiner</button>
+                            <button type="button" class="seg-btn" data-val="angle" title="Feld drehen: blasser Bogen ab dem Feldpfeil in der Drehebene des Magneten, Pfeil = Drehsinn; unter der Probe gestrichelt">Drehen</button>
+                            <button type="button" class="seg-btn" data-val="field" title="Feldstärke über einen Bereich">B₀</button>
+                        </div>
                         <label class="field-label fig-sweep-row" for="figSweepFrom" id="figSweepLabel">Start / Drehung</label>
                         <div class="fig-range fig-sweep-row">
                             <div class="num-unit"><input type="number" id="figSweepFrom" step="any" data-fopt="sweepFrom" /><span class="fig-sweep-unit">°</span></div>

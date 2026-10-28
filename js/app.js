@@ -1684,6 +1684,8 @@ let activeExportTab = 'svg';
 // Figure (SVG): options, the style being edited and the user's saved styles live in localStorage,
 // so every figure of a thesis comes out the same without setting it up again
 const FIGURE_STORAGE_KEY = 'hematite_figure_v1';
+// A sweep and the panel letter belong to one figure: a new visit starts from the field as in 3D
+const FIGURE_PER_FIGURE_OPTIONS = ['sweep', 'sweepFrom', 'sweepTo', 'sweepSpan', 'panel'];
 const figure = { options: { ...DEFAULT_FIGURE_OPTIONS }, style: completeFigureStyle(BUILTIN_FIGURE_STYLES.Standard), styleName: 'Standard', saved: {} };
 
 function loadFigureSettings() {
@@ -1691,6 +1693,7 @@ function loadFigureSettings() {
         const s = JSON.parse(localStorage.getItem(FIGURE_STORAGE_KEY) || 'null');
         if (!s) return;
         figure.options = { ...DEFAULT_FIGURE_OPTIONS, ...(s.options || {}) };
+        FIGURE_PER_FIGURE_OPTIONS.forEach((k) => (figure.options[k] = DEFAULT_FIGURE_OPTIONS[k]));
         figure.saved = s.saved && typeof s.saved === 'object' ? s.saved : {};
         figure.style = completeFigureStyle(s.style);
         figure.styleName = s.styleName || '';
@@ -1743,6 +1746,13 @@ function syncFigureControls() {
         if (el.type === 'checkbox') el.checked = !!figure.options[el.dataset.fopt];
         else el.value = figure.options[el.dataset.fopt];
     });
+    document.querySelectorAll('[data-fseg]').forEach((g) =>
+        g.querySelectorAll('.seg-btn').forEach((b) => {
+            const on = b.dataset.val === figure.options[g.dataset.fseg];
+            b.classList.toggle('active', on);
+            b.setAttribute('aria-pressed', on);
+        })
+    );
     document.querySelectorAll('[data-fs]').forEach((el) => {
         const v = getFigStyleValue(el.dataset.fs);
         if (el.type === 'color') el.value = /^#[0-9a-f]{6}$/i.test(v) ? v : '#ffffff';
@@ -1788,18 +1798,26 @@ function bindFigureControls() {
     loadFigureSettings();
     syncFigureControls();
 
+    const setOption = (key, value) => {
+        if (key === 'sweep' && value === figure.options.sweep) return;
+        figure.options[key] = value;
+        // ° and mT do not carry over: a new sweep kind starts from its defaults
+        if (key === 'sweep') {
+            figure.options.sweepFrom = '';
+            figure.options.sweepTo = '';
+            figure.options.sweepSpan = '';
+        }
+        syncFigureControls();
+        saveFigureSettings();
+        refreshSvgPreview();
+    };
     document.querySelectorAll('[data-fopt]').forEach((el) =>
-        el.addEventListener('change', () => {
-            figure.options[el.dataset.fopt] = el.type === 'checkbox' ? el.checked : el.value;
-            // ° and mT do not carry over: a new sweep kind starts from its defaults
-            if (el.dataset.fopt === 'sweep') {
-                figure.options.sweepFrom = '';
-                figure.options.sweepTo = '';
-                figure.options.sweepSpan = '';
-                syncFigureControls();
-            }
-            saveFigureSettings();
-            refreshSvgPreview();
+        el.addEventListener('change', () => setOption(el.dataset.fopt, el.type === 'checkbox' ? el.checked : el.value))
+    );
+    document.querySelectorAll('[data-fseg]').forEach((g) =>
+        g.addEventListener('click', (e) => {
+            const btn = e.target.closest('.seg-btn');
+            if (btn) setOption(g.dataset.fseg, btn.dataset.val);
         })
     );
 
