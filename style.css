@@ -1668,6 +1668,17 @@ body.theme-light .canvas-pill-btn {
 .fig-grid .field-label {
     margin: 0;
 }
+.fig-range {
+    display: flex;
+    gap: 6px;
+}
+.fig-range .num-unit {
+    flex: 1;
+    min-width: 0;
+}
+.fig-range .num-unit input {
+    width: 100%;
+}
 .fig-chk {
     display: grid;
     grid-template-columns: 1fr 1fr;

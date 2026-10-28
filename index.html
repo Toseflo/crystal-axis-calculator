@@ -689,7 +689,7 @@
                     <p class="export-intro">Probe und Feld immer aus derselben Sicht und im selben Maßstab.</p>
                     <details class="more-details fig-more">
                         <summary>Was ist drauf?</summary>
-                        <p class="fig-note">Probe mit Sender und Empfänger wie in der 3D-Ansicht (um den Antennenwinkel gedreht), dazwischen die Welle k; das Feld beginnt auf k, mit Winkel in der Ebene und – falls gekippt – aus der Ebene. Daneben die Richtungen der Kanten und der Normalen (Miller-Bravais). Schrift und Linien sind Druckgrößen bei der eingestellten Breite; die Teile liegen in eigenen Inkscape-Ebenen.</p>
+                        <p class="fig-note">Probe mit Sender und Empfänger wie in der 3D-Ansicht (um den Antennenwinkel gedreht), dazwischen die Welle k; das Feld beginnt auf k, mit Winkel in der Ebene und – falls gekippt – aus der Ebene. Beim Sweep zeigt ein Bogen, wie weit sich das Feld ab dem gezeichneten Pfeil dreht (leer = aktueller Winkel, eine volle Drehung), oder das Label nennt den Feldbereich. Daneben die Richtungen der Kanten und der Normalen (Miller-Bravais). Schrift und Linien sind Druckgrößen bei der eingestellten Breite; die Teile liegen in eigenen Inkscape-Ebenen.</p>
                     </details>
 
                     <div class="fig-grid">
@@ -715,6 +715,25 @@
                             <option value="value">30°</option>
                             <option value="symbol">φ</option>
                             <option value="both">φ = 30°</option>
+                        </select>
+                        <label class="field-label" for="figSweep">Sweep</label>
+                        <select id="figSweep" class="select-input" data-fopt="sweep" title="Feld drehen: Bahn der Feldspitze in der Drehebene des Magneten, Pfeil = Drehsinn; unter der Probe gestrichelt">
+                            <option value="none">Keiner</option>
+                            <option value="angle">Feld drehen</option>
+                            <option value="field">Feldstärke B₀</option>
+                        </select>
+                        <label class="field-label fig-sweep-row" for="figSweepFrom">von / bis</label>
+                        <div class="fig-range fig-sweep-row">
+                            <div class="num-unit"><input type="number" id="figSweepFrom" step="any" data-fopt="sweepFrom" /><span class="fig-sweep-unit">°</span></div>
+                            <div class="num-unit"><input type="number" id="figSweepTo" step="any" data-fopt="sweepTo" aria-label="bis" /><span class="fig-sweep-unit">°</span></div>
+                        </div>
+                        <label class="field-label fig-sweep-angle" for="figSweepStep">Zwischen­pfeile</label>
+                        <select id="figSweepStep" class="select-input fig-sweep-angle" data-fopt="sweepStep">
+                            <option value="0">keine</option>
+                            <option value="90">alle 90°</option>
+                            <option value="45">alle 45°</option>
+                            <option value="30">alle 30°</option>
+                            <option value="15">alle 15°</option>
                         </select>
                     </div>
 

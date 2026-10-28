@@ -1754,7 +1754,21 @@ function syncFigureControls() {
     renderFigStyleSelect();
 }
 
+// Sweep rows only when a sweep is chosen; empty fields show what they stand for
+function updateSweepControls(setup) {
+    const mode = figure.options.sweep || 'none';
+    document.querySelectorAll('.fig-sweep-row').forEach((el) => (el.style.display = mode === 'none' ? 'none' : ''));
+    document.querySelectorAll('.fig-sweep-angle').forEach((el) => (el.style.display = mode === 'angle' ? '' : 'none'));
+    document.querySelectorAll('.fig-sweep-unit').forEach((el) => (el.textContent = mode === 'field' ? 'mT' : '°'));
+    const from = Number(setup.phiMDeg) || 0;
+    const fromNum = figure.options.sweepFrom === '' ? from : Number(figure.options.sweepFrom);
+    document.getElementById('figSweepFrom').placeholder = mode === 'field' ? '0' : `${Number(from.toFixed(1))}`;
+    document.getElementById('figSweepTo').placeholder =
+        mode === 'field' ? `${Number(((Number(setup.b0Tesla) || 0) * 1000).toFixed(1))}` : `${Number((fromNum + 360).toFixed(1))}`;
+}
+
 function refreshSvgPreview() {
+    updateSweepControls(getActiveSetup());
     const svgStr = generateFigureSVG(evaluateSetup(getActiveSetup()), figure.options, figure.style);
     document.getElementById('svgPreviewContainer').innerHTML = svgStr;
     return svgStr;
@@ -1775,6 +1789,12 @@ function bindFigureControls() {
     document.querySelectorAll('[data-fopt]').forEach((el) =>
         el.addEventListener('change', () => {
             figure.options[el.dataset.fopt] = el.type === 'checkbox' ? el.checked : el.value;
+            // ° and mT do not carry over: a new sweep kind starts from its defaults
+            if (el.dataset.fopt === 'sweep') {
+                figure.options.sweepFrom = '';
+                figure.options.sweepTo = '';
+                syncFigureControls();
+            }
             saveFigureSettings();
             refreshSvgPreview();
         })
