@@ -120,7 +120,8 @@ export const DEFAULT_FIGURE_OPTIONS = {
     latex: false,
     sweep: 'none', // 'none' | 'angle' (magnet turns the field) | 'field' (B0 over a range)
     sweepFrom: '', // phi_M in ° or B0 in mT; empty: the current value (angle) or 0 (field)
-    sweepTo: '', // empty: one full turn (angle) or the current B0 (field)
+    sweepTo: '', // B0 sweep end in mT; empty: the current B0
+    sweepSpan: '', // angle sweep: turn in ° from the start, negative = other sense; empty: 360
     sweepStep: '0' // faint field arrows every … ° along the turn; 0: none
 };
 
@@ -351,6 +352,19 @@ function segHitsBox(a, b, box) {
     return true;
 }
 
+/** Do segments a-b and c-d cross (inner points only, touching ends do not count)? */
+function segsCross(a, b, c, d) {
+    const cr = (p, q, r) => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+    return cr(c, d, a) * cr(c, d, b) < -1e-9 && cr(a, b, c) * cr(a, b, d) < -1e-9;
+}
+
+/** Point of the box {l, r, t, b} closest to p */
+const nearestInBox = (p, b) => [Math.max(b.l, Math.min(b.r, p[0])), Math.max(b.t, Math.min(b.b, p[1]))];
+const distToBox = (p, b) => {
+    const q = nearestInBox(p, b);
+    return Math.hypot(q[0] - p[0], q[1] - p[1]);
+};
+
 const boxPoly = (b) => [[b.l, b.t], [b.r, b.t], [b.r, b.b], [b.l, b.b]];
 const grow = (b, m) => ({ l: b.l - m, r: b.r + m, t: b.t - m, b: b.b + m });
 const unionBox = (a, b) => ({ l: Math.min(a.l, b.l), r: Math.max(a.r, b.r), t: Math.min(a.t, b.t), b: Math.max(a.b, b.b) });
@@ -397,7 +411,7 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
         const e2 = state.matrices.vectorInAllFrames([0, 1, 0], 'Lab').Sub;
         bAt = (phi) => unit(add(mul(e1, Math.cos(phi * DEG)), mul(e2, Math.sin(phi * DEG))));
         swFrom = num(o.sweepFrom, Number(state.setup.phiMDeg) || 0);
-        swSpan = Math.max(-360, Math.min(360, num(o.sweepTo, swFrom + 360) - swFrom));
+        swSpan = Math.max(-360, Math.min(360, num(o.sweepSpan, 360)));
     }
     const sweepAngle = Math.abs(swSpan) > TINY_DEG;
     const b0mT = (Number(state.setup.b0Tesla) || 0) * 1000;
@@ -434,7 +448,10 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
         const id = lineId++;
         for (let i = 0; i + 1 < pts.length; i++) lines.push([pts[i], pts[i + 1], w, id]);
         if (closed) lines.push([pts[pts.length - 1], pts[0], w, id]);
+        return id;
     };
+    // Drawn arcs (screen points): an angle value must sit closer to its own arc than to any other
+    const marks = [];
     const W_LINE = 12;
     const W_GUIDE = 8;
     const W_EDGE = 3;
@@ -502,10 +519,30 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
     // its candidate spots: no other label, no line through it, little antenna or sample edge under
     // it, close to what it labels, and not far outside the drawing (that would make it bigger)
     const labelReqs = [];
-    const wantLabel = (prio, cands, content, color, w) => labelReqs.push({ prio, cands, content, color, w });
+    // An angle value also names its arc (own: line id and screen points, anchor: middle of the arc):
+    // the way from the arc to the value crosses no arrow, and no other arc is closer to it
+    const wantLabel = (prio, cands, content, color, w, arcOf = null) => labelReqs.push({ prio, cands, content, color, w, arcOf });
+    const arcCost = (q, b) => {
+        const { id, pts, anchor } = q.arcOf;
+        let cost = 0;
+        const sight = [anchor, nearestInBox(anchor, b)];
+        const hit = new Map();
+        for (const [a, z, w, lid] of lines) {
+            if (lid === id || hit.has(lid) || w < W_GUIDE || !segsCross(sight[0], sight[1], a, z)) continue;
+            hit.set(lid, w >= W_LINE ? 15 : 4);
+        }
+        hit.forEach((c) => (cost += c));
+        const near = (ps) => Math.min(...ps.map((p) => distToBox(p, b)));
+        const own = near(pts);
+        const other = Math.min(Infinity, ...marks.filter((mk) => mk.id !== id && (mk.angle || !q.arcOf.angle)).map((mk) => near(mk.pts)));
+        if (other < own + fs * 0.3) cost += 3 + Math.max(0, own - other) / fs;
+        return cost;
+    };
     const placeLabels = (core) => {
         const placed = [];
         const m = fs * 0.15;
+        // the spot at an arrow tip is kept for that arrow's name
+        const tips = labelReqs.filter((q) => q.cands[0]?.tip).map((q) => ({ q, box: grow(labelBox(q.cands[0], q.w), m) }));
         labelReqs
             .sort((a, b) => a.prio - b.prio)
             .forEach((q) => {
@@ -516,8 +553,10 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
                     const e = grow(b, m);
                     let cost = i * 0.02 + (c.pen || 0);
                     if (placed.some((p) => boxesTouch(e, p))) cost += 100;
+                    tips.forEach((t) => t.q !== q && boxesTouch(e, t.box) && (cost += c.leader ? 20 : 6)); // a value set off belongs nowhere near a tip
                     const hit = new Map();
-                    for (const [a, z, w, id] of lines) if (!hit.has(id) && segHitsBox(a, z, e)) hit.set(id, w);
+                    // a value on its own arc hides the arc it names
+                    for (const [a, z, w, id] of lines) if (!hit.has(id) && segHitsBox(a, z, e)) hit.set(id, id === q.arcOf?.id ? W_LINE : w);
                     hit.forEach((w) => (cost += w));
                     // a label grazing an antenna is fine, one covering it is not
                     const boxArea = (e.r - e.l) * (e.b - e.t);
@@ -527,12 +566,23 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
                     }
                     const over = Math.max(0, core.l - b.l) + Math.max(0, b.r - core.r) + Math.max(0, core.t - b.t) + Math.max(0, b.b - core.b);
                     cost += (1.5 * over) / fs;
+                    if (q.arcOf) cost += arcCost(q, b);
                     if (cost < bestCost) {
                         bestCost = cost;
                         best = b;
+                        best.leader = c.leader ? c.from || q.arcOf.anchor : null;
                     }
                 });
                 placed.push(best);
+                // a value set off from its arc gets a thin line to it
+                if (best.leader) {
+                    const [ax, ay] = best.leader;
+                    const [bx, by] = nearestInBox(best.leader, grow(best, fs * 0.12));
+                    const d = Math.hypot(bx - ax, by - ay) || 1;
+                    const s = [ax + ((bx - ax) / d) * fs * 0.15, ay + ((by - ay) / d) * fs * 0.15];
+                    addLine([s, [bx, by]], W_GUIDE);
+                    layers.arcs.push(`<path d="M${n2(s[0])},${n2(s[1])}L${n2(bx)},${n2(by)}" stroke="${q.color === C.text ? C.angle : q.color}" stroke-width="${n2(L.guide * 0.7)}" fill="none"/>`);
+                }
                 layers.labels.push(
                     typeof q.content === 'function'
                         ? q.content(best.l, best.y)
@@ -618,7 +668,9 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
     const drawArc = (a, b, r, symbol, c = origin, color = C.angle) => {
         const A = arc(a, b, r, c);
         if (A.ang < TINY_DEG) return;
-        addLine(A.pts.map(toSvg), W_GUIDE);
+        const scr = A.pts.map(toSvg);
+        const id = addLine(scr, W_GUIDE);
+        marks.push({ id, pts: scr, angle: true });
         const below = A.pts.some((p) => p[2] < -1e-6) ? ` stroke-dasharray="${n2(L.arc * 2.5)},${n2(L.arc * 2)}"` : '';
         layers.arcs.push(`<path d="${pathOf(A.pts)}" stroke="${color}" stroke-width="${n2(L.arc)}"${below} fill="none"/>`);
         const w = angleWidth(symbol, A.ang);
@@ -628,7 +680,7 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
                 const d = A.dirAt(f);
                 const [sx, sy] = toSvg(add(c, mul(d, r)));
                 const [ux, uy] = screenDir(c, add(c, d));
-                cands.push(beyond(sx, sy, ux, uy, w, gap * fs, pen + Math.abs(f - 0.5) * 1.5));
+                cands.push({ ...beyond(sx, sy, ux, uy, w, gap * fs, pen + Math.abs(f - 0.5) * 1.5), from: [sx, sy], leader: gap >= 1 });
             }
         }
         const [ix, iy] = toSvg(add(c, mul(A.mid, r * 0.55)));
@@ -639,9 +691,21 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
             const [sx, sy] = toSvg(add(c, mul(A.dirAt(f), r)));
             const [rx, ry] = screenDir(c, add(c, A.dirAt(f)));
             const s = (mx - sx) * -ry + (my - sy) * rx > 0 ? -1 : 1; // normal of the ray, away from the arc
-            cands.push(beyond(sx, sy, -ry * s, rx * s, w, fs * 0.25, 1.2), beyond(sx, sy, ...turn([-ry * s, rx * s], s * -35), w, fs * 0.25, 1.4));
+            cands.push(
+                { ...beyond(sx, sy, -ry * s, rx * s, w, fs * 0.25, 1.2), from: [sx, sy] },
+                { ...beyond(sx, sy, ...turn([-ry * s, rx * s], s * -35), w, fs * 0.25, 1.4), from: [sx, sy] }
+            );
         }
-        wantLabel(1 + arcCount++ * 0.1, cands, angleText(symbol, A.ang), C.text, w);
+        // crowded: further out, with a line to the arc
+        for (const [gap, pen] of [[1.8, 2], [2.8, 3]]) {
+            for (const f of [0.5, 0.3, 0.7]) {
+                const d = A.dirAt(f);
+                const [sx, sy] = toSvg(add(c, mul(d, r)));
+                const [ux, uy] = screenDir(c, add(c, d));
+                cands.push({ ...beyond(sx, sy, ux, uy, w, gap * fs, pen + Math.abs(f - 0.5) * 1.5), from: [sx, sy], leader: true });
+            }
+        }
+        wantLabel(1 + arcCount++ * 0.1, cands, angleText(symbol, A.ang), C.text, w, { id, pts: scr, anchor: [mx, my], angle: true });
     };
 
     // Label at the free end of an arrow, or beside its shaft
@@ -651,7 +715,7 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
         const u = screenDir(from, to);
         const cands = [[0, 0], [45, 0.5], [-45, 0.5], [90, 1], [-90, 1]].map(([deg, pen]) => {
             const [ux, uy] = turn(u, deg);
-            return beyond(b[0], b[1], ux, uy, w, fs * 0.25, pen);
+            return { ...beyond(b[0], b[1], ux, uy, w, fs * 0.25, pen), tip: deg === 0 };
         });
         for (const f of [0.8, 0.6, 0.3]) {
             const sx = a[0] + (b[0] - a[0]) * f;
@@ -730,9 +794,20 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
     const P0 = mul(kHat, (kFrom + kTo) / 2);
     const rs = Math.max(0.55, Math.min(1, (kTo - kFrom) / 2 / 0.75)); // in-plane arcs shrink with a short k
     const rDev = R_DEV * rs;
-    const fl = sweepAngle ? Math.max(0.5, Math.min(FIELD_LEN, (kTo - kFrom) / 2 - 0.12)) : FIELD_LEN;
-    const rPhi = Math.min(R_PHI * rs, 0.6 * fl);
-    const rElev = Math.min(R_ELEV, 0.75 * fl);
+    // A turning field is as long as the antennas allow where it runs near the surface; its turn is an
+    // arc on the shaft, outside the angle arcs
+    let fl = FIELD_LEN;
+    if (sweepAngle) {
+        let maxK = 0;
+        for (let i = 0; i <= 72; i++) {
+            const d = bAt(swFrom + (swSpan * i) / 72);
+            if (Math.abs(d[2]) < 0.25) maxK = Math.max(maxK, Math.abs(dot(d, kHat)));
+        }
+        if (maxK > 1e-6) fl = Math.max(0.55, Math.min(FIELD_LEN, ((kTo - kFrom) / 2 - 0.04) / maxK));
+    }
+    const rSweep = 0.8 * fl;
+    const rPhi = Math.min(R_PHI * rs, (sweepAngle ? 0.4 : 0.6) * fl);
+    const rElev = Math.min(R_ELEV, (sweepAngle ? 0.52 : 0.75) * fl);
 
     // ---- angles: antenna turn (0° edge -> k), field in plane, field out of plane
     const devDeg = angleDeg(xEdge, kHat);
@@ -807,9 +882,10 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
         layers.arrows.push(arrow(a, b, C.wave, L.wave));
         wantLabel(5, arrowLabelCands(a, b, symbolWidth(st.symbols.wave)), vectorText(st.symbols.wave), C.wave, symbolWidth(st.symbols.wave));
     }
-    // ---- angle sweep: path of the tip just outside the arrow tips, head at the end, faint field
-    // arrows at the end and (optionally) on the way. Seen edge-on (top view, field turning out of
-    // the surface) the path would be a line: then the turn goes into the field label.
+    // ---- angle sweep: a lightly filled wedge from the drawn field to where it ends, its rim an
+    // arc across the shaft with the head at the end; faint field arrows at the end and (optionally)
+    // on the way. Below the surface it is fainter and dashed. Seen edge-on (top view, field turning
+    // out of the surface) the wedge would be a line: then the turn goes into the field label.
     let sweepNote = '';
     let sweepNoteW = 0;
     if (sweepAngle) {
@@ -821,41 +897,47 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
         const ay = cam.proj(add(foot, bAt(swFrom + 90)));
         const o2 = cam.proj(foot);
         const flat = Math.abs((ax[0] - o2[0]) * (ay[1] - o2[1]) - (ax[1] - o2[1]) * (ay[0] - o2[0])) < 0.12;
-        const ghosts = [];
-        if (step >= 1) for (let a = step; a < span - 1e-6; a += step) ghosts.push(a);
-        if (!full) ghosts.push(span);
-        if (!flat) {
-            ghosts.forEach((a) => {
-                const d = bAt(swFrom + sgn * a);
-                layers.sweep.push(arrow(foot, add(foot, mul(d, fl)), C.field, L.field * 0.75, { dashed: d[2] < -1e-6, opacity: 0.35, w: 4 }));
-            });
-        }
-        const rs2 = fl + 0.08;
-        const gap = full ? 9 : 0; // a full turn leaves a gap at the start, so its head reads
-        const n = Math.max(12, Math.ceil(span / 3));
-        const path = Array.from({ length: n + 1 }, (_, i) => add(foot, mul(bAt(swFrom + sgn * (gap + ((span - 2 * gap) * i) / n)), rs2)));
-        const scr = path.map(toSvg);
         if (flat) {
             const mode = o.angleLabels === 'value' ? 'both' : o.angleLabels;
             sweepNote = `, ${angleText(st.symbols.sweep, span, mode)}`;
             sweepNoteW = textWidth(', ') + angleWidth(st.symbols.sweep, span, mode);
         } else {
-            addLine(scr, W_GUIDE);
-            // runs above / below the surface: below dashed
-            let run = [path[0]];
-            const runs = [];
-            for (let i = 1; i < path.length; i++) {
-                const prevBelow = path[i - 1][2] < -1e-6;
-                const below = path[i][2] < -1e-6;
-                if (below !== prevBelow) {
-                    runs.push({ pts: run, below: prevBelow });
-                    run = [path[i - 1]];
+            const ghosts = [];
+            if (step >= 1) for (let a = step; a < span - 1e-6; a += step) ghosts.push(a);
+            if (!full) ghosts.push(span);
+            ghosts.forEach((a) => {
+                const d = bAt(swFrom + sgn * a);
+                layers.sweep.push(arrow(foot, add(foot, mul(d, fl)), C.field, L.field * 0.75, { dashed: d[2] < -1e-6, opacity: 0.35, w: 4 }));
+            });
+            const n = Math.max(12, Math.ceil(span / 3));
+            const at = (deg) => add(foot, mul(bAt(swFrom + sgn * deg), rSweep));
+            const below = (p) => p[2] < -1e-6;
+            // runs of points above / below the surface
+            const runsOf = (path) => {
+                const runs = [];
+                let run = [path[0]];
+                for (let i = 1; i < path.length; i++) {
+                    if (below(path[i]) !== below(path[i - 1])) {
+                        runs.push({ pts: run, below: below(path[i - 1]) });
+                        run = [path[i - 1]];
+                    }
+                    run.push(path[i]);
                 }
-                run.push(path[i]);
-            }
-            runs.push({ pts: run, below: path[path.length - 1][2] < -1e-6 });
+                runs.push({ pts: run, below: below(path[path.length - 1]) });
+                return runs;
+            };
+            const wedge = Array.from({ length: n + 1 }, (_, i) => at((span * i) / n));
+            runsOf(wedge).forEach((r) =>
+                layers.sweep.push(`<path d="${pathOf([foot, ...r.pts], true)}" fill="${shade(C.field, 0.85)}" fill-opacity="${r.below ? 0.25 : 0.5}" stroke="none"/>`)
+            );
+            // the rim starts on the shaft; a full turn stops short of it, so its head reads
+            const end = full ? span - 16 : span;
+            const rim = Array.from({ length: n + 1 }, (_, i) => at((end * i) / n));
+            const scr = rim.map(toSvg);
+            const id = addLine(scr, W_LINE); // text on the rim would hide where the turn runs
+            marks.push({ id, pts: scr });
             const sw = L.arc * 1.1;
-            runs.forEach((r) =>
+            runsOf(rim).forEach((r) =>
                 layers.sweep.push(
                     `<path d="${pathOf(r.pts)}" stroke="${C.field}" stroke-width="${n2(sw)}"${r.below ? ` stroke-dasharray="${n2(sw * 2.5)},${n2(sw * 2)}"` : ''} fill="none"/>`
                 )
@@ -864,16 +946,18 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
             const prev = scr[Math.max(0, scr.length - 3)];
             const dd = Math.hypot(tip[0] - prev[0], tip[1] - prev[1]) || 1;
             layers.sweep.push(headPath(tip, (tip[0] - prev[0]) / dd, (tip[1] - prev[1]) / dd, st.arrowHeadPt * 0.8, C.field));
-            // the turn at the middle of the path, outside it
+            // the turn just outside the middle of the rim, or further out with a line to it
             const w = angleWidth(st.symbols.sweep, span);
             const [cx, cy] = toSvg(foot);
             const cands = [];
             for (const f of [0.5, 0.35, 0.65, 0.2, 0.8]) {
                 const p = scr[Math.round(f * n)];
                 const d = Math.hypot(p[0] - cx, p[1] - cy) || 1;
-                for (const [g, pen] of [[0.25, 0], [0.7, 0.8]]) cands.push(beyond(p[0], p[1], (p[0] - cx) / d, (p[1] - cy) / d, w, g * fs, pen + Math.abs(f - 0.5) * 1.5));
+                for (const [g, pen, leader] of [[0.25, 0, false], [0.7, 0.8, false], [1.8, 2, true], [2.8, 3, true]]) {
+                    cands.push({ ...beyond(p[0], p[1], (p[0] - cx) / d, (p[1] - cy) / d, w, g * fs, pen + Math.abs(f - 0.5) * 1.5), from: p, leader });
+                }
             }
-            wantLabel(3, cands, angleText(st.symbols.sweep, span), C.field, w);
+            wantLabel(3, cands, angleText(st.symbols.sweep, span), C.field, w, { id, pts: scr, anchor: scr[Math.round(n / 2)] });
         }
     }
 
@@ -1075,9 +1159,9 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
         bg +
         layer('sample', 'Probe', layers.sample) +
         layer('antenna', 'Antenne', layers.antenna) +
+        layer('sweep', 'Sweep', layers.sweep) +
         layer('guides', 'Hilfslinien', layers.guides) +
         layer('arcs', 'Winkel', layers.arcs) +
-        layer('sweep', 'Sweep', layers.sweep) +
         layer('arrows', 'Pfeile', layers.arrows) +
         layer('axes', 'Kristallachsen', layers.axes) +
         layer('labels', 'Beschriftung', layers.labels) +

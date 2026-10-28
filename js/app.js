@@ -1759,12 +1759,14 @@ function updateSweepControls(setup) {
     const mode = figure.options.sweep || 'none';
     document.querySelectorAll('.fig-sweep-row').forEach((el) => (el.style.display = mode === 'none' ? 'none' : ''));
     document.querySelectorAll('.fig-sweep-angle').forEach((el) => (el.style.display = mode === 'angle' ? '' : 'none'));
+    document.querySelectorAll('.fig-sweep-field').forEach((el) => (el.style.display = mode === 'field' ? '' : 'none'));
     document.querySelectorAll('.fig-sweep-unit').forEach((el) => (el.textContent = mode === 'field' ? 'mT' : '°'));
-    const from = Number(setup.phiMDeg) || 0;
-    const fromNum = figure.options.sweepFrom === '' ? from : Number(figure.options.sweepFrom);
-    document.getElementById('figSweepFrom').placeholder = mode === 'field' ? '0' : `${Number(from.toFixed(1))}`;
-    document.getElementById('figSweepTo').placeholder =
-        mode === 'field' ? `${Number(((Number(setup.b0Tesla) || 0) * 1000).toFixed(1))}` : `${Number((fromNum + 360).toFixed(1))}`;
+    // angle: start (current φ_M in 0…360°) and turn; field: B0 from / to
+    document.getElementById('figSweepLabel').textContent = mode === 'field' ? 'von / bis' : 'Start / Drehung';
+    const phi = (((Number(setup.phiMDeg) || 0) % 360) + 360) % 360;
+    document.getElementById('figSweepFrom').placeholder = mode === 'field' ? '0' : `${Number(phi.toFixed(1))}`;
+    document.getElementById('figSweepTo').placeholder = `${Number(((Number(setup.b0Tesla) || 0) * 1000).toFixed(1))}`;
+    document.getElementById('figSweepSpan').placeholder = '360';
 }
 
 function refreshSvgPreview() {
@@ -1793,6 +1795,7 @@ function bindFigureControls() {
             if (el.dataset.fopt === 'sweep') {
                 figure.options.sweepFrom = '';
                 figure.options.sweepTo = '';
+                figure.options.sweepSpan = '';
                 syncFigureControls();
             }
             saveFigureSettings();
