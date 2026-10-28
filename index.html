@@ -736,6 +736,8 @@
                             <option value="30">alle 30°</option>
                             <option value="15">alle 15°</option>
                         </select>
+                        <label class="field-label" for="figPanel">Teilbild</label>
+                        <input type="text" id="figPanel" class="input-text" data-fopt="panel" placeholder="z. B. (a)" maxlength="8" title="Buchstabe oben links für Abbildungen aus mehreren Teilen" />
                     </div>
 
                     <div class="svg-chk-list fig-chk">
@@ -820,6 +822,7 @@
                             <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                             SVG-Quellcode kopieren
                         </button>
+                        <button type="button" id="btnCopyFigCaption" class="btn btn-ghost btn-block" title="Bildunterschrift in LaTeX mit den Winkeln wie gezeichnet – zum Anpassen">Bildunterschrift kopieren</button>
                     </div>
                 </div>
                 <div class="svg-preview-col">

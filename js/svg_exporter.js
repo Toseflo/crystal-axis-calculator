@@ -122,7 +122,8 @@ export const DEFAULT_FIGURE_OPTIONS = {
     sweepFrom: '', // phi_M in ° or B0 in mT; empty: the current value (angle) or 0 (field)
     sweepTo: '', // B0 sweep end in mT; empty: the current B0
     sweepSpan: '', // angle sweep: turn in ° from the start, negative = other sense; empty: 360
-    sweepStep: '0' // faint field arrows every … ° along the turn; 0: none
+    sweepStep: '0', // faint field arrows every … ° along the turn; 0: none
+    panel: '' // sub-figure letter in the top left corner, e.g. '(a)'; empty: none
 };
 
 /** Fills gaps of a (possibly older or partial) saved style from the standard style. */
@@ -215,7 +216,7 @@ const isSerif = (family) => /serif|times|georgia|palatino|garamond|cmu|computer 
 const GREEK_TEX = {
     α: '\\alpha', β: '\\beta', γ: '\\gamma', δ: '\\delta', ε: '\\varepsilon', ζ: '\\zeta', η: '\\eta', θ: '\\theta',
     ϑ: '\\vartheta', κ: '\\kappa', λ: '\\lambda', μ: '\\mu', ν: '\\nu', ξ: '\\xi', π: '\\pi', ρ: '\\rho', σ: '\\sigma',
-    τ: '\\tau', φ: '\\varphi', ϕ: '\\phi', χ: '\\chi', ψ: '\\psi', ω: '\\omega', Θ: '\\Theta', Φ: '\\Phi', Ψ: '\\Psi', Ω: '\\Omega'
+    τ: '\\tau', φ: '\\varphi', ϕ: '\\phi', χ: '\\chi', ψ: '\\psi', ω: '\\omega', Δ: '\\Delta', Θ: '\\Theta', Φ: '\\Phi', Ψ: '\\Psi', Ω: '\\Omega'
 };
 
 function parseSymbol(str) {
@@ -385,6 +386,28 @@ function boundsOf(pts) {
  * @param styleIn see BUILTIN_FIGURE_STYLES (partial styles are completed)
  * @returns SVG document string
  */
+const num = (x, fallback) => (x === '' || x == null || !Number.isFinite(Number(x)) ? fallback : Number(x));
+
+// Sweep and drawn field, the same for the figure and its caption: the magnet turns the field in the
+// lab xy plane, and the drawn field is where the turn starts
+function fieldSetup(state, o) {
+    let bAt = null;
+    let swFrom = 0;
+    let swSpan = 0;
+    if (o.sweep === 'angle' && state.matrices) {
+        const e1 = state.matrices.vectorInAllFrames([1, 0, 0], 'Lab').Sub;
+        const e2 = state.matrices.vectorInAllFrames([0, 1, 0], 'Lab').Sub;
+        bAt = (phi) => unit(add(mul(e1, Math.cos(phi * DEG)), mul(e2, Math.sin(phi * DEG))));
+        swFrom = num(o.sweepFrom, Number(state.setup.phiMDeg) || 0);
+        swSpan = Math.max(-360, Math.min(360, num(o.sweepSpan, 360)));
+    }
+    const sweepAngle = Math.abs(swSpan) > TINY_DEG;
+    const b0mT = (Number(state.setup.b0Tesla) || 0) * 1000;
+    const fieldRange = o.sweep === 'field' ? [num(o.sweepFrom, 0), num(o.sweepTo, b0mT)] : null;
+    const bHat = sweepAngle ? bAt(swFrom) : unit(state.vectors.bHat.Sub);
+    return { bAt, swFrom, swSpan, sweepAngle, b0mT, fieldRange, bHat };
+}
+
 export function generateFigureSVG(state, options = {}, styleIn = null) {
     const o = { ...DEFAULT_FIGURE_OPTIONS, ...options };
     const st = completeFigureStyle(styleIn);
@@ -402,21 +425,7 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
     const tHat = v.tHat.Sub;
 
     // ---- sweep: the magnet turns the field in the lab xy plane; the drawn field is where it starts
-    const num = (x, fallback) => (x === '' || x == null || !Number.isFinite(Number(x)) ? fallback : Number(x));
-    let bAt = null;
-    let swFrom = 0;
-    let swSpan = 0;
-    if (o.sweep === 'angle' && state.matrices) {
-        const e1 = state.matrices.vectorInAllFrames([1, 0, 0], 'Lab').Sub;
-        const e2 = state.matrices.vectorInAllFrames([0, 1, 0], 'Lab').Sub;
-        bAt = (phi) => unit(add(mul(e1, Math.cos(phi * DEG)), mul(e2, Math.sin(phi * DEG))));
-        swFrom = num(o.sweepFrom, Number(state.setup.phiMDeg) || 0);
-        swSpan = Math.max(-360, Math.min(360, num(o.sweepSpan, 360)));
-    }
-    const sweepAngle = Math.abs(swSpan) > TINY_DEG;
-    const b0mT = (Number(state.setup.b0Tesla) || 0) * 1000;
-    const fieldRange = o.sweep === 'field' ? [num(o.sweepFrom, 0), num(o.sweepTo, b0mT)] : null;
-    const bHat = sweepAngle ? bAt(swFrom) : unit(v.bHat.Sub);
+    const { bAt, swFrom, swSpan, sweepAngle, fieldRange, bHat } = fieldSetup(state, o);
     const xEdge = [1, 0, 0];
     const nrm = [0, 0, 1];
     const origin = [0, 0, 0];
@@ -452,6 +461,7 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
     };
     // Drawn arcs (screen points): an angle value must sit closer to its own arc than to any other
     const marks = [];
+    const thin = new Set(); // lines a value may be seen across (the sweep rim), though not sit on
     const W_LINE = 12;
     const W_GUIDE = 8;
     const W_EDGE = 3;
@@ -529,7 +539,7 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
         const hit = new Map();
         for (const [a, z, w, lid] of lines) {
             if (lid === id || hit.has(lid) || w < W_GUIDE || !segsCross(sight[0], sight[1], a, z)) continue;
-            hit.set(lid, w >= W_LINE ? 15 : 4);
+            hit.set(lid, w >= W_LINE && !thin.has(lid) ? 15 : 4);
         }
         hit.forEach((c) => (cost += c));
         const near = (ps) => Math.min(...ps.map((p) => distToBox(p, b)));
@@ -543,6 +553,7 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
         const m = fs * 0.15;
         // the spot at an arrow tip is kept for that arrow's name
         const tips = labelReqs.filter((q) => q.cands[0]?.tip).map((q) => ({ q, box: grow(labelBox(q.cands[0], q.w), m) }));
+        const names = []; // placed arrow names: a value right beside one reads as part of it
         labelReqs
             .sort((a, b) => a.prio - b.prio)
             .forEach((q) => {
@@ -566,7 +577,7 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
                     }
                     const over = Math.max(0, core.l - b.l) + Math.max(0, b.r - core.r) + Math.max(0, core.t - b.t) + Math.max(0, b.b - core.b);
                     cost += (1.5 * over) / fs;
-                    if (q.arcOf) cost += arcCost(q, b);
+                    if (q.arcOf) cost += arcCost(q, b) + names.filter((nb) => boxesTouch(b, grow(nb, fs * 0.6))).length * 4;
                     if (cost < bestCost) {
                         bestCost = cost;
                         best = b;
@@ -574,6 +585,7 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
                     }
                 });
                 placed.push(best);
+                if (q.cands[0]?.tip) names.push(best);
                 // a value set off from its arc gets a thin line to it
                 if (best.leader) {
                     const [ax, ay] = best.leader;
@@ -805,7 +817,8 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
         }
         if (maxK > 1e-6) fl = Math.max(0.55, Math.min(FIELD_LEN, ((kTo - kFrom) / 2 - 0.04) / maxK));
     }
-    const rSweep = 0.8 * fl;
+    // a full turn rings the angle arcs: wider, so their values fit inside it
+    const rSweep = (Math.abs(swSpan) >= 360 - 1e-6 ? 0.85 : 0.7) * fl;
     const rPhi = Math.min(R_PHI * rs, (sweepAngle ? 0.4 : 0.6) * fl);
     const rElev = Math.min(R_ELEV, (sweepAngle ? 0.52 : 0.75) * fl);
 
@@ -936,6 +949,7 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
             const scr = rim.map(toSvg);
             const id = addLine(scr, W_LINE); // text on the rim would hide where the turn runs
             marks.push({ id, pts: scr });
+            thin.add(id);
             const sw = L.arc * 1.1;
             runsOf(rim).forEach((r) =>
                 layers.sweep.push(
@@ -955,6 +969,13 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
                 const d = Math.hypot(p[0] - cx, p[1] - cy) || 1;
                 for (const [g, pen, leader] of [[0.25, 0, false], [0.7, 0.8, false], [1.8, 2, true], [2.8, 3, true]]) {
                     cands.push({ ...beyond(p[0], p[1], (p[0] - cx) / d, (p[1] - cy) / d, w, g * fs, pen + Math.abs(f - 0.5) * 1.5), from: p, leader });
+                }
+                // beside the rim: a wedge seen nearly edge-on points its outside at the field tip
+                const q = scr[Math.min(n, Math.round(f * n) + 1)];
+                const r = scr[Math.max(0, Math.round(f * n) - 1)];
+                const t = Math.hypot(q[0] - r[0], q[1] - r[1]) || 1;
+                for (const sd of [1, -1]) {
+                    cands.push({ ...beyond(p[0], p[1], (-(q[1] - r[1]) / t) * sd, ((q[0] - r[0]) / t) * sd, w, 0.3 * fs, 1 + Math.abs(f - 0.5) * 1.5), from: p });
                 }
             }
             wantLabel(3, cands, angleText(st.symbols.sweep, span), C.field, w, { id, pts: scr, anchor: scr[Math.round(n / 2)] });
@@ -1004,7 +1025,7 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
         const tiltMode = o.angleLabels === 'value' ? 'both' : o.angleLabels;
         const tilt = isTop && showElev ? `, ${angleText(st.symbols.theta, elevDeg, tiltMode)}` : '';
         const w = fieldLabelW + (tilt ? textWidth(', ') + angleWidth(st.symbols.theta, elevDeg, tiltMode) : 0) + sweepNoteW;
-        wantLabel(4, arrowLabelCands(foot, fOuter, w), fieldLabel + tilt + sweepNote, C.field, w);
+        wantLabel(0.5, arrowLabelCands(foot, fOuter, w), fieldLabel + tilt + sweepNote, C.field, w); // the name first: values keep off it
     }
     // m belongs to the current field, not to a turning one
     if (o.showMoment && !sweepAngle && !state.metrics.isEasyPlaneSingular) {
@@ -1132,8 +1153,20 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
 
     const placed = placeLabels(core);
 
-    // ---- tight crop around everything drawn
+    // ---- tight crop around everything drawn; the panel letter in its top left corner
     const frame = grow(placed.reduce(unionBox, core), fs * 0.3);
+    const panel = String(o.panel || '').trim();
+    if (panel) {
+        const w = textWidth(panel) * 1.06;
+        const at = (t) => ({ l: frame.l, r: frame.l + w, t, b: t + fs * 0.96 });
+        let b = at(frame.t);
+        const taken = (box) => ink.some(([x, y]) => x > box.l && x < box.r && y > box.t && y < box.b) || placed.some((p) => boxesTouch(box, p));
+        if (taken(grow(b, fs * 0.3))) {
+            frame.t -= fs * 1.2;
+            b = at(frame.t);
+        }
+        layers.labels.push(`<text x="${n2(b.l)}" y="${n2(b.t + fs * 0.76)}" fill="${C.text}" font-size="${fs}" font-weight="bold">${esc(panel)}</text>`);
+    }
     const W = n2(frame.r - frame.l);
     const H = n2(frame.b - frame.t);
     const X = n2(frame.l);
@@ -1167,4 +1200,74 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
         layer('labels', 'Beschriftung', layers.labels) +
         `</svg>\n`
     );
+}
+
+/**
+ * Caption for the figure (LaTeX), with the angles as drawn: what is on it, the wave and field
+ * directions, the sweep. The figure options and style decide what is mentioned and the symbols.
+ */
+export function figureCaption(state, options = {}, styleIn = null) {
+    const o = { ...DEFAULT_FIGURE_OPTIONS, ...options };
+    const st = completeFigureStyle(styleIn);
+    const sym = (k) => symbolTex(st.symbols[k], 'none');
+    const vec = (k) => symbolTex(st.symbols[k], st.vectorStyle);
+    const deg = (x) => `${Number(x.toFixed(1))}^\\circ`;
+    const mT = (x) => `${Number(x.toFixed(1))}\\,\\mathrm{mT}`;
+    const s = state.setup;
+    const kHat = state.vectors.kHat.Sub;
+    const { swSpan, sweepAngle, b0mT, fieldRange, bHat } = fieldSetup(state, o);
+    const xEdge = [1, 0, 0];
+    const edge = `$${state.millerBravais.xs.latex}$`;
+    const parts = [];
+
+    const cut = s.cutPreset === 'custom' ? 'eigener Schnitt' : s.cutPreset;
+    const name = { IDT: 'IDT', CPW: 'Antenne' };
+    const own = s.deviceType === 'IDT' ? 'IDT' : 'CPW';
+    const devs = o.showAntenna ? (DEVICE_SETS[o.devices] || DEVICE_SETS.pair)(own) : [];
+    const two = { IDT: 'zwei IDTs', CPW: 'zwei Antennen' };
+    const devText =
+        devs.length > 1
+            ? devs[0] === devs[1]
+                ? ` mit ${two[devs[0]]} als Sender und Empfänger`
+                : ` mit Sender (${name[devs[0]]}) und Empfänger (${name[devs[1]]})`
+            : devs.length
+              ? ` mit Sender (${name[devs[0]]})`
+              : '';
+    parts.push(`Probe (${cut}, Einbau ${s.mountMode})${devText}.`);
+
+    const devDeg = angleDeg(xEdge, kHat);
+    if (o.showWave) {
+        const from = devs.length > 1 ? 'läuft vom Sender zum Empfänger' : devs.length ? 'läuft vom Sender weg' : 'läuft';
+        const dir = devDeg > TINY_DEG ? `, um $${sym('dev')} = ${deg(devDeg)}$ gegen die 0°-Kante ${edge} gedreht` : ` entlang der 0°-Kante ${edge}`;
+        parts.push(`Die Welle $${vec('wave')}$ ${from}${dir}.`);
+    }
+
+    const strength = fieldRange ? `$B_0 = ${fieldRange.map((x) => Number(x.toFixed(1))).join('\\ldots ')}\\,\\mathrm{mT}$` : `$B_0 = ${mT(b0mT)}$`;
+    const bn = bHat[2];
+    const bPlane = [bHat[0], bHat[1], 0];
+    const elev = Math.asin(Math.min(1, Math.abs(bn))) / DEG;
+    let field;
+    if (len(bPlane) < 1e-6) field = `steht senkrecht ${bn < 0 ? 'in die Probe hinein' : 'auf der Probe'}`;
+    else {
+        const ref = o.angleRef === 'edge' ? xEdge : kHat;
+        const phi = angleDeg(ref, unit(bPlane));
+        const refText = o.angleRef === 'edge' ? 'zur 0°-Kante' : `zu $${vec('wave')}$`;
+        field = phi > TINY_DEG ? `liegt in der Ebene unter $${sym('phi')} = ${deg(phi)}$ ${refText}` : `zeigt in der Ebene entlang ${o.angleRef === 'edge' ? 'der 0°-Kante' : `$${vec('wave')}$`}`;
+        if (elev > TINY_DEG) field += ` und ist um $${sym('theta')} = ${deg(elev)}$ ${bn < 0 ? 'unter die' : 'aus der'} Probenebene gekippt`;
+    }
+    parts.push(`Das Feld $${vec('field')}$ (${strength}${sweepAngle ? ', zu Beginn des Sweeps' : ''}) ${field}.`);
+
+    if (sweepAngle) {
+        const span = Math.abs(swSpan);
+        parts.push(
+            span >= 360 - 1e-6
+                ? `Der Bogen zeigt eine volle Drehung des Feldes in der Drehebene des Magneten, die Pfeilspitze den Drehsinn.`
+                : `Der Bogen zeigt, wie sich das Feld in der Drehebene des Magneten um $${sym('sweep')} = ${deg(span)}$ dreht; die Pfeilspitze zeigt den Drehsinn.`
+        );
+    } else if (fieldRange && Math.min(...fieldRange) < 0 && Math.max(...fieldRange) > 0) {
+        parts.push('Der blasse Pfeil zeigt die umgekehrte Feldrichtung.');
+    }
+    if (o.showMoment && !sweepAngle && !state.metrics.isEasyPlaneSingular) parts.push(`$${vec('moment')}$ zeigt die Gleichgewichtslage.`);
+    if (o.showAxes) parts.push('Daneben die Kristallrichtungen der Probenkanten und der Normalen (Miller-Bravais).');
+    return parts.join(' ');
 }

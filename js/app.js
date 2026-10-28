@@ -34,7 +34,7 @@ import {
 } from './math_core.js';
 
 import { Scene3DController, VECTOR_COLORS } from './visualizer_3d.js';
-import { generateFigureSVG, BUILTIN_FIGURE_STYLES, DEFAULT_FIGURE_OPTIONS, completeFigureStyle } from './svg_exporter.js';
+import { generateFigureSVG, figureCaption, BUILTIN_FIGURE_STYLES, DEFAULT_FIGURE_OPTIONS, completeFigureStyle } from './svg_exporter.js';
 import { buildLabNote, buildSweepCsv, downloadBlob, downloadText, exportBaseName } from './export_tools.js';
 import { renderSweepPlot } from './sweep_plot.js';
 import { buildNarrative, buildSummary, shortDirection, token } from './narrative.js';
@@ -2029,6 +2029,11 @@ function bindExportModal() {
     document.getElementById('btnCopySvgCode').addEventListener('click', (e) => {
         navigator.clipboard.writeText(refreshSvgPreview());
         flashButton(e.currentTarget, 'SVG-Code kopiert');
+    });
+
+    document.getElementById('btnCopyFigCaption').addEventListener('click', (e) => {
+        navigator.clipboard.writeText(figureCaption(evaluateSetup(getActiveSetup()), figure.options, figure.style));
+        flashButton(e.currentTarget, 'Bildunterschrift kopiert');
     });
 
     document.getElementById('btnCopyPythonSnippet').addEventListener('click', (e) => {
