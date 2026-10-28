@@ -818,8 +818,12 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
         const axLen = fs * 3;
         const gap = fs * 0.25;
         const ring = fs * 0.36;
+        // normal as a direction where [hkil] ∥ (hkil) (c, a, m); otherwise (r-cut) the exact plane
+        const norm4 = (p) => p.map((x) => x / Math.max(...p.map(Math.abs)));
+        const sameIdx = (p, q) => [1, -1].some((s) => norm4(p).every((x, i) => Math.abs(x - s * norm4(q)[i]) < 1e-3));
+        const nLabel = sameIdx(mb.zsDir.raw, mb.zsPlane.raw) ? mb.zsDir : mb.zsPlane;
         const axes = [
-            { d: nrm, ...millerLabel(mb.zsDir.label, mb.zsDir.latex) },
+            { d: nrm, ...millerLabel(nLabel.label, nLabel.latex) },
             { d: xEdge, ...millerLabel(mb.xs.label, mb.xs.latex) },
             { d: [0, 1, 0], ...millerLabel(mb.ys.label, mb.ys.latex) }
         ];
