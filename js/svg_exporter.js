@@ -1,581 +1,705 @@
 /**
- * svg_exporter.js
- * Publication-ready layered SVG generator for Bachelor/Master/PhD theses
- * (Inkscape / Illustrator / LaTeX pdf_tex compatible).
+ * Figure export: one uniform schematic of the sample and the magnetic field.
  *
- * Generates clean vector schematics with grouped Inkscape layers:
- *   - 01_Background_Grid
- *   - 02_Crystal_EasyPlane
- *   - 03_Substrate_Chip
- *   - 04_Microstructure_IDT_CPW
- *   - 04b_Field_Sweep (only with a sweep range)
- *   - 05_Vectors_Projections
- *   - 06_Angle_Arcs
- *   - 07_Labels_Legend
+ * The sample always sits in the same pose (fixed camera in the sample frame F_Sub), so figures made
+ * from different setups line up 1:1 in a thesis. Drawn: slab, antenna(s) turned by theta_dev, the
+ * wave vector, the field arrow with its in-plane and out-of-plane angle, and a small triad with the
+ * Miller-Bravais indices of the sample edges and the surface normal.
+ *
+ * Geometry lives in sample units (half edge = 1, top surface at z = 0); the SVG viewBox is in pt,
+ * so font sizes and line widths in the style are print sizes when the figure is placed at its width.
  */
 
-import {
-    DEG2RAD,
-    add3,
-    scale3,
-    dot3,
-    norm3,
-    normalize3,
-    matVec3,
-    evaluateSetup,
-    FRAME_METADATA
-} from './math_core.js';
+const DEG = Math.PI / 180;
+const PT_PER_MM = 72 / 25.4;
 
-function escXml(str) {
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
+// Camera in F_Sub. Oblique: front-left corner towards the viewer; top: looking down the normal.
+const VIEWS = {
+    oblique: { azDeg: -58, elDeg: 36 },
+    top: { azDeg: -90, elDeg: 90 }
+};
+
+const HALF = 1; // half edge of the square sample
+const FIELD_LEN = 1.3; // field arrow, reaches past the sample edge
+const WAVE_LEN = 0.5; // k arrow, stays in the gap between the two antennas
+const ANT_IN = 0.6; // antennas sit at |k| = ANT_IN … ANT_OUT
+const ANT_OUT = 0.9;
+const MOMENT_LEN = 0.85;
+const R_DEV = 0.27; // arc radii: antenna angle, in-plane field angle, elevation
+const R_PHI = 0.46;
+const R_ELEV = 0.62;
+const TINY_DEG = 0.05;
+
+// ---------------------------------------------------------------------------
+// Styles: everything that should look the same in every figure of a thesis
+// ---------------------------------------------------------------------------
+
+export const BUILTIN_FIGURE_STYLES = {
+    Standard: {
+        widthMm: 80,
+        fontFamily: 'Arial, Helvetica, sans-serif',
+        fontSizePt: 9,
+        vectorStyle: 'bold',
+        sampleThickness: 0.1,
+        arrowHeadPt: 6,
+        colors: {
+            sample: '#6cb8b4',
+            antenna: '#d9a82e',
+            field: '#111111',
+            wave: '#c2410c',
+            angle: '#1f2937',
+            axes: '#374151',
+            moment: '#7c3aed',
+            text: '#111111',
+            background: 'none'
+        },
+        lines: { outline: 0.5, field: 1.4, wave: 1.1, arc: 0.7, guide: 0.6, axes: 0.8 },
+        symbols: { field: 'B', wave: 'k', moment: 'm', phi: 'φ', theta: 'θ', dev: 'α' }
+    },
+    'Schwarz-Weiß': {
+        widthMm: 80,
+        fontFamily: 'Times New Roman, Times, serif',
+        fontSizePt: 10,
+        vectorStyle: 'bold',
+        sampleThickness: 0.1,
+        arrowHeadPt: 6,
+        colors: {
+            sample: '#d4d4d4',
+            antenna: '#7a7a7a',
+            field: '#000000',
+            wave: '#000000',
+            angle: '#000000',
+            axes: '#000000',
+            moment: '#555555',
+            text: '#000000',
+            background: 'none'
+        },
+        lines: { outline: 0.5, field: 1.3, wave: 0.9, arc: 0.6, guide: 0.5, axes: 0.7 },
+        symbols: { field: 'B', wave: 'k', moment: 'm', phi: 'φ', theta: 'θ', dev: 'α' }
+    },
+    Folie: {
+        widthMm: 120,
+        fontFamily: 'Arial, Helvetica, sans-serif',
+        fontSizePt: 14,
+        vectorStyle: 'bold',
+        sampleThickness: 0.12,
+        arrowHeadPt: 10,
+        colors: {
+            sample: '#4fa3a5',
+            antenna: '#e0a526',
+            field: '#1d3a8a',
+            wave: '#d9480f',
+            angle: '#111827',
+            axes: '#374151',
+            moment: '#7c3aed',
+            text: '#111827',
+            background: '#ffffff'
+        },
+        lines: { outline: 0.8, field: 2.6, wave: 2, arc: 1.2, guide: 1, axes: 1.3 },
+        symbols: { field: 'B', wave: 'k', moment: 'm', phi: 'φ', theta: 'θ', dev: 'α' }
+    }
+};
+
+export const DEFAULT_FIGURE_OPTIONS = {
+    view: 'oblique', // 'oblique' | 'top'
+    angleRef: 'wave', // in-plane field angle measured from k ('wave') or from the 0° edge ('edge')
+    angleLabels: 'value', // 'value' | 'symbol' | 'both'
+    showAntenna: true,
+    showWave: true,
+    showAxes: true,
+    showCAxis: true,
+    showMoment: false,
+    latex: false
+};
+
+/** Fills gaps of a (possibly older or partial) saved style from the standard style. */
+export function completeFigureStyle(style) {
+    const base = BUILTIN_FIGURE_STYLES.Standard;
+    const s = style || {};
+    return {
+        ...base,
+        ...s,
+        colors: { ...base.colors, ...(s.colors || {}) },
+        lines: { ...base.lines, ...(s.lines || {}) },
+        symbols: { ...base.symbols, ...(s.symbols || {}) }
+    };
 }
 
-function fmt(num) {
-    return Number(num).toFixed(2);
+// ---------------------------------------------------------------------------
+// Small vector + colour helpers
+// ---------------------------------------------------------------------------
+
+const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const mul = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const len = (a) => Math.hypot(a[0], a[1], a[2]);
+const unit = (a) => mul(a, 1 / (len(a) || 1));
+const angleDeg = (a, b) => Math.acos(Math.max(-1, Math.min(1, dot(unit(a), unit(b))))) / DEG;
+
+function shade(hex, f) {
+    const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+    if (!m) return hex;
+    const n = parseInt(m[1], 16);
+    const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => Math.round(f < 0 ? c * (1 + f) : c + (255 - c) * f));
+    return '#' + ch.map((c) => c.toString(16).padStart(2, '0')).join('');
 }
 
-export function generateThesisSVG(stateA, options = {}) {
-    const {
-        layout = 'combined', // 'combined' | '3d' | '2d_sample' | '2d_easy'
-        lockFrame = 'Sub',   // 'Lab' | 'Sub' | 'Wave' | 'Cryst'
-        cameraAzimuthDeg = -38,
-        cameraElevationDeg = 28,
-        latexLabels = false,
-        transparentBg = false,
-        showEasyPlane = true,
-        showMicrostructure = true,
-        showCrystalAxes = true,
-        showEquilibrium = true,
-        showAngleArcs = true,
-        showLegend = true,
-        sweep = null // { fromDeg, toDeg }: draw where B and m̂ travel while φ_M runs from start to stop
-    } = options;
+const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const n2 = (v) => Number(v.toFixed(2));
+const fmtAngle = (deg) => `${Number(deg.toFixed(1))}°`;
 
-    const width = layout === 'combined' ? 1080 : 680;
-    const height = layout === 'combined' ? 540 : 540;
+// ---------------------------------------------------------------------------
+// Labels: "φ_B", "θ_{dev}" -> italic symbol + subscript; optional LaTeX output
+// ---------------------------------------------------------------------------
 
-    // Publication color palette (optimized for crisp print & vector clarity)
-    const palette = {
-        bg: '#ffffff',
-        grid: '#cbd5e1',
-        textMain: '#0f172a',
-        textMuted: '#475569',
-        chipFill: '#f1f5f9',
-        chipSide: '#cbd5e1',
-        chipStroke: '#334155',
-        easyFill: '#f3e8ff',
-        easyStroke: '#7e22ce',
-        goldFill: '#fef3c7',
-        goldStroke: '#d97706',
-        B: '#0284c7',
-        B_easy: '#d97706',
-        B_sample: '#0369a1',
-        m: '#e11d48',
-        l: '#059669',
-        k: '#a21caf',
-        t: '#475569',
-        n: '#2563eb',
-        ec: '#6d28d9',
-        ea: '#7c3aed',
-        em: '#4f46e5'
-    };
+const GREEK_TEX = {
+    α: '\\alpha', β: '\\beta', γ: '\\gamma', δ: '\\delta', ε: '\\varepsilon', ζ: '\\zeta', η: '\\eta', θ: '\\theta',
+    ϑ: '\\vartheta', κ: '\\kappa', λ: '\\lambda', μ: '\\mu', ν: '\\nu', ξ: '\\xi', π: '\\pi', ρ: '\\rho', σ: '\\sigma',
+    τ: '\\tau', φ: '\\varphi', ϕ: '\\phi', χ: '\\chi', ψ: '\\psi', ω: '\\omega', Θ: '\\Theta', Φ: '\\Phi', Ψ: '\\Psi', Ω: '\\Omega'
+};
 
-    const lbl = (unicodeStr, texStr) => (latexLabels ? texStr : unicodeStr);
+function parseSymbol(str) {
+    const m = /^([^_]*)(?:_\{?([^}]*)\}?)?$/.exec(String(str));
+    return { main: m ? m[1] : String(str), sub: m && m[2] ? m[2] : '' };
+}
 
-    // Layer buckets
-    const layers = {
-        bg: [],
-        crystal: [],
-        substrate: [],
-        device: [],
-        sweep: [],
-        vectors: [],
-        arcs: [],
-        labels: []
-    };
+const texGreek = (s) => [...s].map((c) => (GREEK_TEX[c] ? GREEK_TEX[c] + ' ' : c)).join('').trim();
 
-    if (!transparentBg) {
-        layers.bg.push(`<rect x="0" y="0" width="${width}" height="${height}" fill="${palette.bg}" />`);
+function symbolTex(str, vectorStyle) {
+    const { main, sub: s } = parseSymbol(str);
+    let body = texGreek(main);
+    if (vectorStyle === 'bold') body = `\\mathbf{${body}}`;
+    else if (vectorStyle === 'hat') body = `\\hat{${body}}`;
+    else if (vectorStyle === 'arrow') body = `\\vec{${body}}`;
+    if (s) body += s.length > 1 ? `_{\\mathrm{${s}}}` : `_{${texGreek(s)}}`;
+    return body;
+}
+
+const VECTOR_MARK = { hat: '̂', arrow: '⃗' };
+
+/** SVG tspans for a symbol; vectorStyle only for vectors (B, k, m), plain italic otherwise. */
+function symbolSpans(str, fs, vectorStyle) {
+    const { main, sub: s } = parseSymbol(str);
+    const weight = vectorStyle === 'bold' ? ' font-weight="bold"' : '';
+    let out = `<tspan font-style="italic"${weight}>${esc(main + (VECTOR_MARK[vectorStyle] || ''))}</tspan>`;
+    if (s) {
+        const italic = s.length === 1 ? ' font-style="italic"' : '';
+        out += `<tspan dy="${n2(fs * 0.28)}" font-size="${n2(fs * 0.72)}"${italic}>${esc(s)}</tspan><tspan dy="${n2(-fs * 0.28)}">​</tspan>`;
     }
+    return out;
+}
 
-    // Marker definitions for vector arrowheads
-    const markerColors = [
-        { id: 'arrow-B', color: palette.B },
-        { id: 'arrow-Beasy', color: palette.B_easy },
-        { id: 'arrow-Bsamp', color: palette.B_sample },
-        { id: 'arrow-m', color: palette.m },
-        { id: 'arrow-l', color: palette.l },
-        { id: 'arrow-k', color: palette.k },
-        { id: 'arrow-t', color: palette.t },
-        { id: 'arrow-n', color: palette.n },
-        { id: 'arrow-ec', color: palette.ec },
-        { id: 'arrow-ea', color: palette.ea },
-        { id: 'arrow-em', color: palette.em }
-    ];
+/** Miller-Bravais label "[1̅1̅20]" (combining overlines) -> tspans with real overlines, or LaTeX. */
+function millerSpans(label, latex, latexLabel) {
+    if (latex) return esc(`$${latexLabel}$`);
+    if (/\s/.test(label)) return esc(label); // non-integer indices: plain
+    let out = '';
+    const chars = [...label];
+    chars.forEach((c, i) => {
+        if (c === '̅') return;
+        if (chars[i + 1] === '̅') out += `<tspan text-decoration="overline">${esc(c)}</tspan><tspan font-size="30%"> </tspan>`;
+        else out += esc(c);
+    });
+    return out;
+}
 
-    const defsContent = markerColors
-        .map(
-            (m) => `
-    <marker id="${m.id}" viewBox="0 0 10 10" refX="8.2" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
-      <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" fill="${m.color}" />
-    </marker>`
-        )
-        .join('');
+// ---------------------------------------------------------------------------
+// Projection
+// ---------------------------------------------------------------------------
 
-    // Helper to draw SVG arrow + label
-    const addArrow2D = (x1, y1, x2, y2, color, markerId, labelText, strokeWidth = 2.4, dashed = false) => {
-        const len = Math.hypot(x2 - x1, y2 - y1);
-        if (len < 3) return;
-        const dashAttr = dashed ? ` stroke-dasharray="5,3"` : '';
-        layers.vectors.push(
-            `<line x1="${fmt(x1)}" y1="${fmt(y1)}" x2="${fmt(x2)}" y2="${fmt(y2)}" stroke="${color}" stroke-width="${strokeWidth}" stroke-linecap="round"${dashAttr} marker-end="url(#${markerId})" />`
-        );
-        if (labelText) {
-            const ang = Math.atan2(y2 - y1, x2 - x1);
-            const lx = x2 + Math.cos(ang) * 14;
-            const ly = y2 + Math.sin(ang) * 14 + 4;
-            layers.labels.push(
-                `<text x="${fmt(lx)}" y="${fmt(ly)}" fill="${color}" font-family="Inter, Arial, sans-serif" font-size="12" font-weight="700" text-anchor="middle">${escXml(labelText)}</text>`
-            );
-        }
-    };
+function makeCamera(view) {
+    const { azDeg, elDeg } = VIEWS[view] || VIEWS.oblique;
+    const az = azDeg * DEG;
+    const el = elDeg * DEG;
+    const right = [-Math.sin(az), Math.cos(az), 0];
+    const up = [-Math.sin(el) * Math.cos(az), -Math.sin(el) * Math.sin(az), Math.cos(el)];
+    const toViewer = [Math.cos(el) * Math.cos(az), Math.cos(el) * Math.sin(az), Math.sin(el)];
+    return { right, up, toViewer, proj: (p) => [dot(p, right), dot(p, up)] };
+}
 
-    // Field sweep: the setup re-evaluated along φ_M = from … to (2° steps, at most one full turn)
-    const sweepStates = [];
-    let sweepFrom = 0;
-    let sweepTo = 0;
-    if (sweep && Number.isFinite(sweep.fromDeg) && Number.isFinite(sweep.toDeg) && Math.abs(sweep.toDeg - sweep.fromDeg) >= 1) {
-        sweepFrom = sweep.fromDeg;
-        const span = Math.max(-360, Math.min(360, sweep.toDeg - sweep.fromDeg));
-        sweepTo = sweepFrom + span;
-        const n = Math.max(8, Math.ceil(Math.abs(span) / 2));
-        for (let i = 0; i <= n; i++) {
-            sweepStates.push(evaluateSetup({ ...stateA.setup, phiMDeg: sweepFrom + (span * i) / n }));
+/** Fixed frame per view: sample + the whole upper half sphere the field arrow can reach. */
+function frameBounds(cam, thickness) {
+    const pts = [];
+    for (const z of [0, -thickness]) for (const x of [-HALF, HALF]) for (const y of [-HALF, HALF]) pts.push([x, y, z]);
+    const r = FIELD_LEN * 1.08;
+    for (let a = 0; a < 360; a += 5) {
+        for (let e = 0; e <= 90; e += 5) {
+            pts.push([r * Math.cos(e * DEG) * Math.cos(a * DEG), r * Math.cos(e * DEG) * Math.sin(a * DEG), r * Math.sin(e * DEG)]);
         }
     }
-    const fmtDeg = (d) => (Number.isInteger(d) ? String(d) : d.toFixed(1));
-    const degLbl = (d) => lbl(`${fmtDeg(d)}°`, `$${fmtDeg(d)}^\\circ$`);
+    const xy = pts.map(cam.proj);
+    return {
+        minX: Math.min(...xy.map((p) => p[0])),
+        maxX: Math.max(...xy.map((p) => p[0])),
+        minY: Math.min(...xy.map((p) => p[1])),
+        maxY: Math.max(...xy.map((p) => p[1]))
+    };
+}
 
-    // Dotted trace of an arrow tip along the sweep; arrowhead = sense of rotation.
-    // pointOf(state) returns the projected tip or null (e.g. m̂ undefined) – the trace breaks there.
-    const addSweepTrace = (pointOf, color, markerId, center, withLabels = false) => {
-        if (sweepStates.length < 2) return;
-        const runs = [];
-        let cur = [];
-        for (const s of sweepStates) {
-            const p = pointOf(s);
-            if (p) cur.push(p);
-            else if (cur.length) {
-                runs.push(cur);
-                cur = [];
-            }
+/** Convex hull of 2D points (monotone chain). */
+function convexHull(points) {
+    const p = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    const half = (list) => {
+        const h = [];
+        for (const q of list) {
+            while (h.length >= 2 && cross(h[h.length - 2], h[h.length - 1], q) <= 0) h.pop();
+            h.push(q);
         }
-        if (cur.length) runs.push(cur);
-        const pathLen = (run) => run.reduce((acc, p, i) => (i ? acc + Math.hypot(p.x - run[i - 1].x, p.y - run[i - 1].y) : 0), 0);
-        const drawn = runs.filter((run) => run.length > 1 && pathLen(run) > 4);
-        drawn.forEach((run, idx) => {
-            const head = idx === drawn.length - 1 ? ` marker-end="url(#${markerId})"` : '';
-            layers.sweep.push(
-                `<polyline points="${run.map((p) => `${fmt(p.x)},${fmt(p.y)}`).join(' ')}" fill="none" stroke="${color}" stroke-width="1.5" stroke-dasharray="0.1,3.6" stroke-linecap="round" stroke-linejoin="round"${head} />`
-            );
+        h.pop();
+        return h;
+    };
+    return [...half(p), ...half([...p].reverse())];
+}
+
+/** Separating-axis test for two convex polygons. */
+function convexOverlap(a, b) {
+    for (const poly of [a, b]) {
+        for (let i = 0; i < poly.length; i++) {
+            const p = poly[i];
+            const q = poly[(i + 1) % poly.length];
+            const ax = [q[1] - p[1], p[0] - q[0]];
+            const span = (pts) => pts.map((r) => r[0] * ax[0] + r[1] * ax[1]);
+            const sa = span(a);
+            const sb = span(b);
+            if (Math.max(...sa) < Math.min(...sb) || Math.max(...sb) < Math.min(...sa)) return false;
+        }
+    }
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
+
+/**
+ * @param state   result of evaluateSetup()
+ * @param options see DEFAULT_FIGURE_OPTIONS
+ * @param styleIn see BUILTIN_FIGURE_STYLES (partial styles are completed)
+ * @returns SVG document string
+ */
+export function generateFigureSVG(state, options = {}, styleIn = null) {
+    const o = { ...DEFAULT_FIGURE_OPTIONS, ...options };
+    const st = completeFigureStyle(styleIn);
+    const C = st.colors;
+    const L = st.lines;
+    const fs = Number(st.fontSizePt) || 9;
+    const latex = !!o.latex;
+    const cam = makeCamera(o.view);
+    const isTop = o.view === 'top';
+    const thick = isTop ? 0 : Math.max(0, Number(st.sampleThickness) || 0);
+
+    const v = state.vectors;
+    const kHat = v.kHat.Sub;
+    const tHat = v.tHat.Sub;
+    const bHat = unit(v.bHat.Sub);
+    const xEdge = [1, 0, 0];
+    const nrm = [0, 0, 1];
+
+    // ---- frame: fixed scale per view and width, so every figure lines up
+    const fb = frameBounds(cam, thick);
+    const pad = fs * 1.6;
+    const widthPt = (Number(st.widthMm) || 80) * PT_PER_MM;
+    const scale = (widthPt - 2 * pad) / (fb.maxX - fb.minX);
+    let heightPt = (fb.maxY - fb.minY) * scale + 2 * pad;
+    const toSvg = (p) => {
+        const [x, y] = cam.proj(p);
+        return [pad + (x - fb.minX) * scale, pad + (fb.maxY - y) * scale];
+    };
+    const pt = (p) => toSvg(p).map(n2).join(',');
+    const pathOf = (pts, close = false) => 'M' + pts.map(pt).join('L') + (close ? 'Z' : '');
+
+    const layers = { sample: [], antenna: [], guides: [], arcs: [], arrows: [], labels: [], axes: [] };
+    const halo = C.background && C.background !== 'none' ? C.background : '#ffffff';
+
+    const textAt = (x, y, content, color, anchor = 'middle', extra = '') =>
+        `<text x="${n2(x)}" y="${n2(y)}" text-anchor="${anchor}" fill="${color}" font-size="${fs}"${extra}>${content}</text>`;
+
+    // Label just beyond a screen point, pushed away along a screen direction (unit, y down)
+    const labelNear = (sx, sy, dirX, dirY, content, color, gap = fs * 0.55) => {
+        const x = sx + dirX * gap;
+        const y = sy + dirY * gap;
+        const anchor = dirX > 0.35 ? 'start' : dirX < -0.35 ? 'end' : 'middle';
+        const yAdj = y + fs * 0.35 + dirY * fs * 0.35;
+        return textAt(x, yAdj, content, color, anchor, ` stroke="${halo}" stroke-width="${n2(fs * 0.28)}" stroke-linejoin="round" paint-order="stroke"`);
+    };
+
+    // Box of a labelNear() text (same anchor rules), for overlap checks; widths are estimates
+    const textWidth = (plain) => [...String(plain).replace(/̅/g, '')].length * fs * 0.56;
+    const symbolWidth = (str) => {
+        const { main, sub: s } = parseSymbol(str);
+        return main.length * fs * 0.62 + s.length * fs * 0.45;
+    };
+    const labelBox = (sx, sy, dirX, dirY, w, gap) => {
+        const x = sx + dirX * gap;
+        const y = sy + dirY * gap + fs * 0.35 + dirY * fs * 0.35;
+        const l = dirX > 0.35 ? x : dirX < -0.35 ? x - w : x - w / 2;
+        return { l, r: l + w, t: y - fs * 0.8, b: y + fs * 0.25 };
+    };
+
+    // Labels are collected and placed at the end: each takes the first of its candidate spots that
+    // stays inside the figure and clear of the labels placed before it (lower prio = placed first)
+    const labelReqs = [];
+    const wantLabel = (prio, cands, content, color, w) => labelReqs.push({ prio, cands, content, color, w });
+    const around = (sx, sy, dx, dy, gap, turns) =>
+        turns.map((t) => {
+            const c = Math.cos(t * DEG);
+            const s = Math.sin(t * DEG);
+            return { sx, sy, dx: dx * c - dy * s, dy: dx * s + dy * c, gap };
         });
-        if (!withLabels || !drawn.length) return;
-        const firstRun = drawn[0];
-        const lastRun = drawn[drawn.length - 1];
-        const first = firstRun[0];
-        const last = lastRun[lastRun.length - 1];
-        // Label sideways to the trace (normal pointing away from the panel centre), so it never
-        // sits on the radial label of the arrow that may end at the same spot
-        const labelAt = (p, q, text) => {
-            let nx = -(q.y - p.y);
-            let ny = q.x - p.x;
-            const nl = Math.hypot(nx, ny) || 1;
-            nx /= nl;
-            ny /= nl;
-            if (nx * (p.x - center.x) + ny * (p.y - center.y) < 0) {
-                nx = -nx;
-                ny = -ny;
-            }
-            const anchor = Math.abs(nx) < 0.35 ? 'middle' : nx > 0 ? 'start' : 'end';
-            layers.labels.push(
-                `<text x="${fmt(p.x + nx * 9)}" y="${fmt(p.y + ny * 9 + 3.5 + (ny > 0.35 ? 4 : 0))}" fill="${palette.textMuted}" font-family="Inter, Arial, sans-serif" font-size="10.5" text-anchor="${anchor}">${escXml(text)}</text>`
-            );
-        };
-        layers.sweep.push(`<circle cx="${fmt(first.x)}" cy="${fmt(first.y)}" r="2.6" fill="${color}" />`);
-        if (Math.hypot(last.x - first.x, last.y - first.y) < 16) {
-            labelAt(first, firstRun[1], lbl(`${fmtDeg(sweepFrom)}° → ${fmtDeg(sweepTo)}°`, `$${fmtDeg(sweepFrom)}^\\circ \\to ${fmtDeg(sweepTo)}^\\circ$`));
-        } else {
-            labelAt(first, firstRun[1], degLbl(sweepFrom));
-            labelAt(last, lastRun[lastRun.length - 2], degLbl(sweepTo));
-        }
+    const placeLabels = () => {
+        const placed = [];
+        const inside = (b) => b.l >= 1 && b.r <= widthPt - 1 && b.t >= 1 && b.b <= heightPt - 1;
+        const m = fs * 0.2;
+        const clash = (b) => placed.some((p) => b.l < p.r + m && p.l < b.r + m && b.t < p.b + m && p.t < b.b + m);
+        labelReqs
+            .sort((a, b) => a.prio - b.prio)
+            .forEach((q) => {
+                const boxes = q.cands.map((c) => labelBox(c.sx, c.sy, c.dx, c.dy, q.w, c.gap));
+                let i = boxes.findIndex((b) => inside(b) && !clash(b));
+                if (i < 0) i = Math.max(0, boxes.findIndex(inside));
+                placed.push(boxes[i]);
+                const c = q.cands[i];
+                layers.labels.push(labelNear(c.sx, c.sy, c.dx, c.dy, q.content, q.color, c.gap));
+            });
     };
-    const mDefined = (s) => showEquilibrium && !s.metrics.isEasyPlaneSingular;
 
-    // ------------------------------------------------------------------------
-    // Panel 1: 3D Isometric Schematic
-    // ------------------------------------------------------------------------
-    const render3DPanel = (cx, cy, scale) => {
-        const F = lockFrame;
-        const R_Lock_from = (src) => stateA.matrices.getRotationMatrix(F, src);
-        const toLock = (v, src) => matVec3(R_Lock_from(src), v);
+    const screenDir = (from, to) => {
+        const a = toSvg(from);
+        const b = toSvg(to);
+        const d = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+        return [(b[0] - a[0]) / d, (b[1] - a[1]) / d];
+    };
 
-        const az = cameraAzimuthDeg * DEG2RAD;
-        const el = cameraElevationDeg * DEG2RAD;
-        const caz = Math.cos(az);
-        const saz = Math.sin(az);
-        const cel = Math.cos(el);
-        const sel = Math.sin(el);
-
-        const proj3 = (p) => {
-            const xCam = -saz * p[0] + caz * p[1];
-            const dHoriz = -caz * p[0] - saz * p[1];
-            const z1 = p[2];
-            const yCam = sel * dHoriz + cel * z1;
-            return {
-                x: cx + xCam * scale,
-                y: cy - yCam * scale
-            };
-        };
-
-        // Reference ellipse in locked XY plane
-        const circlePts = [];
-        for (let d = 0; d <= 360; d += 6) {
-            const r = d * DEG2RAD;
-            const pt = proj3([1.05 * Math.cos(r), 1.05 * Math.sin(r), 0]);
-            circlePts.push(`${fmt(pt.x)},${fmt(pt.y)}`);
+    // Arrow in 3D, head drawn in screen space so it keeps its size when foreshortened
+    const arrow = (from, to, color, width, { dash = '', haloW = 0 } = {}) => {
+        const a = toSvg(from);
+        const b = toSvg(to);
+        const dx = b[0] - a[0];
+        const dy = b[1] - a[1];
+        const d = Math.hypot(dx, dy);
+        if (d < 0.5) return '';
+        const ux = dx / d;
+        const uy = dy / d;
+        const hl = Math.min(st.arrowHeadPt * (0.6 + width / 3.5), d * 0.6);
+        const hw = hl * 0.42;
+        const bx = b[0] - ux * hl * 0.82;
+        const by = b[1] - uy * hl * 0.82;
+        const shaft = `M${n2(a[0])},${n2(a[1])}L${n2(bx)},${n2(by)}`;
+        const head = `M${n2(b[0])},${n2(b[1])}L${n2(b[0] - ux * hl - uy * hw)},${n2(b[1] - uy * hl + ux * hw)}L${n2(b[0] - ux * hl + uy * hw)},${n2(b[1] - uy * hl - ux * hw)}Z`;
+        let s = '';
+        if (haloW) {
+            s += `<path d="${shaft}" stroke="${halo}" stroke-width="${n2(width + 2 * haloW)}" stroke-linecap="round" fill="none"/>`;
+            s += `<path d="${head}" fill="${halo}" stroke="${halo}" stroke-width="${n2(2 * haloW)}" stroke-linejoin="round"/>`;
         }
-        layers.bg.push(
-            `<polyline points="${circlePts.join(' ')}" fill="none" stroke="${palette.grid}" stroke-width="1.2" stroke-dasharray="4,4" />`
-        );
+        s += `<path d="${shaft}" stroke="${color}" stroke-width="${n2(width)}" fill="none"${dash ? ` stroke-dasharray="${dash}"` : ''}/>`;
+        s += `<path d="${head}" fill="${color}"/>`;
+        return s;
+    };
 
-        // Basal Easy-Plane (0001) hexagon in F_Cryst
-        if (showEasyPlane) {
-            const hexPts = [];
-            for (let i = 0; i < 6; i++) {
-                const ang = i * 60 * DEG2RAD;
-                const pt = proj3(toLock([0.92 * Math.cos(ang), 0.92 * Math.sin(ang), 0], 'Cryst'));
-                hexPts.push(`${fmt(pt.x)},${fmt(pt.y)}`);
+    const guideLine = (from, to, color = C.angle) =>
+        `<path d="${pathOf([from, to])}" stroke="${color}" stroke-width="${n2(L.guide)}" stroke-dasharray="${n2(L.guide * 1.5)},${n2(L.guide * 2.6)}" stroke-linecap="round" fill="none"/>`;
+
+    // Arc from direction a to direction b (3D unit vectors) around the origin; returns label point too
+    const arc = (a, b, r) => {
+        const ang = angleDeg(a, b);
+        const ua = unit(a);
+        let perp = sub(unit(b), mul(ua, dot(ua, unit(b))));
+        if (len(perp) < 1e-9) perp = unit([-ua[1], ua[0], 0]);
+        perp = unit(perp);
+        const pts = [];
+        const steps = Math.max(8, Math.ceil(ang / 3));
+        for (let i = 0; i <= steps; i++) {
+            const t = (ang * i * DEG) / steps;
+            pts.push(add(mul(ua, r * Math.cos(t)), mul(perp, r * Math.sin(t))));
+        }
+        const dirAt = (f) => add(mul(ua, Math.cos(ang * f * DEG)), mul(perp, Math.sin(ang * f * DEG)));
+        return { ang, d: pathOf(pts), mid: dirAt(0.5), dirAt, r };
+    };
+
+    const angleText = (symbol, deg, mode = o.angleLabels) => {
+        if (latex) {
+            const s = symbolTex(symbol, 'none');
+            const val = `${Number(deg.toFixed(1))}^\\circ`;
+            return esc(mode === 'symbol' ? `$${s}$` : mode === 'both' ? `$${s} = ${val}$` : `$${val}$`);
+        }
+        if (mode === 'symbol') return symbolSpans(symbol, fs, 'none');
+        if (mode === 'both') return `${symbolSpans(symbol, fs, 'none')} = ${fmtAngle(deg)}`;
+        return fmtAngle(deg);
+    };
+    const angleWidth = (symbol, deg, mode = o.angleLabels) =>
+        mode === 'symbol' ? symbolWidth(symbol) : mode === 'both' ? symbolWidth(symbol) + textWidth(` = ${fmtAngle(deg)}`) : textWidth(fmtAngle(deg));
+    const vectorText = (symbol) => (latex ? esc(`$${symbolTex(symbol, st.vectorStyle)}$`) : symbolSpans(symbol, fs, st.vectorStyle));
+
+    // Arc with its value just outside the middle; if that spot is taken, further along the arc or further out
+    let arcCount = 0;
+    const drawArc = (a, b, r, symbol, color = C.angle) => {
+        const A = arc(a, b, r);
+        if (A.ang < TINY_DEG) return;
+        layers.arcs.push(`<path d="${A.d}" stroke="${color}" stroke-width="${n2(L.arc)}" fill="none"/>`);
+        const cands = [];
+        for (const gap of [fs * 0.45, fs * 1.4]) {
+            for (const f of [0.5, 0.3, 0.7, 0.15, 0.85]) {
+                const d = A.dirAt(f);
+                const [sx, sy] = toSvg(mul(d, A.r));
+                const [dx, dy] = screenDir([0, 0, 0], d);
+                cands.push({ sx, sy, dx, dy, gap });
             }
-            layers.crystal.push(
-                `<polygon points="${hexPts.join(' ')}" fill="${palette.easyFill}" fill-opacity="0.55" stroke="${palette.easyStroke}" stroke-width="1.6" />`
-            );
-            const epLabelPt = proj3(toLock([-0.62, -0.62, 0], 'Cryst'));
-            layers.labels.push(
-                `<text x="${fmt(epLabelPt.x)}" y="${fmt(epLabelPt.y)}" fill="${palette.easyStroke}" font-family="Inter, Arial, sans-serif" font-size="11" font-weight="600">${escXml(lbl('(0001) Easy-Plane', '$(0001)$ Easy-Plane'))}</text>`
-            );
         }
+        wantLabel(10 + arcCount++, cands, angleText(symbol, A.ang), C.text, angleWidth(symbol, A.ang));
+    };
 
-        // Substrate slab in F_Sub
-        const wx = 0.62;
-        const wy = 0.52;
-        const topSub = [
-            [-wx, -wy, 0],
-            [wx, -wy, 0],
-            [wx, wy, 0],
-            [-wx, wy, 0]
+    // ---- sample slab: visible side faces (auto-shaded), then the top face
+    const corners = (z) => [[-HALF, -HALF, z], [HALF, -HALF, z], [HALF, HALF, z], [-HALF, HALF, z]];
+    const top = corners(0);
+    const sampleStroke = shade(C.sample, -0.45);
+    if (thick > 0) {
+        const bot = corners(-thick);
+        const sides = [
+            { n: [0, -1, 0], q: [top[0], top[1], bot[1], bot[0]] },
+            { n: [1, 0, 0], q: [top[1], top[2], bot[2], bot[1]] },
+            { n: [0, 1, 0], q: [top[2], top[3], bot[3], bot[2]] },
+            { n: [-1, 0, 0], q: [top[3], top[0], bot[0], bot[3]] }
         ];
-        const topPts = topSub.map((c) => proj3(toLock(c, 'Sub')));
-        layers.substrate.push(
-            `<polygon points="${topPts.map((p) => `${fmt(p.x)},${fmt(p.y)}`).join(' ')}" fill="${palette.chipFill}" fill-opacity="0.82" stroke="${palette.chipStroke}" stroke-width="1.8" />`
-        );
+        sides.forEach((f, i) => {
+            if (dot(f.n, cam.toViewer) <= 1e-6) return;
+            layers.sample.push(`<path d="${pathOf(f.q, true)}" fill="${shade(C.sample, i % 2 ? -0.28 : -0.16)}" stroke="${sampleStroke}" stroke-width="${n2(L.outline)}" stroke-linejoin="round"/>`);
+        });
+    }
+    layers.sample.push(`<path d="${pathOf(top, true)}" fill="${C.sample}" stroke="${sampleStroke}" stroke-width="${n2(L.outline)}" stroke-linejoin="round"/>`);
 
-        // Line of nodes on substrate
-        if (showEasyPlane && Math.abs(stateA.setup.thetaCutDeg) > 1e-3) {
-            const nodeSub = stateA.vectors.nodesHat.Sub;
-            const p1 = proj3(toLock(scale3(nodeSub, -0.58), 'Sub'));
-            const p2 = proj3(toLock(scale3(nodeSub, 0.58), 'Sub'));
-            layers.crystal.push(
-                `<line x1="${fmt(p1.x)}" y1="${fmt(p1.y)}" x2="${fmt(p2.x)}" y2="${fmt(p2.y)}" stroke="${palette.easyStroke}" stroke-width="1.5" stroke-dasharray="5,3" />`
-            );
-        }
-
-        // Microstructure (IDT / CPW) as true 3D polygons in F_Wave (gold width === gap width)
-        if (showMicrostructure) {
-            let polys = [];
-            if (stateA.setup.deviceType === 'IDT') {
-                const w = 0.042;
-                const x0 = -5.5 * w;
-                const yOuter = 0.28;
-                const yBus = yOuter - 1.35 * w;
-                const yTipTop = -yBus + w;
-                const yTipBot = yBus - w;
-                polys = [
-                    [
-                        [x0, yOuter], [-x0, yOuter], [-x0, yBus],
-                        [x0 + 9 * w, yBus], [x0 + 9 * w, yTipTop], [x0 + 8 * w, yTipTop], [x0 + 8 * w, yBus],
-                        [x0 + 5 * w, yBus], [x0 + 5 * w, yTipTop], [x0 + 4 * w, yTipTop], [x0 + 4 * w, yBus],
-                        [x0 + 1 * w, yBus], [x0 + 1 * w, yTipTop], [x0 + 0 * w, yTipTop], [x0, yBus]
-                    ],
-                    [
-                        [x0, -yOuter], [-x0, -yOuter], [-x0, -yBus],
-                        [x0 + 11 * w, -yBus], [x0 + 11 * w, yTipBot], [x0 + 10 * w, yTipBot], [x0 + 10 * w, -yBus],
-                        [x0 + 7 * w, -yBus], [x0 + 7 * w, yTipBot], [x0 + 6 * w, yTipBot], [x0 + 6 * w, -yBus],
-                        [x0 + 3 * w, -yBus], [x0 + 3 * w, yTipBot], [x0 + 2 * w, yTipBot], [x0 + 2 * w, -yBus], [x0, -yBus]
-                    ]
-                ];
-            } else {
-                const w = 0.056;
-                const yBot = -0.35;
-                const yTop = 0.35;
-                const yInner = yTop - w;
-                polys = [[
-                    [-2.5 * w, yTop], [2.5 * w, yTop], [2.5 * w, yBot],
-                    [1.5 * w, yBot], [1.5 * w, yInner], [0.5 * w, yInner],
-                    [0.5 * w, yBot], [-0.5 * w, yBot], [-0.5 * w, yInner],
-                    [-1.5 * w, yInner], [-1.5 * w, yBot], [-2.5 * w, yBot]
-                ]];
-            }
-
-            for (const poly of polys) {
-                const ptsStr = poly
-                    .map(([xk, yt]) => {
-                        const p = proj3(toLock([xk, yt, 0], 'Wave'));
-                        return `${fmt(p.x)},${fmt(p.y)}`;
-                    })
-                    .join(' ');
-                layers.device.push(
-                    `<polygon points="${ptsStr}" fill="${palette.goldStroke}" stroke="none" />`
-                );
-            }
-        }
-
-        const origin2 = proj3([0, 0, 0]);
-
-        // Sweep traces: tips of m̂ (scaled with |B_easy|/|B| like its arrow) and B
-        addSweepTrace(
-            (s) => {
-                if (!mDefined(s)) return null;
-                const len = norm3(s.vectors.bEasyProjVec[F]) / (s.metrics.b0Tesla || 1);
-                return len > 0.04 ? proj3(scale3(s.vectors.mHat[F], len)) : null;
-            },
-            palette.m,
-            'arrow-m',
-            origin2
-        );
-        addSweepTrace((s) => proj3(s.vectors.bHat[F]), palette.B, 'arrow-B', origin2, true);
-
-        const addVec3 =(v3, scaleLen, color, markerId, text, sw = 2.5, dashed = false) => {
-            const pEnd = proj3(scale3(v3, scaleLen));
-            addArrow2D(origin2.x, origin2.y, pEnd.x, pEnd.y, color, markerId, text, sw, dashed);
-        };
-
-        // Crystal axes with Miller-Bravais notation
-        if (showCrystalAxes) {
-            addVec3(stateA.vectors.eaHat[F], 0.92, palette.ea, 'arrow-ea', lbl('a [112\u03050]', '$a\\,[11\\bar{2}0]$'), 1.6, true);
-            addVec3(stateA.vectors.emHat[F], 0.88, palette.em, 'arrow-em', lbl('m [11\u030500]', '$m\\,[1\\bar{1}00]$'), 1.5, true);
-            addVec3(stateA.vectors.ecHat[F], 1.00, palette.ec, 'arrow-ec', lbl('c [0001]', '$c\\,[0001]$'), 2.1, false);
-        }
-
-        // Wave vector k_hat
-        addVec3(stateA.vectors.kHat[F], 1.00, palette.k, 'arrow-k', lbl('k̂', '$\\hat{k}$'), 2.8, false);
-
-        // B projection onto Easy-Plane & drop-line from tip of B to tip of m_hat
-        const bHatF = stateA.vectors.bHat[F];
-        const bEasyF = scale3(stateA.vectors.bEasyProjVec[F], 1 / (stateA.metrics.b0Tesla || 1));
-        const bEasyLen = norm3(bEasyF);
-        const diffOut = Math.hypot(bHatF[0] - bEasyF[0], bHatF[1] - bEasyF[1], bHatF[2] - bEasyF[2]);
-        if (bEasyLen > 0.04 && diffOut > 0.05) {
-            const pB = proj3(bHatF);
-            const pBe = proj3(bEasyF);
-            layers.vectors.push(
-                `<line x1="${fmt(pB.x)}" y1="${fmt(pB.y)}" x2="${fmt(pBe.x)}" y2="${fmt(pBe.y)}" stroke="${palette.B_easy}" stroke-width="1.3" stroke-dasharray="4,3" />`
-            );
-        }
-
-        // Equilibrium vectors m_hat (scaled to Easy-Plane projection) and l_hat
-        if (showEquilibrium && !stateA.metrics.isEasyPlaneSingular) {
-            addVec3(stateA.vectors.lHat[F], 1.00, palette.l, 'arrow-l', lbl('l̂', '$\\hat{l}$'), 2.6, false);
-            if (bEasyLen > 0.04) {
-                addVec3(stateA.vectors.mHat[F], bEasyLen, palette.m, 'arrow-m', lbl('m̂', '$\\hat{m}$'), 2.6, false);
-            }
-        }
-
-        // Applied magnetic field B
-        addVec3(bHatF, 1.00, palette.B, 'arrow-B', lbl('B', '$\\mathbf{B}$'), 3.2, false);
-
-        // 3D Angle Arc between B and k_hat
-        if (showAngleArcs) {
-            const u1 = normalize3(bHatF);
-            const u2 = normalize3(stateA.vectors.kHat[F]);
-            const omega = Math.acos(Math.max(-1, Math.min(1, dot3(u1, u2))));
-            if (omega > 0.05 && omega < Math.PI - 0.05) {
-                const sinO = Math.sin(omega);
-                const arcPts = [];
-                for (let i = 0; i <= 18; i++) {
-                    const t = i / 18;
-                    const a = Math.sin((1 - t) * omega) / sinO;
-                    const b = Math.sin(t * omega) / sinO;
-                    const pt = proj3(scale3(add3(scale3(u1, a), scale3(u2, b)), 0.42));
-                    arcPts.push(`${fmt(pt.x)},${fmt(pt.y)}`);
+    // ---- antennas in the wave frame (k, t): emitter and receiver either side of the centre
+    const wave = (kk, tt) => add(mul(kHat, kk), mul(tHat, tt));
+    const rect = (k0, k1, t0, t1) => [wave(k0, t0), wave(k1, t0), wave(k1, t1), wave(k0, t1)];
+    if (o.showAntenna) {
+        const parts = [];
+        const isIdt = state.setup.deviceType === 'IDT';
+        for (const side of [-1, 1]) {
+            const kIn = ANT_IN * side;
+            const kOut = ANT_OUT * side;
+            const [k0, k1] = [Math.min(kIn, kOut), Math.max(kIn, kOut)];
+            if (isIdt) {
+                const bar = 0.06;
+                const tSpan = 0.4;
+                parts.push(rect(k0, k1, tSpan - bar, tSpan), rect(k0, k1, -tSpan, -tSpan + bar));
+                const fingers = 7;
+                const pitch = (k1 - k0) / fingers;
+                const fw = pitch * 0.42;
+                for (let i = 0; i < fingers; i++) {
+                    const kc = k0 + pitch * (i + 0.5);
+                    const fromTop = i % 2 === 0;
+                    parts.push(rect(kc - fw / 2, kc + fw / 2, fromTop ? -tSpan + bar + 0.07 : -tSpan + bar, fromTop ? tSpan - bar : tSpan - bar - 0.07));
                 }
-                layers.arcs.push(
-                    `<polyline points="${arcPts.join(' ')}" fill="none" stroke="${palette.B}" stroke-width="1.5" stroke-dasharray="3,2" />`
-                );
+            } else {
+                // coplanar waveguide: ground - signal - ground, all along t
+                const kc = (k0 + k1) / 2;
+                const tSpan = 0.45;
+                const sig = 0.03;
+                const gap = 0.035;
+                const gnd = 0.08;
+                parts.push(rect(kc - sig, kc + sig, -tSpan, tSpan));
+                parts.push(rect(kc + sig + gap, kc + sig + gap + gnd, -tSpan, tSpan));
+                parts.push(rect(kc - sig - gap - gnd, kc - sig - gap, -tSpan, tSpan));
             }
         }
-
-        // Panel title
-        const frameMeta = FRAME_METADATA[F] || FRAME_METADATA.Sub;
-        layers.labels.push(
-            `<text x="${fmt(cx)}" y="28" fill="${palette.textMain}" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700" text-anchor="middle">${escXml(`3D-Geometrie (${frameMeta.name})`)}</text>`
+        const stroke = shade(C.antenna, -0.35);
+        layers.antenna.push(
+            `<path d="${parts.map((q) => pathOf(q, true)).join('')}" fill="${C.antenna}" stroke="${stroke}" stroke-width="${n2(L.outline * 0.6)}" stroke-linejoin="round"/>`
         );
-    };
+    }
 
-    // ------------------------------------------------------------------------
-    // Panel 2: 2D Sample Surface (Chip Plane F_Sub)
-    // ------------------------------------------------------------------------
-    const render2DSamplePanel = (cx, cy, rMax) => {
-        const cw = rMax * 1.48;
-        const ch = rMax * 1.25;
-        layers.substrate.push(
-            `<rect x="${fmt(cx - cw / 2)}" y="${fmt(cy - ch / 2)}" width="${fmt(cw)}" height="${fmt(ch)}" rx="4" fill="${palette.chipFill}" stroke="${palette.chipStroke}" stroke-width="1.8" />`
-        );
-        layers.bg.push(
-            `<circle cx="${fmt(cx)}" cy="${fmt(cy)}" r="${fmt(rMax)}" fill="none" stroke="${palette.grid}" stroke-width="1.2" stroke-dasharray="4,4" />`
-        );
+    // ---- angles on the surface: antenna turn (0° edge -> k), field in plane, field out of plane
+    const devDeg = angleDeg(xEdge, kHat);
+    const showDev = devDeg > TINY_DEG && (o.showAntenna || o.showWave);
+    const bn = dot(bHat, nrm);
+    const bPlane = [bHat[0], bHat[1], 0];
+    const pDir = len(bPlane) > 1e-6 ? unit(bPlane) : null;
+    const elevDeg = Math.asin(Math.min(1, Math.abs(bn))) / DEG;
+    const showElev = elevDeg > TINY_DEG;
+    const refDir = o.angleRef === 'edge' ? xEdge : kHat;
 
-        // Line of nodes
-        if (showEasyPlane && Math.abs(stateA.setup.thetaCutDeg) > 1e-3) {
-            const nd = stateA.vectors.nodesHat.Sub;
-            layers.crystal.push(
-                `<line x1="${fmt(cx - nd[0] * rMax)}" y1="${fmt(cy + nd[1] * rMax)}" x2="${fmt(cx + nd[0] * rMax)}" y2="${fmt(cy - nd[1] * rMax)}" stroke="${palette.easyStroke}" stroke-width="1.5" stroke-dasharray="5,3" />`
+    // Field arrow stays above the surface: pointing away from it, or (B·n < 0) coming down onto it
+    const down = bn < -1e-6;
+    const fTail = down ? mul(bHat, -FIELD_LEN) : [0, 0, 0];
+    const fHead = down ? [0, 0, 0] : mul(bHat, FIELD_LEN);
+    const fOuter = down ? fTail : fHead; // the end away from the sample centre
+    const outerDir = down ? mul(bHat, -1) : bHat;
+    const shadowDir = pDir && down ? mul(pDir, -1) : pDir;
+
+    if (o.angleRef === 'edge') layers.guides.push(guideLine([0, 0, 0], mul(xEdge, 0.92)));
+    if (o.angleRef === 'wave' && !o.showWave) layers.guides.push(guideLine([0, 0, 0], mul(kHat, 0.6)));
+
+    // Antenna angle edge -> k, or the equal vertical angle (-edge -> -k) when the field crowds that side
+    if (showDev) {
+        const busy = pDir ? [pDir, shadowDir, arc(refDir, pDir, 1).mid] : [];
+        const devMid = arc(xEdge, kHat, 1).mid;
+        const clearance = (m) => Math.min(180, ...busy.map((b) => angleDeg(m, b)));
+        const flip = clearance(devMid) < 40 && clearance(mul(devMid, -1)) > clearance(devMid);
+        const edgeRay = flip ? mul(xEdge, -1) : xEdge;
+        if (!(o.angleRef === 'edge' && !flip)) layers.guides.push(guideLine([0, 0, 0], mul(edgeRay, 0.92)));
+        if (flip) layers.guides.push(guideLine([0, 0, 0], mul(kHat, -(R_DEV + 0.12))));
+        drawArc(edgeRay, flip ? mul(kHat, -1) : kHat, R_DEV, st.symbols.dev);
+    }
+
+    if (pDir) {
+        // in-plane angle to k (or to the 0° edge)
+        drawArc(refDir, pDir, R_PHI, st.symbols.phi);
+        if (showElev && !isTop) {
+            const foot = mul(shadowDir, FIELD_LEN * Math.cos(elevDeg * DEG));
+            layers.guides.push(guideLine([0, 0, 0], foot));
+            layers.guides.push(guideLine(fOuter, foot));
+            if (down) layers.guides.push(guideLine([0, 0, 0], mul(pDir, R_PHI + 0.12))); // ray for the in-plane angle
+            drawArc(shadowDir, outerDir, R_ELEV, st.symbols.theta);
+        }
+    } else if (!isTop) {
+        drawArc(refDir, outerDir, R_ELEV, st.symbols.theta); // field along the normal
+    }
+
+    // ---- arrows: k, optional m, field on top with a halo so it reads over the antenna
+    if (o.showWave) {
+        layers.arrows.push(arrow([0, 0, 0], mul(kHat, WAVE_LEN), C.wave, L.wave));
+        const tip = toSvg(mul(kHat, WAVE_LEN));
+        const [dx, dy] = screenDir([0, 0, 0], kHat);
+        // beside the tip, on the side away from the field arrow
+        const side = pDir && dot(tHat, pDir) > 0 ? -1 : 1;
+        const [sx, sy] = screenDir([0, 0, 0], mul(tHat, side));
+        const n = Math.hypot(dx + sx, dy + sy) || 1;
+        wantLabel(2, around(tip[0], tip[1], (dx + sx) / n, (dy + sy) / n, fs * 0.5, [0, 40, -40, 80, -80, 130, -130]), vectorText(st.symbols.wave), C.wave, symbolWidth(st.symbols.wave));
+    }
+    if (o.showMoment && !state.metrics.isEasyPlaneSingular) {
+        const mHat = unit(v.mHat.Sub);
+        const mDown = dot(mHat, nrm) < -1e-6;
+        const mFrom = mDown ? mul(mHat, -MOMENT_LEN) : [0, 0, 0];
+        const mTo = mDown ? [0, 0, 0] : mul(mHat, MOMENT_LEN);
+        layers.arrows.push(arrow(mFrom, mTo, C.moment, L.wave, { haloW: 0.8 }));
+        const outer = mDown ? mFrom : mTo;
+        const [dx, dy] = screenDir([0, 0, 0], mDown ? mul(mHat, -1) : mHat);
+        const p = toSvg(outer);
+        wantLabel(3, around(p[0], p[1], dx, dy, fs * 0.55, [0, 40, -40, 80, -80, 130, -130]), vectorText(st.symbols.moment), C.moment, symbolWidth(st.symbols.moment));
+    }
+    // Top view cannot show the tilt: the field along the normal becomes ⊙ / ⊗, a tilt goes into the label
+    const fieldLabel = vectorText(st.symbols.field);
+    if (isTop && !pDir) {
+        const [cx, cy] = toSvg([0, 0, 0]);
+        const r = fs * 0.75;
+        const mark = down
+            ? `<path d="M${n2(cx - r * 0.6)},${n2(cy - r * 0.6)}L${n2(cx + r * 0.6)},${n2(cy + r * 0.6)}M${n2(cx - r * 0.6)},${n2(cy + r * 0.6)}L${n2(cx + r * 0.6)},${n2(cy - r * 0.6)}" stroke="${C.field}" stroke-width="${n2(L.field * 0.8)}"/>`
+            : `<circle cx="${n2(cx)}" cy="${n2(cy)}" r="${n2(L.field * 1.3)}" fill="${C.field}"/>`;
+        layers.arrows.push(`<circle cx="${n2(cx)}" cy="${n2(cy)}" r="${n2(r)}" fill="${halo}" stroke="${C.field}" stroke-width="${n2(L.field * 0.8)}"/>`, mark);
+        wantLabel(1, around(cx + r * 0.7, cy - r * 0.7, 0.7, -0.7, fs * 0.3, [0, 90, -90, 180]), fieldLabel, C.field, symbolWidth(st.symbols.field));
+    } else {
+        layers.arrows.push(arrow(fTail, fHead, C.field, L.field, { haloW: Math.max(0.8, L.field * 0.6) }));
+        const p = toSvg(fOuter);
+        const [dx, dy] = screenDir([0, 0, 0], outerDir);
+        const tiltMode = o.angleLabels === 'value' ? 'both' : o.angleLabels;
+        const tilt = isTop && showElev ? `, ${angleText(st.symbols.theta, elevDeg, tiltMode)}` : '';
+        const w = symbolWidth(st.symbols.field) + (tilt ? textWidth(', ') + angleWidth(st.symbols.theta, elevDeg, tiltMode) : 0);
+        wantLabel(1, around(p[0], p[1], dx, dy, fs * 0.6, [0, 40, -40, 80, -80, 130, -130]), fieldLabel + tilt, C.field, w);
+    }
+
+    // ---- triad: sample edges and normal with Miller-Bravais indices, bottom left.
+    // Its place depends only on the view (fixed axis directions, typical label width), never on the setup.
+    if (o.showAxes) {
+        const mb = state.millerBravais;
+        const axLen = fs * 2.6;
+        const o0 = cam.proj([0, 0, 0]);
+        const screenOf = (d) => {
+            const p = cam.proj(d);
+            const dx = p[0] - o0[0];
+            const dy = -(p[1] - o0[1]);
+            return { dx, dy, d: Math.hypot(dx, dy) };
+        };
+        const axes = [
+            { d: nrm, label: millerSpans(mb.zsPlane.label, latex, mb.zsPlane.latex), width: textWidth(mb.zsPlane.label) },
+            { d: xEdge, label: millerSpans(mb.xs.label, latex, mb.xs.latex), width: textWidth(mb.xs.label) },
+            { d: [0, 1, 0], label: millerSpans(mb.ys.label, latex, mb.ys.latex), width: textWidth(mb.ys.label) }
+        ];
+
+        // Box around the triad relative to its origin: axis tips plus a typical label each
+        const labelW = fs * 0.55 * 7;
+        const box = { l: -fs, r: fs, t: -fs, b: fs };
+        axes.forEach((a) => {
+            const s = screenOf(a.d);
+            if (s.d < 0.15) {
+                box.l = Math.min(box.l, -fs * 0.9 - labelW);
+                box.b = Math.max(box.b, fs * 1.9);
+                return;
+            }
+            const ex = (s.dx / s.d) * axLen * Math.min(1, s.d);
+            const ey = (s.dy / s.d) * axLen * Math.min(1, s.d);
+            const lx = ex + (s.dx / s.d) * fs * 0.4;
+            const ly = ey + (s.dy / s.d) * fs * 0.4;
+            const ux = s.dx / s.d;
+            const x0 = ux > 0.35 ? lx : ux < -0.35 ? lx - labelW : lx - labelW / 2;
+            box.l = Math.min(box.l, x0);
+            box.r = Math.max(box.r, x0 + labelW);
+            box.t = Math.min(box.t, ly - fs * 1.1);
+            box.b = Math.max(box.b, ly + fs * 0.6);
+        });
+
+        // Bottom left; slide down (and grow the figure) until it clears the sample
+        const hull = convexHull([...corners(0), ...corners(-thick)].map(toSvg));
+        const ox = pad * 0.5 - box.l;
+        let oy = heightPt - pad * 0.5 - box.b;
+        const rectAt = (y) => [[ox + box.l, y + box.t], [ox + box.r, y + box.t], [ox + box.r, y + box.b], [ox + box.l, y + box.b]];
+        while (convexOverlap(hull, rectAt(oy))) oy += fs * 0.25;
+        heightPt = Math.max(heightPt, oy + box.b + pad * 0.5);
+
+        const cHat = unit(v.ecHat.Sub);
+        if (o.showCAxis && axes.every((a) => Math.abs(dot(a.d, cHat)) < 0.999)) {
+            const up = dot(cHat, nrm) >= 0;
+            axes.push({ d: up ? cHat : mul(cHat, -1), label: millerSpans(up ? '[0001]' : '[0001\u0305]', latex, up ? '[0001]' : '[000\\bar{1}]'), width: textWidth('[0001]'), dashed: true });
+        }
+        axes.forEach((a) => {
+            const s = screenOf(a.d);
+            if (s.d < 0.15) {
+                // axis towards the viewer (top view): dot in a circle
+                layers.axes.push(`<circle cx="${n2(ox)}" cy="${n2(oy)}" r="${n2(fs * 0.38)}" fill="none" stroke="${C.axes}" stroke-width="${n2(L.axes)}"/>`);
+                layers.axes.push(`<circle cx="${n2(ox)}" cy="${n2(oy)}" r="${n2(L.axes * 1.1)}" fill="${C.axes}"/>`);
+                wantLabel(0, around(ox - fs * 0.2, oy + fs * 0.2, -0.75, 0.66, fs * 0.45, [0, 40, -40]), a.label, C.text, a.width);
+                return;
+            }
+            const ux = s.dx / s.d;
+            const uy = s.dy / s.d;
+            const ex = ox + ux * axLen * Math.min(1, s.d);
+            const ey = oy + uy * axLen * Math.min(1, s.d);
+            const hl = fs * 0.55;
+            layers.axes.push(
+                `<path d="M${n2(ox)},${n2(oy)}L${n2(ex - ux * hl * 0.8)},${n2(ey - uy * hl * 0.8)}" stroke="${C.axes}" stroke-width="${n2(L.axes)}" fill="none"${a.dashed ? ` stroke-dasharray="${n2(L.axes * 3)},${n2(L.axes * 2)}"` : ''}/>`,
+                `<path d="M${n2(ex)},${n2(ey)}L${n2(ex - ux * hl - uy * hl * 0.36)},${n2(ey - uy * hl + ux * hl * 0.36)}L${n2(ex - ux * hl + uy * hl * 0.36)},${n2(ey - uy * hl - ux * hl * 0.36)}Z" fill="${C.axes}"/>`
             );
-        }
-
-        const drawSubVec = (v, color, marker, text, sw = 2.4, dashed = false) => {
-            addArrow2D(cx, cy, cx + v[0] * rMax, cy - v[1] * rMax, color, marker, text, sw, dashed);
-        };
-
-        const subTip = (v) => ({ x: cx + v[0] * rMax, y: cy - v[1] * rMax });
-        addSweepTrace((s) => (mDefined(s) ? subTip(s.vectors.mHat.Sub) : null), palette.m, 'arrow-m', { x: cx, y: cy });
-        addSweepTrace((s) => subTip(s.vectors.bHat.Sub), palette.B, 'arrow-B', { x: cx, y: cy }, true);
-
-        drawSubVec([1, 0, 0], palette.textMuted, 'arrow-t', lbl('x̂_s', '$\\hat{x}_s$'), 1.3, true);
-        drawSubVec([0, 1, 0], palette.textMuted, 'arrow-t', lbl('ŷ_s', '$\\hat{y}_s$'), 1.3, true);
-        drawSubVec(stateA.vectors.tHat.Sub, palette.t, 'arrow-t', lbl('t̂', '$\\hat{t}$'), 1.5, true);
-        drawSubVec(stateA.vectors.kHat.Sub, palette.k, 'arrow-k', lbl('k̂', '$\\hat{k}$'), 2.8, false);
-
-        if (showEquilibrium && !stateA.metrics.isEasyPlaneSingular) {
-            drawSubVec(stateA.vectors.lHat.Sub, palette.l, 'arrow-l', lbl('l̂_∥s', '$\\hat{l}_{\\parallel s}$'), 2.2, false);
-            drawSubVec(stateA.vectors.mHat.Sub, palette.m, 'arrow-m', lbl('m̂_∥s', '$\\hat{m}_{\\parallel s}$'), 2.2, false);
-        }
-        drawSubVec(stateA.vectors.bHat.Sub, palette.B, 'arrow-B', lbl('B_∥s', '$\\mathbf{B}_{\\parallel s}$'), 3.0, false);
-
-        layers.labels.push(
-            `<text x="${fmt(cx)}" y="${fmt(cy - rMax - 22)}" fill="${palette.textMain}" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="700" text-anchor="middle">${escXml('Probenebene (ℱ_Sub)')}</text>`
-        );
-    };
-
-    // ------------------------------------------------------------------------
-    // Panel 3: 2D Basal Easy-Plane (0001) (F_Cryst)
-    // ------------------------------------------------------------------------
-    const render2DEasyPanel = (cx, cy, rMax) => {
-        const hexPts = [];
-        for (let i = 0; i < 6; i++) {
-            const ang = i * 60 * DEG2RAD;
-            hexPts.push(`${fmt(cx + rMax * Math.cos(ang))},${fmt(cy - rMax * Math.sin(ang))}`);
-        }
-        layers.crystal.push(
-            `<polygon points="${hexPts.join(' ')}" fill="${palette.easyFill}" fill-opacity="0.55" stroke="${palette.easyStroke}" stroke-width="1.8" />`
-        );
-
-        const drawCrystVec = (v, color, marker, text, sw = 2.4, dashed = false) => {
-            addArrow2D(cx, cy, cx + v[0] * rMax, cy - v[1] * rMax, color, marker, text, sw, dashed);
-        };
-
-        const crystTip = (v) => ({ x: cx + v[0] * rMax, y: cy - v[1] * rMax });
-        addSweepTrace((s) => (mDefined(s) ? crystTip(s.vectors.mHat.Cryst) : null), palette.m, 'arrow-m', { x: cx, y: cy });
-        addSweepTrace((s) => crystTip(s.vectors.bHat.Cryst), palette.B_easy, 'arrow-Beasy', { x: cx, y: cy }, true);
-
-        drawCrystVec([1, 0, 0], palette.ea, 'arrow-ea', lbl('ê_a [112\u03050]', '$\\hat{e}_a$'), 1.4, true);
-        drawCrystVec([0, 1, 0], palette.em, 'arrow-em', lbl('ê_m [11\u030500]', '$\\hat{e}_m$'), 1.4, true);
-        drawCrystVec(stateA.vectors.kHat.Cryst, palette.k, 'arrow-k', lbl('k̂_⊥c', '$\\hat{k}_{\\perp c}$'), 2.3, true);
-
-        if (showEquilibrium && !stateA.metrics.isEasyPlaneSingular) {
-            drawCrystVec(stateA.vectors.lHat.Cryst, palette.l, 'arrow-l', lbl('l̂', '$\\hat{l}$'), 2.7, false);
-            drawCrystVec(stateA.vectors.mHat.Cryst, palette.m, 'arrow-m', lbl('m̂', '$\\hat{m}$'), 2.7, false);
-        }
-        drawCrystVec(stateA.vectors.bHat.Cryst, palette.B_easy, 'arrow-Beasy', lbl('B_⊥c', '$\\mathbf{B}_{\\perp c}$'), 3.0, false);
-
-        layers.labels.push(
-            `<text x="${fmt(cx)}" y="${fmt(cy - rMax - 22)}" fill="${palette.textMain}" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="700" text-anchor="middle">${escXml('Basalebene (0001) Easy-Plane')}</text>`
-        );
-    };
-
-    // Dispatch layout
-    if (layout === 'combined') {
-        render3DPanel(300, 265, 195);
-        render2DSamplePanel(825, 140, 88);
-        render2DEasyPanel(825, 370, 88);
-    } else if (layout === '3d') {
-        render3DPanel(width * 0.5, height * 0.5, 195);
-    } else if (layout === '2d_sample') {
-        render2DSamplePanel(width * 0.5, height * 0.48, 175);
-    } else if (layout === '2d_easy') {
-        render2DEasyPanel(width * 0.5, height * 0.48, 175);
+            // Beyond the tip; turned aside if it would cover another one (c axis close to an edge)
+            const turns = [0, 35, -35, 70, -70, 110, -110];
+            wantLabel(0, [...around(ex, ey, ux, uy, fs * 0.35, turns), ...around(ex, ey, ux, uy, fs * 1.3, turns)], a.label, C.text, a.width);
+        });
     }
 
-    // Bottom Summary / Legend Strip
-    if (showLegend) {
-        const s = stateA.setup;
-        const m = stateA.metrics;
-        const infoLine = `${s.name} | ${s.mountMode}-Halterung | ${s.cutPreset} (θ_cut=${s.thetaCutDeg.toFixed(2)}°) | ${s.deviceType} θ_dev=${s.thetaDevDeg.toFixed(1)}° | ψ_S=${s.psiSDeg.toFixed(1)}°, φ_M=${s.phiMDeg.toFixed(1)}° | B_⊥c/B₀=${(m.bEasyRatio * 100).toFixed(1)}%, ∠(B,k̂)=${m.angleBKDeg.toFixed(1)}°, ∠(m̂,k̂)=${m.angleMKDeg.toFixed(1)}°, ∠(l̂,k̂)=${m.angleLKDeg.toFixed(1)}°${sweepStates.length ? ` | Sweep φ_M: ${fmtDeg(sweepFrom)}°→${fmtDeg(sweepTo)}°` : ''}`;
-        // Monospace 10.5px ≈ 6.4px per character: split into two rows at a " | " if it would overflow
-        const parts = infoLine.split(' | ');
-        let rows = [infoLine];
-        if (infoLine.length * 6.4 > width - 48 && parts.length > 1) {
-            let cut = 1;
-            while (cut < parts.length - 1 && parts.slice(0, cut + 1).join(' | ').length <= infoLine.length / 2) cut++;
-            rows = [parts.slice(0, cut).join(' | '), parts.slice(cut).join(' | ')];
-        }
-        const stripH = 10 + rows.length * 14;
-        layers.labels.push(
-            `<rect x="16" y="${height - 12 - stripH}" width="${width - 32}" height="${stripH}" rx="4" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1" />`,
-            ...rows.map(
-                (row, i) =>
-                    `<text x="${width / 2}" y="${height - 12 - stripH + 16 + i * 14}" fill="${palette.textMain}" font-family="JetBrains Mono, Consolas, monospace" font-size="10.5" text-anchor="middle">${escXml(row)}</text>`
-            )
-        );
-    }
+    placeLabels();
 
-    return `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<svg xmlns="http://www.w3.org/2000/svg"
-     xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
-     viewBox="0 0 ${width} ${height}"
-     width="${width}" height="${height}">
-  <defs>${defsContent}
-  </defs>
-  <g inkscape:groupmode="layer" id="layer_01_bg" inkscape:label="01_Background_Grid">
-    ${layers.bg.join('\n    ')}
-  </g>
-  <g inkscape:groupmode="layer" id="layer_02_crystal" inkscape:label="02_Crystal_EasyPlane">
-    ${layers.crystal.join('\n    ')}
-  </g>
-  <g inkscape:groupmode="layer" id="layer_03_substrate" inkscape:label="03_Substrate_Chip">
-    ${layers.substrate.join('\n    ')}
-  </g>
-  <g inkscape:groupmode="layer" id="layer_04_device" inkscape:label="04_Microstructure_IDT_CPW">
-    ${layers.device.join('\n    ')}
-  </g>${
-      layers.sweep.length
-          ? `
-  <g inkscape:groupmode="layer" id="layer_04b_sweep" inkscape:label="04b_Field_Sweep">
-    ${layers.sweep.join('\n    ')}
-  </g>`
-          : ''
-  }
-  <g inkscape:groupmode="layer" id="layer_05_vectors" inkscape:label="05_Vectors_Projections">
-    ${layers.vectors.join('\n    ')}
-  </g>
-  <g inkscape:groupmode="layer" id="layer_06_arcs" inkscape:label="06_Angle_Arcs">
-    ${layers.arcs.join('\n    ')}
-  </g>
-  <g inkscape:groupmode="layer" id="layer_07_labels" inkscape:label="07_Labels_Legend">
-    ${layers.labels.join('\n    ')}
-  </g>
-</svg>`;
+    // ---- assemble
+    const s = state.setup;
+    const desc = `${s.name || s.cutPreset} · ${s.deviceType} θ_dev=${fmtAngle(s.thetaDevDeg)} · Einbau ${s.mountMode} ψ_S=${fmtAngle(s.psiSDeg)} · φ_M=${fmtAngle(s.phiMDeg)}`;
+    const layer = (id, label, items) =>
+        items.length ? `  <g id="${id}" inkscape:groupmode="layer" inkscape:label="${label}">\n    ${items.join('\n    ')}\n  </g>\n` : '';
+    const W = n2(widthPt);
+    const H = n2(heightPt);
+    const bg = C.background && C.background !== 'none' ? `  <rect id="background" width="${W}" height="${H}" fill="${C.background}"/>\n` : '';
+
+    return (
+        `<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n` +
+        `<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" ` +
+        `width="${n2(widthPt / PT_PER_MM)}mm" height="${n2(heightPt / PT_PER_MM)}mm" viewBox="0 0 ${W} ${H}" ` +
+        `font-family="${esc(st.fontFamily)}" stroke-linecap="round">\n` +
+        `  <title>Probe und Magnetfeld</title>\n  <desc>${esc(desc)}</desc>\n` +
+        bg +
+        layer('sample', 'Probe', layers.sample) +
+        layer('antenna', 'Antenne', layers.antenna) +
+        layer('guides', 'Hilfslinien', layers.guides) +
+        layer('arcs', 'Winkel', layers.arcs) +
+        layer('arrows', 'Pfeile', layers.arrows) +
+        layer('axes', 'Kristallachsen', layers.axes) +
+        layer('labels', 'Beschriftung', layers.labels) +
+        `</svg>\n`
+    );
 }

@@ -686,42 +686,103 @@
             <!-- Tab: SVG -->
             <div class="modal-body svg-modal-grid export-panel" data-epanel="svg">
                 <div class="svg-options-col">
-                    <p class="export-intro">Nach Ebenen gruppierte Vektorgrafik (<code>.svg</code>) für Inkscape / LaTeX.</p>
-                    <label class="field-label">Layout / Projektions-Modus:</label>
-                    <select id="svgOptLayout" class="select-input">
-                        <option value="combined">Kombi-Grafik (3D + 2D Sample + 2D Easy-Plane)</option>
-                        <option value="3d">Nur 3D-Schemazeichnung (aktuelles Bezugssystem)</option>
-                        <option value="2d_sample">Nur 2D-Sample-Ebene (Sample-Draufsicht mit IDT/CPW)</option>
-                        <option value="2d_easy">Nur 2D-Basalebene (0001) Easy-Plane</option>
-                    </select>
+                    <p class="export-intro">Probe und Feld immer aus derselben Sicht und im selben Maßstab.</p>
+                    <details class="more-details fig-more">
+                        <summary>Was ist drauf?</summary>
+                        <p class="fig-note">Probe mit Antennen (um den Antennenwinkel gedreht), Welle, Feld mit Winkel in der Ebene und – falls gekippt – aus der Ebene. Unten links die Richtungen der Kanten und der Normalen (Miller-Bravais). Schrift und Linien sind Druckgrößen bei der eingestellten Breite; die Teile liegen in eigenen Inkscape-Ebenen.</p>
+                    </details>
 
-                    <label class="field-label">3D-Bezugssystem (was steht still):</label>
-                    <select id="svgOptFrame" class="select-input">
-                        <option value="Sub">Probe</option>
-                        <option value="Wave">Welle k̂</option>
-                        <option value="Cryst">Kristall / Easy-Plane</option>
-                        <option value="Lab">Magnet</option>
-                    </select>
-
-                    <label class="field-label">Sichtbare Ebenen im SVG:</label>
-                    <div class="svg-chk-list">
-                        <label><input type="checkbox" id="svgOptEasyPlane" checked /> (0001) Easy-Plane &amp; Schnittlinie</label>
-                        <label><input type="checkbox" id="svgOptMicro" checked /> IDT / CPW Mikrostruktur</label>
-                        <label><input type="checkbox" id="svgOptCrystalAxes" checked /> Kristallachsen (ê<sub>a</sub>, ê<sub>m</sub>, ê<sub>c</sub>)</label>
-                        <label><input type="checkbox" id="svgOptEquilibrium" checked /> Gleichgewicht (m̂ &amp; Néel-Vektor l̂)</label>
-                        <label><input type="checkbox" id="svgOptArcs" checked /> Winkelbögen</label>
-                        <label><input type="checkbox" id="svgOptLegend" checked /> Parameter-Legende unten</label>
-                        <label title="Beschriftungen als $\mathbf{B}$, $\hat{k}$ … – in Inkscape als PDF+LaTeX (pdf_tex) speichern, dann setzt LaTeX die Schrift"><input type="checkbox" id="svgOptLatex" /> LaTeX-Labels</label>
-                        <label><input type="checkbox" id="svgOptTransparent" /> Transparenter Hintergrund</label>
+                    <div class="fig-grid">
+                        <label class="field-label" for="figView">Ansicht</label>
+                        <select id="figView" class="select-input" data-fopt="view">
+                            <option value="oblique">Schräg</option>
+                            <option value="top">Draufsicht</option>
+                        </select>
+                        <label class="field-label" for="figAngleRef">Feldwinkel ab</label>
+                        <select id="figAngleRef" class="select-input" data-fopt="angleRef">
+                            <option value="wave">Welle k̂</option>
+                            <option value="edge">0°-Kante</option>
+                        </select>
+                        <label class="field-label" for="figAngleLabels">Winkel</label>
+                        <select id="figAngleLabels" class="select-input" data-fopt="angleLabels">
+                            <option value="value">30°</option>
+                            <option value="symbol">φ</option>
+                            <option value="both">φ = 30°</option>
+                        </select>
                     </div>
 
-                    <label class="field-label" title="Gepunktete Spur: wohin B und m̂ wandern, während der Magnet von Start bis Stopp dreht. Die Pfeilspitze zeigt die Drehrichtung.">Feld-Sweep einzeichnen:</label>
-                    <div class="svg-sweep-row">
-                        <label><input type="checkbox" id="svgOptSweep" /> <span data-tex="\phi_M">φ_M</span></label>
-                        <div class="num-unit"><input type="number" id="svgOptSweepFrom" value="0" step="15" aria-label="Startwinkel" /><span>°</span></div>
-                        <span aria-hidden="true">→</span>
-                        <div class="num-unit"><input type="number" id="svgOptSweepTo" value="180" step="15" aria-label="Stoppwinkel" /><span>°</span></div>
+                    <div class="svg-chk-list fig-chk">
+                        <label><input type="checkbox" data-fopt="showAntenna" /> Antennen</label>
+                        <label><input type="checkbox" data-fopt="showWave" /> Welle k̂</label>
+                        <label><input type="checkbox" data-fopt="showAxes" /> Kristallrichtungen</label>
+                        <label><input type="checkbox" data-fopt="showCAxis" /> c-Achse</label>
+                        <label><input type="checkbox" data-fopt="showMoment" /> m̂ (Gleichgewicht)</label>
+                        <label title="Beschriftungen als $\mathbf{B}$, $\varphi$ … – in Inkscape als PDF+LaTeX (pdf_tex) speichern, dann setzt LaTeX die Schrift"><input type="checkbox" data-fopt="latex" /> LaTeX-Labels</label>
                     </div>
+
+                    <label class="field-label" for="figStyleSelect">Stil</label>
+                    <div class="preset-dropdown-row">
+                        <select id="figStyleSelect" class="select-input"></select>
+                        <button type="button" id="btnFigStyleDelete" class="btn btn-xs btn-ghost preset-delete-btn" title="Gespeicherten Stil löschen">✕</button>
+                    </div>
+                    <details class="more-details fig-style-editor">
+                        <summary>Stil anpassen</summary>
+                        <div class="fig-style-body">
+                            <div class="fig-sub">Farben</div>
+                            <div class="fig-color-grid">
+                                <label><input type="color" data-fs="colors.sample" /> Probe</label>
+                                <label><input type="color" data-fs="colors.antenna" /> Antenne</label>
+                                <label><input type="color" data-fs="colors.field" /> Feld</label>
+                                <label><input type="color" data-fs="colors.wave" /> Welle</label>
+                                <label><input type="color" data-fs="colors.angle" /> Winkel</label>
+                                <label><input type="color" data-fs="colors.axes" /> Achsen</label>
+                                <label><input type="color" data-fs="colors.moment" /> m̂</label>
+                                <label><input type="color" data-fs="colors.text" /> Text</label>
+                                <label><input type="color" data-fs="colors.background" /> Hintergrund</label>
+                                <label><input type="checkbox" id="figBgNone" /> transparent</label>
+                            </div>
+                            <div class="fig-sub">Linien (pt)</div>
+                            <div class="fig-num-grid">
+                                <label>Feld<input type="number" min="0" step="0.1" data-fs="lines.field" /></label>
+                                <label>Welle<input type="number" min="0" step="0.1" data-fs="lines.wave" /></label>
+                                <label>Bögen<input type="number" min="0" step="0.1" data-fs="lines.arc" /></label>
+                                <label>Achsen<input type="number" min="0" step="0.1" data-fs="lines.axes" /></label>
+                                <label>Umriss<input type="number" min="0" step="0.1" data-fs="lines.outline" /></label>
+                                <label>Hilfslinien<input type="number" min="0" step="0.1" data-fs="lines.guide" /></label>
+                                <label>Spitze<input type="number" min="0" step="0.5" data-fs="arrowHeadPt" /></label>
+                            </div>
+                            <div class="fig-sub">Größe &amp; Schrift</div>
+                            <div class="fig-num-grid">
+                                <label>Breite (mm)<input type="number" min="30" step="5" data-fs="widthMm" /></label>
+                                <label>Schrift (pt)<input type="number" min="5" step="0.5" data-fs="fontSizePt" /></label>
+                                <label>Probendicke<input type="number" min="0" step="0.02" data-fs="sampleThickness" /></label>
+                                <label>Vektoren<select data-fs="vectorStyle">
+                                    <option value="bold">fett</option>
+                                    <option value="hat">Hut</option>
+                                    <option value="arrow">Pfeil</option>
+                                    <option value="none">schlicht</option>
+                                </select></label>
+                                <label class="wide">Schriftart<input type="text" data-fs="fontFamily" /></label>
+                            </div>
+                            <div class="fig-sub">Symbole</div>
+                            <div class="fig-sym-grid">
+                                <label title="Feld"><input type="text" data-fs="symbols.field" /></label>
+                                <label title="Welle"><input type="text" data-fs="symbols.wave" /></label>
+                                <label title="Moment"><input type="text" data-fs="symbols.moment" /></label>
+                                <label title="Winkel in der Ebene"><input type="text" data-fs="symbols.phi" /></label>
+                                <label title="Winkel aus der Ebene"><input type="text" data-fs="symbols.theta" /></label>
+                                <label title="Antennenwinkel"><input type="text" data-fs="symbols.dev" /></label>
+                            </div>
+                            <div class="save-preset-row">
+                                <input type="text" id="figStyleName" class="input-text" placeholder="Name für diesen Stil" />
+                                <button type="button" id="btnFigStyleSave" class="btn btn-xs btn-secondary">Speichern</button>
+                            </div>
+                            <div class="fig-style-io">
+                                <button type="button" id="btnFigStyleCopy" class="btn btn-xs btn-ghost" title="Stil als JSON in die Zwischenablage, z. B. für Kolleg:innen">Stil kopieren</button>
+                                <button type="button" id="btnFigStylePaste" class="btn btn-xs btn-ghost" title="Stil-JSON aus der Zwischenablage übernehmen">Stil einfügen</button>
+                            </div>
+                        </div>
+                    </details>
 
                     <div class="modal-actions-stack">
                         <button type="button" id="btnDownloadSvg" class="btn btn-primary btn-block">

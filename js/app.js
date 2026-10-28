@@ -34,7 +34,7 @@ import {
 } from './math_core.js';
 
 import { Scene3DController, VECTOR_COLORS } from './visualizer_3d.js';
-import { generateThesisSVG } from './svg_exporter.js';
+import { generateFigureSVG, BUILTIN_FIGURE_STYLES, DEFAULT_FIGURE_OPTIONS, completeFigureStyle } from './svg_exporter.js';
 import { buildLabNote, buildSweepCsv, downloadBlob, downloadText, exportBaseName } from './export_tools.js';
 import { renderSweepPlot } from './sweep_plot.js';
 import { buildNarrative, buildSummary, shortDirection, token } from './narrative.js';
@@ -736,8 +736,6 @@ function bindUIEvents() {
     document.querySelectorAll('#frameLockPills .frame-pill').forEach((pill) => {
         pill.addEventListener('click', () => {
             sceneController.setLockFrame(pill.dataset.frame, true);
-            const svgOpt = document.getElementById('svgOptFrame');
-            if (svgOpt) svgOpt.value = pill.dataset.frame;
             syncFramePills();
             writeStateToUrl();
         });
@@ -1683,30 +1681,185 @@ function setFieldPreview(vectors) {
 
 let activeExportTab = 'svg';
 
-function refreshSvgPreview() {
-    const st = evaluateSetup(getActiveSetup());
-    const svgStr = generateThesisSVG(st, {
-        layout: document.getElementById('svgOptLayout').value,
-        lockFrame: document.getElementById('svgOptFrame').value,
-        cameraAzimuthDeg: sceneController.camera.azimuthDeg,
-        cameraElevationDeg: sceneController.camera.elevationDeg,
-        showEasyPlane: document.getElementById('svgOptEasyPlane').checked,
-        showMicrostructure: document.getElementById('svgOptMicro').checked,
-        showCrystalAxes: document.getElementById('svgOptCrystalAxes').checked,
-        showEquilibrium: document.getElementById('svgOptEquilibrium').checked,
-        showAngleArcs: document.getElementById('svgOptArcs').checked,
-        showLegend: document.getElementById('svgOptLegend').checked,
-        latexLabels: document.getElementById('svgOptLatex').checked,
-        transparentBg: document.getElementById('svgOptTransparent').checked,
-        sweep: document.getElementById('svgOptSweep').checked
-            ? {
-                  fromDeg: Number(document.getElementById('svgOptSweepFrom').value) || 0,
-                  toDeg: Number(document.getElementById('svgOptSweepTo').value) || 0
-              }
-            : null
+// Figure (SVG): options, the style being edited and the user's saved styles live in localStorage,
+// so every figure of a thesis comes out the same without setting it up again
+const FIGURE_STORAGE_KEY = 'hematite_figure_v1';
+const figure = { options: { ...DEFAULT_FIGURE_OPTIONS }, style: completeFigureStyle(BUILTIN_FIGURE_STYLES.Standard), styleName: 'Standard', saved: {} };
+
+function loadFigureSettings() {
+    try {
+        const s = JSON.parse(localStorage.getItem(FIGURE_STORAGE_KEY) || 'null');
+        if (!s) return;
+        figure.options = { ...DEFAULT_FIGURE_OPTIONS, ...(s.options || {}) };
+        figure.saved = s.saved && typeof s.saved === 'object' ? s.saved : {};
+        figure.style = completeFigureStyle(s.style);
+        figure.styleName = s.styleName || '';
+    } catch (_) {
+        // Keep the defaults
+    }
+}
+
+function saveFigureSettings() {
+    try {
+        localStorage.setItem(FIGURE_STORAGE_KEY, JSON.stringify(figure));
+    } catch (_) {
+        // Ignore storage quota errors
+    }
+}
+
+const figStylePath = (path) => path.split('.');
+function getFigStyleValue(path) {
+    return figStylePath(path).reduce((o, k) => o?.[k], figure.style);
+}
+function setFigStyleValue(path, value) {
+    const keys = figStylePath(path);
+    const last = keys.pop();
+    keys.reduce((o, k) => o[k], figure.style)[last] = value;
+}
+
+function renderFigStyleSelect() {
+    const sel = document.getElementById('figStyleSelect');
+    // Built with DOM nodes: saved style names are user text
+    const group = (label, names, prefix) => {
+        const g = document.createElement('optgroup');
+        g.label = label;
+        names.forEach((n) => g.append(new Option(n, `${prefix}:${n}`)));
+        return g;
+    };
+    const own = Object.keys(figure.saved);
+    sel.replaceChildren(group('Mitgeliefert', Object.keys(BUILTIN_FIGURE_STYLES), 'b'));
+    if (own.length) sel.append(group('Eigene', own, 'u'));
+    if (!figure.styleName) {
+        const changed = new Option('(geändert)', '');
+        changed.disabled = true;
+        sel.append(changed);
+    }
+    sel.value = figure.styleName ? `${figure.saved[figure.styleName] ? 'u' : 'b'}:${figure.styleName}` : '';
+    document.getElementById('btnFigStyleDelete').disabled = !figure.saved[figure.styleName];
+}
+
+function syncFigureControls() {
+    document.querySelectorAll('[data-fopt]').forEach((el) => {
+        if (el.type === 'checkbox') el.checked = !!figure.options[el.dataset.fopt];
+        else el.value = figure.options[el.dataset.fopt];
     });
+    document.querySelectorAll('[data-fs]').forEach((el) => {
+        const v = getFigStyleValue(el.dataset.fs);
+        if (el.type === 'color') el.value = /^#[0-9a-f]{6}$/i.test(v) ? v : '#ffffff';
+        else el.value = v;
+    });
+    const bgNone = getFigStyleValue('colors.background') === 'none';
+    document.getElementById('figBgNone').checked = bgNone;
+    document.querySelector('[data-fs="colors.background"]').disabled = bgNone;
+    renderFigStyleSelect();
+}
+
+function refreshSvgPreview() {
+    const svgStr = generateFigureSVG(evaluateSetup(getActiveSetup()), figure.options, figure.style);
     document.getElementById('svgPreviewContainer').innerHTML = svgStr;
     return svgStr;
+}
+
+function applyFigureStyle(style, name) {
+    figure.style = completeFigureStyle(JSON.parse(JSON.stringify(style)));
+    figure.styleName = name;
+    syncFigureControls();
+    saveFigureSettings();
+    refreshSvgPreview();
+}
+
+function bindFigureControls() {
+    loadFigureSettings();
+    syncFigureControls();
+
+    document.querySelectorAll('[data-fopt]').forEach((el) =>
+        el.addEventListener('change', () => {
+            figure.options[el.dataset.fopt] = el.type === 'checkbox' ? el.checked : el.value;
+            saveFigureSettings();
+            refreshSvgPreview();
+        })
+    );
+
+    // Any edit turns the style into an unsaved one; the dropdown then shows "(geändert)"
+    const edited = () => {
+        figure.styleName = '';
+        renderFigStyleSelect();
+        saveFigureSettings();
+        refreshSvgPreview();
+    };
+    document.querySelectorAll('[data-fs]').forEach((el) =>
+        el.addEventListener('input', () => {
+            if (el.type === 'number') {
+                if (el.value === '' || !Number.isFinite(Number(el.value))) return;
+                setFigStyleValue(el.dataset.fs, Number(el.value));
+            } else {
+                setFigStyleValue(el.dataset.fs, el.value);
+            }
+            edited();
+        })
+    );
+    document.getElementById('figBgNone').addEventListener('change', (e) => {
+        const color = document.querySelector('[data-fs="colors.background"]');
+        color.disabled = e.target.checked;
+        setFigStyleValue('colors.background', e.target.checked ? 'none' : color.value);
+        edited();
+    });
+
+    document.getElementById('figStyleSelect').addEventListener('change', (e) => {
+        const [group, ...rest] = e.target.value.split(':');
+        const name = rest.join(':');
+        const style = group === 'u' ? figure.saved[name] : BUILTIN_FIGURE_STYLES[name];
+        if (style) applyFigureStyle(style, name);
+    });
+
+    const nameInput = document.getElementById('figStyleName');
+    const saveBtn = document.getElementById('btnFigStyleSave');
+    const save = () => {
+        const name = nameInput.value.trim();
+        if (!name) {
+            nameInput.focus();
+            return;
+        }
+        if (BUILTIN_FIGURE_STYLES[name]) {
+            flashButton(saveBtn, 'Name vergeben');
+            return;
+        }
+        figure.saved[name] = JSON.parse(JSON.stringify(figure.style));
+        figure.styleName = name;
+        nameInput.value = '';
+        renderFigStyleSelect();
+        saveFigureSettings();
+        flashButton(saveBtn, 'Gespeichert');
+    };
+    saveBtn.addEventListener('click', save);
+    nameInput.addEventListener('keydown', (e) => e.key === 'Enter' && save());
+
+    document.getElementById('btnFigStyleDelete').addEventListener('click', () => {
+        if (!figure.saved[figure.styleName]) return;
+        delete figure.saved[figure.styleName];
+        applyFigureStyle(BUILTIN_FIGURE_STYLES.Standard, 'Standard');
+    });
+
+    document.getElementById('btnFigStyleCopy').addEventListener('click', (e) => {
+        navigator.clipboard.writeText(JSON.stringify(figure.style, null, 2));
+        flashButton(e.currentTarget, 'Kopiert');
+    });
+    document.getElementById('btnFigStylePaste').addEventListener('click', (e) => {
+        const btn = e.currentTarget;
+        navigator.clipboard.readText().then(
+            (text) => {
+                try {
+                    const style = JSON.parse(text);
+                    if (!style || typeof style !== 'object' || !style.colors) throw new Error('no style');
+                    applyFigureStyle(style, '');
+                    flashButton(btn, 'Übernommen');
+                } catch (_) {
+                    flashButton(btn, 'Kein Stil-JSON');
+                }
+            },
+            () => flashButton(btn, 'Kein Zugriff')
+        );
+    });
 }
 
 // Logical size (CSS px) per PNG format; 'view' = the size of view 1 on screen
@@ -1816,7 +1969,6 @@ function bindExportModal() {
 
     document.querySelectorAll('[data-open-export]').forEach((btn) => {
         btn.addEventListener('click', () => {
-            document.getElementById('svgOptFrame').value = sceneController.lockFrame;
             modal.classList.remove('hidden');
             openExportTab(btn.dataset.openExport);
         });
@@ -1829,27 +1981,7 @@ function bindExportModal() {
         if (e.target === modal) modal.classList.add('hidden');
     });
 
-    [
-        'svgOptLayout',
-        'svgOptFrame',
-        'svgOptEasyPlane',
-        'svgOptMicro',
-        'svgOptCrystalAxes',
-        'svgOptEquilibrium',
-        'svgOptArcs',
-        'svgOptLegend',
-        'svgOptLatex',
-        'svgOptTransparent',
-        'svgOptSweep'
-    ].forEach((id) => document.getElementById(id).addEventListener('change', refreshSvgPreview));
-
-    // Typing a start/stop angle switches the sweep on
-    ['svgOptSweepFrom', 'svgOptSweepTo'].forEach((id) =>
-        document.getElementById(id).addEventListener('input', () => {
-            document.getElementById('svgOptSweep').checked = true;
-            refreshSvgPreview();
-        })
-    );
+    bindFigureControls();
 
     ['pngOptFormat', 'pngOptColors', 'pngOptScale', 'pngOptTransparent'].forEach((id) =>
         document.getElementById(id).addEventListener('change', refreshPngPreview)
