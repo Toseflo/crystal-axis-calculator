@@ -765,9 +765,11 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
     const devTypes = o.showAntenna ? (DEVICE_SETS[o.devices] || DEVICE_SETS.pair)(ownType) : [];
     const shapes = devTypes.map(microstructure);
     const sideOf = (i) => (i === 0 ? -1 : 1);
-    // receiver mirrored along k; both turned so the shorting bar (+t in the shape) faces the front edge
-    const tFlip = tHat[1] > 0 ? -1 : 1;
-    const devPoint = (i, dist, s) => ([pk, pt]) => wave(sideOf(i) * (dist - pk * s), tFlip * pt * s);
+    // receiver mirrored to the emitter, as on our samples: along k, and an antenna (symmetric along k)
+    // also across k, so its shorting bar (+t in the shape) faces the front edge, the emitter's the back
+    const back = tHat[1] < 0 ? -1 : 1;
+    const tSide = (i) => back * (i === 1 && shapes.length > 1 && devTypes[1] === 'CPW' ? -1 : 1);
+    const devPoint = (i, dist, s) => ([pk, pt]) => wave(sideOf(i) * (dist - pk * s), tSide(i) * pt * s);
     const overflow = (dist, s) =>
         Math.max(0, ...shapes.flatMap((polys, i) => polys.flat().map((q) => {
             const p = devPoint(i, dist, s)(q);
