@@ -30,6 +30,7 @@ const HY = 1;
 const FIELD_LEN = 0.86;
 const DEV_DIST = 1; // emitter / receiver centres at -/+ DEV_DIST along k
 const DEV_SCALE = 1; // microstructures as in the 3D view
+const TRIAD_SCALE = 0.75; // direction triad, labels included, a bit smaller than the rest
 const MIN_HALF_GAP = 0.36; // free half-distance between the antennas, room for k
 const K_GAP = 0.06; // k starts this far from the emitter
 const MOMENT_LEN = 0.8;
@@ -557,8 +558,8 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
         if (other < own + fs * 0.3) cost += 3 + Math.max(0, own - other) / fs;
         return cost;
     };
-    const placeLabels = (core) => {
-        const placed = [];
+    const placeLabels = (core, taken) => {
+        const placed = taken ? [taken] : [];
         const m = fs * 0.15;
         // the spot at an arrow tip is kept for that arrow's name
         const tips = labelReqs.filter((q) => q.cands[0]?.tip).map((q) => ({ q, box: grow(labelBox(q.cands[0], q.w), m) }));
@@ -1052,6 +1053,7 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
 
     // ---- crystal directions of the sample edges and the normal, in a free corner
     let core = boundsOf(ink);
+    let triadBox = null; // the other labels keep off it
     if (o.showAxes) {
         const mb = state.millerBravais;
         const axLen = fs * 3;
@@ -1123,6 +1125,10 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
             box = unionBox(box, opts[i][pick[i]].box);
         });
 
+        // The triad is drawn smaller than the rest (k), so it fits into a free corner of the drawing
+        const k = latex ? 1 : TRIAD_SCALE; // LaTeX sets its own text size, the labels would outgrow the box
+        box = { l: box.l * k, r: box.r * k, t: box.t * k, b: box.b * k };
+
         // Cheapest free spot: not on the sample or any arrow, smallest overall figure, then bottom left
         const hull = convexHull(slab.map(toSvg));
         const step = fs * 0.4;
@@ -1142,29 +1148,33 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
         }
         const { ox, oy } = best || { ox: core.l - box.l, oy: core.b - box.b + fs };
 
+        // Drawn around (0, 0) at full size and scaled as one group; lines keep their stroke width
+        const g = [];
+        const sw = L.axes / k;
+        const at = ([x, y]) => [ox + x * k, oy + y * k];
         axes.forEach((a, i) => {
             if (a.toward) {
-                layers.axes.push(`<circle cx="${n2(ox)}" cy="${n2(oy)}" r="${n2(ring)}" fill="none" stroke="${C.axes}" stroke-width="${n2(L.axes)}"/>`);
-                layers.axes.push(`<circle cx="${n2(ox)}" cy="${n2(oy)}" r="${n2(L.axes * 1.2)}" fill="${C.axes}"/>`);
-                ink.push([ox - ring, oy - ring], [ox + ring, oy + ring]);
+                g.push(`<circle cx="0" cy="0" r="${n2(ring)}" fill="none" stroke="${C.axes}" stroke-width="${n2(sw)}"/>`);
+                g.push(`<circle cx="0" cy="0" r="${n2(sw * 1.2)}" fill="${C.axes}"/>`);
             } else {
-                const ex = ox + a.ex;
-                const ey = oy + a.ey;
                 const [ux, uy] = a.u;
                 const hl = fs * 0.6;
-                addLine([[ox, oy], [ex, ey]], W_LINE);
-                layers.axes.push(
-                    `<path d="M${n2(ox)},${n2(oy)}L${n2(ex - ux * hl * 0.7)},${n2(ey - uy * hl * 0.7)}" stroke="${C.axes}" stroke-width="${n2(L.axes)}" fill="none"${a.dashed ? ` stroke-dasharray="${n2(L.axes * 3)},${n2(L.axes * 2)}"` : ''}/>`,
-                    headPath([ex, ey], ux, uy, hl, C.axes)
+                addLine([at([0, 0]), at([a.ex, a.ey])], W_LINE);
+                g.push(
+                    `<path d="M0,0L${n2(a.ex - ux * hl * 0.7)},${n2(a.ey - uy * hl * 0.7)}" stroke="${C.axes}" stroke-width="${n2(sw)}" fill="none"${a.dashed ? ` stroke-dasharray="${n2(sw * 3)},${n2(sw * 2)}"` : ''}/>`,
+                    headPath([a.ex, a.ey], ux, uy, hl, C.axes)
                 );
             }
-            const cands = a.cands(ox, oy);
-            wantLabel(0, [{ ...cands[pick[i]], pen: 0 }, ...cands.map((q) => ({ ...q, pen: q.pen + 5 }))], a.content, C.text, a.width);
+            const b = opts[i][pick[i]].box;
+            g.push(typeof a.content === 'function' ? a.content(b.l, b.y) : `<text x="${n2(b.x)}" y="${n2(b.y)}" text-anchor="${b.anchor}" fill="${C.text}" font-size="${fs}">${a.content}</text>`);
         });
+        layers.axes.push(`<g transform="translate(${n2(ox)},${n2(oy)}) scale(${n2(k)})">${g.join('')}</g>`);
+        triadBox = { l: ox + box.l, r: ox + box.r, t: oy + box.t, b: oy + box.b };
+        ink.push([triadBox.l, triadBox.t], [triadBox.r, triadBox.b]);
         core = boundsOf(ink);
     }
 
-    const placed = placeLabels(core);
+    const placed = placeLabels(core, triadBox);
 
     // ---- tight crop around everything drawn; the panel letter in its top left corner
     const frame = grow(placed.reduce(unionBox, core), fs * 0.3);
