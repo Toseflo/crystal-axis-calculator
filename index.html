@@ -689,7 +689,7 @@
                     <p class="export-intro">Probe und Feld immer aus derselben Sicht und im selben Maßstab.</p>
                     <details class="more-details fig-more">
                         <summary>Was ist drauf?</summary>
-                        <p class="fig-note">Probe mit Antennen (um den Antennenwinkel gedreht), Welle, Feld mit Winkel in der Ebene und – falls gekippt – aus der Ebene. Unten links die Richtungen der Kanten und der Normalen (Miller-Bravais). Schrift und Linien sind Druckgrößen bei der eingestellten Breite; die Teile liegen in eigenen Inkscape-Ebenen.</p>
+                        <p class="fig-note">Probe mit Sender und Empfänger wie in der 3D-Ansicht (um den Antennenwinkel gedreht), dazwischen die Welle k; das Feld beginnt auf k, mit Winkel in der Ebene und – falls gekippt – aus der Ebene. Daneben die Richtungen der Kanten und der Normalen (Miller-Bravais). Schrift und Linien sind Druckgrößen bei der eingestellten Breite; die Teile liegen in eigenen Inkscape-Ebenen.</p>
                     </details>
 
                     <div class="fig-grid">
@@ -697,6 +697,13 @@
                         <select id="figView" class="select-input" data-fopt="view">
                             <option value="oblique">Schräg</option>
                             <option value="top">Draufsicht</option>
+                        </select>
+                        <label class="field-label" for="figDevices">Antennen</label>
+                        <select id="figDevices" class="select-input" data-fopt="devices" title="Sender links, Empfänger rechts; „Antenne“ = kurzgeschlossene Koplanarleitung">
+                            <option value="pair">Zwei wie im Setup</option>
+                            <option value="single">Nur Sender</option>
+                            <option value="IDT-CPW">IDT → Antenne</option>
+                            <option value="CPW-IDT">Antenne → IDT</option>
                         </select>
                         <label class="field-label" for="figAngleRef">Feldwinkel ab</label>
                         <select id="figAngleRef" class="select-input" data-fopt="angleRef">

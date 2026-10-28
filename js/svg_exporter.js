@@ -2,9 +2,10 @@
  * Figure export: one uniform schematic of the sample and the magnetic field.
  *
  * The sample always sits in the same pose and at the same scale (fixed camera in the sample frame
- * F_Sub), so figures made from different setups line up in a thesis. Drawn: slab, the two antennas
- * turned by theta_dev, the wave vector, the field arrow with its in-plane and out-of-plane angle,
- * and a small triad with the Miller-Bravais indices of the sample edges and the surface normal.
+ * F_Sub), so figures made from different setups line up in a thesis. Drawn: slab, emitter (and
+ * receiver) shaped as in the 3D view and turned by theta_dev, the wave vector between them, the
+ * field arrow with its in-plane and out-of-plane angle, and a small triad with the Miller-Bravais
+ * directions of the sample edges and the surface normal.
  * The figure is cropped tightly around what is drawn.
  *
  * Geometry lives in sample units (top surface at z = 0); the SVG viewBox is in pt, so font sizes
@@ -21,15 +22,16 @@ const VIEWS = {
 };
 
 const HX = 1.5; // half edges of the sample: long along the 0° edge x_s
-const HY = 0.8;
+const HY = 1;
 const FIELD_LEN = 0.86;
-const ANT_IN = 0.92; // antennas sit at |k| = ANT_IN … ANT_OUT, |t| <= ANT_T (shrunk to fit the sample)
-const ANT_OUT = 1.28;
-const ANT_T = 0.4;
+const DEV_DIST = 1; // emitter / receiver centres at -/+ DEV_DIST along k
+const DEV_SCALE = 1; // microstructures as in the 3D view
+const MIN_HALF_GAP = 0.36; // free half-distance between the antennas, room for k
+const K_GAP = 0.06; // k starts this far from the emitter
 const MOMENT_LEN = 0.8;
-const R_DEV = 0.3; // arc radii: antenna angle, in-plane field angle, elevation
-const R_PHI = 0.44;
-const R_ELEV = 0.64;
+const R_DEV = 0.36; // arc radii: antenna angle, in-plane field angle, elevation
+const R_PHI = 0.48;
+const R_ELEV = 0.6;
 const TINY_DEG = 0.05;
 
 // ---------------------------------------------------------------------------
@@ -109,6 +111,7 @@ export const DEFAULT_FIGURE_OPTIONS = {
     angleRef: 'wave', // in-plane field angle measured from k ('wave') or from the 0° edge ('edge')
     angleLabels: 'value', // 'value' | 'symbol' | 'both'
     showAntenna: true,
+    devices: 'pair', // 'pair' | 'single' | 'IDT-CPW' | 'CPW-IDT' (emitter first)
     showWave: true,
     showAxes: true,
     showCAxis: true,
@@ -128,6 +131,46 @@ export function completeFigureStyle(style) {
         symbols: { ...base.symbols, ...(s.symbols || {}) }
     };
 }
+
+// ---------------------------------------------------------------------------
+// Antennas: the same shapes as in the 3D view, in the wave frame [along k, along t]
+// ---------------------------------------------------------------------------
+
+const DEVICE_SETS = {
+    pair: (own) => [own, own],
+    single: (own) => [own],
+    'IDT-CPW': () => ['IDT', 'CPW'],
+    'CPW-IDT': () => ['CPW', 'IDT']
+};
+
+/** Interdigital transducer (two combs) or shorted coplanar waveguide; fingers / lines along t. */
+function microstructure(type) {
+    if (type === 'IDT') {
+        const w = 0.042;
+        const x0 = -5.5 * w;
+        const yOuter = 0.28;
+        const yBus = yOuter - 1.35 * w;
+        const yTipTop = -yBus + w;
+        const yTipBot = yBus - w;
+        const comb = (y0, yB, yTip, fingers) => [
+            [x0, y0],
+            [-x0, y0],
+            [-x0, yB],
+            ...fingers.flatMap((i) => [[x0 + (i + 1) * w, yB], [x0 + (i + 1) * w, yTip], [x0 + i * w, yTip], [x0 + i * w, yB]]),
+            [x0, yB]
+        ].filter((p, i, all) => i === 0 || p[0] !== all[i - 1][0] || p[1] !== all[i - 1][1]);
+        return [comb(yOuter, yBus, yTipTop, [8, 4, 0]), comb(-yOuter, -yBus, yTipBot, [10, 6, 2])];
+    }
+    const w = 0.056;
+    const yBot = -0.35;
+    const yTop = 0.35;
+    const yIn = yTop - w;
+    return [[
+        [-2.5 * w, yTop], [2.5 * w, yTop], [2.5 * w, yBot], [1.5 * w, yBot], [1.5 * w, yIn], [0.5 * w, yIn],
+        [0.5 * w, yBot], [-0.5 * w, yBot], [-0.5 * w, yIn], [-1.5 * w, yIn], [-1.5 * w, yBot], [-2.5 * w, yBot]
+    ]];
+}
+const halfLength = (type) => (type === 'IDT' ? 5.5 * 0.042 : 2.5 * 0.056);
 
 // ---------------------------------------------------------------------------
 // Small vector + colour helpers
@@ -412,26 +455,33 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
         return { content, width };
     };
 
-    // Label box just beyond a screen point, pushed away along a screen direction (unit, y down)
+    // Label boxes: just beyond a screen point, pushed along a screen direction (unit, y down),
+    // or centred on a point
     const labelBox = (c, w) => {
+        if (c.center) {
+            const y = c.sy + fs * 0.28;
+            return { l: c.sx - w / 2, r: c.sx + w / 2, t: y - fs * 0.76, b: y + fs * 0.2, x: c.sx, y, anchor: 'middle' };
+        }
         const x = c.sx + c.dx * c.gap;
         const y = c.sy + c.dy * c.gap + fs * 0.35 + c.dy * fs * 0.35;
         const anchor = c.dx > 0.35 ? 'start' : c.dx < -0.35 ? 'end' : 'middle';
         const l = anchor === 'start' ? x : anchor === 'end' ? x - w : x - w / 2;
         return { l, r: l + w, t: y - fs * 0.76, b: y + fs * 0.2, x, y, anchor };
     };
+    // Spot for a w-wide label whose box clears the screen point (ex, ey) by gap in direction (ux, uy):
+    // the label sits on the extension of that direction, at the same distance whatever its width
+    const beyond = (ex, ey, ux, uy, w, gap, pen = 0) => {
+        const h = fs * 0.96;
+        const t = Math.min(Math.abs(ux) > 1e-6 ? w / 2 / Math.abs(ux) : Infinity, Math.abs(uy) > 1e-6 ? h / 2 / Math.abs(uy) : Infinity);
+        return { sx: ex + ux * (t + gap), sy: ey + uy * (t + gap), center: true, pen };
+    };
+    const turn = ([ux, uy], deg) => [ux * Math.cos(deg * DEG) - uy * Math.sin(deg * DEG), ux * Math.sin(deg * DEG) + uy * Math.cos(deg * DEG)];
 
     // Labels are collected and placed at the end, most important first. Each takes the cheapest of
     // its candidate spots: no other label, no line through it, little antenna or sample edge under
-    // it, and not far outside the drawing (that would make the figure bigger)
+    // it, close to what it labels, and not far outside the drawing (that would make it bigger)
     const labelReqs = [];
     const wantLabel = (prio, cands, content, color, w) => labelReqs.push({ prio, cands, content, color, w });
-    const around = (sx, sy, dx, dy, gap, turns) =>
-        turns.map((t) => {
-            const c = Math.cos(t * DEG);
-            const s = Math.sin(t * DEG);
-            return { sx, sy, dx: dx * c - dy * s, dy: dx * s + dy * c, gap };
-        });
     const placeLabels = (core) => {
         const placed = [];
         const m = fs * 0.15;
@@ -443,7 +493,7 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
                 q.cands.forEach((c, i) => {
                     const b = labelBox(c, q.w);
                     const e = grow(b, m);
-                    let cost = i * 0.02;
+                    let cost = i * 0.02 + (c.pen || 0);
                     if (placed.some((p) => boxesTouch(e, p))) cost += 100;
                     const hit = new Map();
                     for (const [a, z, w, id] of lines) if (!hit.has(id) && segHitsBox(a, z, e)) hit.set(id, w);
@@ -478,6 +528,16 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
         return [(b[0] - a[0]) / d, (b[1] - a[1]) / d];
     };
 
+    // Slim arrowhead with a swept-back base; the shaft ends inside it
+    const headPath = (tip, ux, uy, hl, color) => {
+        const hw = hl * 0.36;
+        const bx = tip[0] - ux * hl;
+        const by = tip[1] - uy * hl;
+        const nx = tip[0] - ux * hl * 0.76;
+        const ny = tip[1] - uy * hl * 0.76;
+        return `<path d="M${n2(tip[0])},${n2(tip[1])}L${n2(bx - uy * hw)},${n2(by + ux * hw)}L${n2(nx)},${n2(ny)}L${n2(bx + uy * hw)},${n2(by - ux * hw)}Z" fill="${color}"/>`;
+    };
+
     // Arrow in 3D, head drawn in screen space so it keeps its size when foreshortened
     const arrow = (from, to, color, width) => {
         const a = toSvg(from);
@@ -488,17 +548,13 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
         if (d < 0.5) return '';
         const ux = dx / d;
         const uy = dy / d;
-        const hl = Math.min(st.arrowHeadPt * (0.6 + width / 3.5), d * 0.6);
-        const hw = hl * 0.42;
-        const bx = b[0] - ux * hl * 0.82;
-        const by = b[1] - uy * hl * 0.82;
-        const h1 = [b[0] - ux * hl - uy * hw, b[1] - uy * hl + ux * hw];
-        const h2 = [b[0] - ux * hl + uy * hw, b[1] - uy * hl - ux * hw];
+        const hl = Math.min(st.arrowHeadPt * (0.7 + width / 3.5), d * 0.6);
+        const hw = hl * 0.36;
         addLine([a, b], W_LINE);
-        addLine([b, h1, h2], W_LINE, true);
+        addLine([b, [b[0] - ux * hl - uy * hw, b[1] - uy * hl + ux * hw], [b[0] - ux * hl + uy * hw, b[1] - uy * hl - ux * hw]], W_LINE, true);
         return (
-            `<path d="M${n2(a[0])},${n2(a[1])}L${n2(bx)},${n2(by)}" stroke="${color}" stroke-width="${n2(width)}" fill="none"/>` +
-            `<path d="M${n2(b[0])},${n2(b[1])}L${n2(h1[0])},${n2(h1[1])}L${n2(h2[0])},${n2(h2[1])}Z" fill="${color}"/>`
+            `<path d="M${n2(a[0])},${n2(a[1])}L${n2(b[0] - ux * hl * 0.7)},${n2(b[1] - uy * hl * 0.7)}" stroke="${color}" stroke-width="${n2(width)}" fill="none"/>` +
+            headPath(b, ux, uy, hl, color)
         );
     };
 
@@ -507,8 +563,8 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
         return `<path d="${pathOf([from, to])}" stroke="${color}" stroke-width="${n2(L.guide)}" stroke-dasharray="${n2(L.guide * 1.5)},${n2(L.guide * 2.6)}" fill="none"/>`;
     };
 
-    // Arc from direction a to direction b (3D unit vectors) around the origin
-    const arc = (a, b, r) => {
+    // Arc from direction a to direction b (3D unit vectors) around the point c
+    const arc = (a, b, r, c = origin) => {
         const ang = angleDeg(a, b);
         const ua = unit(a);
         let perp = sub(unit(b), mul(ua, dot(ua, unit(b))));
@@ -516,8 +572,8 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
         perp = unit(perp);
         const dirAt = (f) => add(mul(ua, Math.cos(ang * f * DEG)), mul(perp, Math.sin(ang * f * DEG)));
         const steps = Math.max(8, Math.ceil(ang / 3));
-        const pts = Array.from({ length: steps + 1 }, (_, i) => mul(dirAt(i / steps), r));
-        return { ang, pts, mid: dirAt(0.5), dirAt, r };
+        const pts = Array.from({ length: steps + 1 }, (_, i) => add(c, mul(dirAt(i / steps), r)));
+        return { ang, pts, mid: dirAt(0.5), dirAt, r, c };
     };
 
     const angleText = (symbol, deg, mode = o.angleLabels) => {
@@ -534,24 +590,52 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
         mode === 'symbol' ? symbolWidth(symbol) : mode === 'both' ? symbolWidth(symbol) + textWidth(` = ${fmtAngle(deg)}`) : textWidth(fmtAngle(deg));
     const vectorText = (symbol) => (latex ? esc(`$${symbolTex(symbol, st.vectorStyle)}$`) : symbolSpans(symbol, fs, st.vectorStyle));
 
-    // Arc with its value outside (or inside) the arc, wherever it is free
+    // Arc with its value right at it: just outside the middle of the arc, a bit further along or
+    // out if that spot is taken, or inside the wedge. Never far away.
     let arcCount = 0;
-    const drawArc = (a, b, r, symbol, color = C.angle) => {
-        const A = arc(a, b, r);
+    const drawArc = (a, b, r, symbol, c = origin, color = C.angle) => {
+        const A = arc(a, b, r, c);
         if (A.ang < TINY_DEG) return;
         addLine(A.pts.map(toSvg), W_GUIDE);
         layers.arcs.push(`<path d="${pathOf(A.pts)}" stroke="${color}" stroke-width="${n2(L.arc)}" fill="none"/>`);
+        const w = angleWidth(symbol, A.ang);
         const cands = [];
-        for (const gap of [fs * 0.3, fs * 0.9, fs * 1.6, fs * 2.4, fs * 3.2, -fs * 0.3]) {
+        for (const [gap, pen] of [[0.2, 0], [0.55, 0.8], [1, 2.5]]) {
             for (const f of [0.5, 0.35, 0.65, 0.2, 0.8]) {
                 const d = A.dirAt(f);
-                const [sx, sy] = toSvg(mul(d, A.r));
-                const [dx, dy] = screenDir(origin, d);
-                if (gap < 0) cands.push({ sx, sy, dx: -dx, dy: -dy, gap: -gap });
-                else cands.push(...around(sx, sy, dx, dy, gap, [0, 35, -35]));
+                const [sx, sy] = toSvg(add(c, mul(d, r)));
+                const [ux, uy] = screenDir(c, add(c, d));
+                cands.push(beyond(sx, sy, ux, uy, w, gap * fs, pen + Math.abs(f - 0.5) * 1.5));
             }
         }
-        wantLabel(10 + arcCount++, cands, angleText(symbol, A.ang), C.text, angleWidth(symbol, A.ang));
+        const [ix, iy] = toSvg(add(c, mul(A.mid, r * 0.55)));
+        cands.push({ sx: ix, sy: iy, center: true, pen: 0.6 });
+        // flat wedges leave no room inside: then beside an end of the arc, outside the wedge
+        const [mx, my] = toSvg(add(c, mul(A.mid, r)));
+        for (const f of [0, 1]) {
+            const [sx, sy] = toSvg(add(c, mul(A.dirAt(f), r)));
+            const [rx, ry] = screenDir(c, add(c, A.dirAt(f)));
+            const s = (mx - sx) * -ry + (my - sy) * rx > 0 ? -1 : 1; // normal of the ray, away from the arc
+            cands.push(beyond(sx, sy, -ry * s, rx * s, w, fs * 0.25, 1.2), beyond(sx, sy, ...turn([-ry * s, rx * s], s * -35), w, fs * 0.25, 1.4));
+        }
+        wantLabel(1 + arcCount++ * 0.1, cands, angleText(symbol, A.ang), C.text, w);
+    };
+
+    // Label at the free end of an arrow, or beside its shaft
+    const arrowLabelCands = (from, to, w) => {
+        const a = toSvg(from);
+        const b = toSvg(to);
+        const u = screenDir(from, to);
+        const cands = [[0, 0], [45, 0.5], [-45, 0.5], [90, 1], [-90, 1]].map(([deg, pen]) => {
+            const [ux, uy] = turn(u, deg);
+            return beyond(b[0], b[1], ux, uy, w, fs * 0.25, pen);
+        });
+        for (const f of [0.8, 0.6, 0.3]) {
+            const sx = a[0] + (b[0] - a[0]) * f;
+            const sy = a[1] + (b[1] - a[1]) * f;
+            for (const s of [1, -1]) cands.push(beyond(sx, sy, -u[1] * s, u[0] * s, w, fs * 0.3, 0.8 + (0.8 - f)));
+        }
+        return cands;
     };
 
     // ---- sample slab: visible side faces (auto-shaded), then the top face
@@ -574,187 +658,168 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
     addLine(top.map(toSvg), W_EDGE, true);
     layers.sample.push(`<path d="${pathOf(top, true)}" fill="${C.sample}" stroke="${sampleStroke}" stroke-width="${n2(L.outline)}" stroke-linejoin="round"/>`);
 
-    // ---- antennas in the wave frame (k, t): emitter and receiver either side of the centre,
-    // shrunk as a whole when the turned pair would not fit on the sample
+    // ---- emitter at -k and (optionally) receiver at +k, shaped as in the 3D view. A turned pair
+    // that would not fit moves closer together (keeping room for k) and shrinks only as needed.
     const wave = (kk, tt) => add(mul(kHat, kk), mul(tHat, tt));
-    const fit = Math.min(
-        1,
-        ...[ANT_T, -ANT_T].map((tt) => {
-            const p = wave(ANT_OUT, tt);
-            return Math.min((HX - 0.1) / Math.max(Math.abs(p[0]), 1e-9), (HY - 0.1) / Math.max(Math.abs(p[1]), 1e-9));
-        })
-    );
-    const antIn = ANT_IN * fit;
-    const antOut = ANT_OUT * fit;
-    const antT = ANT_T * fit;
-    const waveLen = Math.min(0.68, antIn * 0.85);
-    if (o.showAntenna) {
-        const polys = [];
-        const isIdt = state.setup.deviceType === 'IDT';
-        const toWave = (list) => list.map(([kk, tt]) => wave(kk, tt));
-        for (const side of [-1, 1]) {
-            const k0 = Math.min(antIn * side, antOut * side);
-            const k1 = Math.max(antIn * side, antOut * side);
-            const sidePolys = [];
-            if (isIdt) {
-                // two interleaved combs: bus bar along k, fingers along t
-                const bar = 0.05 * fit;
-                const gapT = 0.06 * fit;
-                const fingers = 6;
-                const pitch = (k1 - k0) / fingers;
-                const fw = pitch * 0.5;
-                for (const sgn of [1, -1]) {
-                    const T = (t) => sgn * t;
-                    const tip = -(antT - bar - gapT);
-                    const pts = [[k0, T(antT)], [k1, T(antT)], [k1, T(antT - bar)]];
-                    for (let i = fingers - 1; i >= 0; i--) {
-                        if ((i % 2 === 0) !== (sgn > 0)) continue;
-                        const kc = k0 + pitch * (i + 0.5);
-                        pts.push([kc + fw / 2, T(antT - bar)], [kc + fw / 2, T(tip)], [kc - fw / 2, T(tip)], [kc - fw / 2, T(antT - bar)]);
-                    }
-                    pts.push([k0, T(antT - bar)]);
-                    sidePolys.push(toWave(pts));
-                }
-            } else {
-                // coplanar waveguide: ground - signal - ground along t, widening into probe pads at +t
-                const kc = (k0 + k1) / 2;
-                const s = 0.022 * fit;
-                const g = 0.024 * fit;
-                const G = 0.095 * fit;
-                const ps = 0.038 * fit;
-                const pg = 0.03 * fit;
-                const tPad = antT - 0.12 * fit;
-                const tTaper = tPad - 0.06 * fit;
-                sidePolys.push(toWave([[kc - s, -antT], [kc + s, -antT], [kc + s, tTaper], [kc + ps, tPad], [kc + ps, antT], [kc - ps, antT], [kc - ps, tPad], [kc - s, tTaper]]));
-                for (const sg of [1, -1]) {
-                    const inL = s + g;
-                    const inP = ps + pg;
-                    const out = s + g + G;
-                    sidePolys.push(toWave([[kc + sg * inL, -antT], [kc + sg * out, -antT], [kc + sg * out, antT], [kc + sg * inP, antT], [kc + sg * inP, tPad], [kc + sg * inL, tTaper]]));
-                }
-            }
-            const screen = sidePolys.flat().map(toSvg);
-            ink.push(...screen);
-            areas.push([convexHull(screen), W_ANTENNA]);
-            polys.push(...sidePolys);
+    const ownType = state.setup.deviceType === 'IDT' ? 'IDT' : 'CPW';
+    const devTypes = o.showAntenna ? (DEVICE_SETS[o.devices] || DEVICE_SETS.pair)(ownType) : [];
+    const shapes = devTypes.map(microstructure);
+    const sideOf = (i) => (i === 0 ? -1 : 1);
+    const devPoint = (i, dist, s) => ([pk, pt]) => wave(sideOf(i) * (dist - pk * s), pt * s); // receiver mirrored
+    const overflow = (dist, s) =>
+        Math.max(0, ...shapes.flatMap((polys, i) => polys.flat().map((q) => {
+            const p = devPoint(i, dist, s)(q);
+            return Math.max(Math.abs(p[0]) / (HX - 0.08), Math.abs(p[1]) / (HY - 0.08));
+        })));
+    const hkMax = Math.max(0, ...devTypes.map(halfLength));
+    let devDist = DEV_DIST;
+    let devScale = DEV_SCALE;
+    if (shapes.length) {
+        let best = null;
+        for (let dist = DEV_DIST; dist > MIN_HALF_GAP; dist -= 0.02) {
+            let s = Math.min(DEV_SCALE, (dist - MIN_HALF_GAP) / hkMax);
+            while (s > 0.3 && overflow(dist, s) > 1) s *= 0.98;
+            const score = s / DEV_SCALE + (0.5 * dist) / DEV_DIST; // full size first, then far apart
+            if (!best || score > best.score + 1e-6) best = { dist, s, score };
         }
-        const stroke = shade(C.antenna, -0.4);
+        devDist = best.dist;
+        devScale = best.s;
+    }
+    const devPolys = [];
+    shapes.forEach((polys, i) => {
+        const pts3 = polys.map((poly) => poly.map(devPoint(i, devDist, devScale)));
+        const screen = pts3.flat().map(toSvg);
+        ink.push(...screen);
+        areas.push([convexHull(screen), W_ANTENNA]);
+        devPolys.push(...pts3);
+    });
+    if (devPolys.length) {
         layers.antenna.push(
-            `<path d="${polys.map((q) => pathOf(q, true)).join('')}" fill="${C.antenna}" stroke="${stroke}" stroke-width="${n2(L.outline * 0.6)}" stroke-linejoin="round"/>`
+            `<path d="${devPolys.map((q) => pathOf(q, true)).join('')}" fill="${C.antenna}" stroke="${shade(C.antenna, -0.4)}" stroke-width="${n2(L.outline * 0.5)}" stroke-linejoin="round"/>`
         );
     }
 
+    // k runs from the emitter to the receiver (or as far without one)
+    const kLim = Math.min(HX / Math.max(Math.abs(kHat[0]), 1e-9), HY / Math.max(Math.abs(kHat[1]), 1e-9)) - 0.2;
+    const kFrom = shapes.length ? -devDist + halfLength(devTypes[0]) * devScale + K_GAP : -Math.min(0.8, kLim);
+    const kTo = shapes.length > 1 ? devDist - halfLength(devTypes[1]) * devScale - K_GAP : shapes.length ? devDist : Math.min(0.8, kLim);
+    const P0 = mul(kHat, (kFrom + kTo) / 2);
+    const rs = Math.max(0.55, Math.min(1, (kTo - kFrom) / 2 / 0.75)); // in-plane arcs shrink with a short k
+    const rDev = R_DEV * rs;
+    const rPhi = R_PHI * rs;
+
     // ---- angles: antenna turn (0° edge -> k), field in plane, field out of plane
     const devDeg = angleDeg(xEdge, kHat);
-    const showDev = devDeg > TINY_DEG && (o.showAntenna || o.showWave);
+    const showDev = devDeg > TINY_DEG && (shapes.length > 0 || o.showWave);
     const bn = dot(bHat, nrm);
     const bPlane = [bHat[0], bHat[1], 0];
     const pDir = len(bPlane) > 1e-6 ? unit(bPlane) : null;
     const elevDeg = Math.asin(Math.min(1, Math.abs(bn))) / DEG;
     const showElev = elevDeg > TINY_DEG;
     const refDir = o.angleRef === 'edge' ? xEdge : kHat;
-    const rayLen = (r) => r + 0.14; // short reference rays: just past their arc
+    const rayLen = (r) => r + 0.12; // short reference rays: just past their arc
 
+    // The field starts on the k arrow, halfway between the antennas; a field (nearly) along k
+    // starts beside it instead, so the two arrows do not cover each other
+    const alongK = o.showWave && pDir && (isTop || elevDeg < 35) && Math.abs(dot(pDir, kHat)) > Math.cos(12 * DEG);
+    const foot = alongK
+        ? add(P0, add(mul(tHat, (tHat[1] >= 0 ? 1 : -1) * 0.3), mul(pDir, (-FIELD_LEN * Math.cos(elevDeg * DEG) * (bn < -1e-6 ? -1 : 1)) / 2)))
+        : P0;
     // Field arrow stays above the surface: pointing away from it, or (B·n < 0) coming down onto it
     const down = bn < -1e-6;
-    const fTail = down ? mul(bHat, -FIELD_LEN) : origin;
-    const fHead = down ? origin : mul(bHat, FIELD_LEN);
-    const fOuter = down ? fTail : fHead; // the end away from the sample centre
+    const fTail = down ? add(foot, mul(bHat, -FIELD_LEN)) : foot;
+    const fHead = down ? foot : add(foot, mul(bHat, FIELD_LEN));
+    const fOuter = down ? fTail : fHead; // the end away from the surface
     const outerDir = down ? mul(bHat, -1) : bHat;
     const shadowDir = pDir && down ? mul(pDir, -1) : pDir;
 
-    if (pDir && o.angleRef === 'edge') layers.guides.push(guideLine(origin, mul(xEdge, rayLen(R_PHI))));
-    if (pDir && o.angleRef === 'wave' && !o.showWave) layers.guides.push(guideLine(origin, mul(kHat, rayLen(R_PHI))));
+    // Reference ray of the field angles; along k the k arrow itself is the ray
+    if (pDir ? angleDeg(refDir, pDir) > TINY_DEG : !isTop) {
+        const kShaftFree = o.showWave && !alongK && kTo - (kFrom + kTo) / 2 > rPhi + 0.05;
+        const r = pDir ? rPhi : R_ELEV;
+        if (o.angleRef === 'edge') layers.guides.push(guideLine(foot, add(foot, mul(xEdge, rayLen(r)))));
+        else if (!kShaftFree) layers.guides.push(guideLine(foot, add(foot, mul(kHat, rayLen(r)))));
+    }
 
-    // Antenna angle edge -> k, or the equal vertical angle (-edge -> -k) when the field crowds that side
+    // Antenna turn at the tail of k, between the k arrow and the 0° edge direction. Beyond 90° that
+    // wedge would lie on the emitter: then it goes to the field, on the side away from it.
     if (showDev) {
-        const busy = pDir ? [pDir, shadowDir, arc(refDir, pDir, 1).mid] : [];
-        const devMid = arc(xEdge, kHat, 1).mid;
-        const clearance = (m) => Math.min(180, ...busy.map((b) => angleDeg(m, b)));
-        const flip = clearance(devMid) < 40 && clearance(mul(devMid, -1)) > clearance(devMid);
-        const edgeRay = flip ? mul(xEdge, -1) : xEdge;
-        if (!(pDir && o.angleRef === 'edge' && !flip)) layers.guides.push(guideLine(origin, mul(edgeRay, rayLen(R_DEV))));
-        if (flip || !o.showWave) layers.guides.push(guideLine(origin, mul(kHat, flip ? -rayLen(R_DEV) : rayLen(R_DEV))));
-        drawArc(edgeRay, flip ? mul(kHat, -1) : kHat, R_DEV, st.symbols.dev);
+        if (devDeg <= 90 + 1e-6) {
+            const T = mul(kHat, kFrom);
+            layers.guides.push(guideLine(T, add(T, mul(xEdge, rayLen(rDev)))));
+            if (!o.showWave) layers.guides.push(guideLine(T, add(T, mul(kHat, rayLen(rDev)))));
+            drawArc(xEdge, kHat, rDev, st.symbols.dev, T);
+        } else {
+            const busy = pDir && !alongK ? [pDir, shadowDir, arc(refDir, pDir, 1).mid] : [];
+            const devMid = arc(xEdge, kHat, 1).mid;
+            const clearance = (m) => Math.min(180, ...busy.map((b) => angleDeg(m, b)));
+            const flip = clearance(mul(devMid, -1)) > clearance(devMid);
+            const edgeRay = flip ? mul(xEdge, -1) : xEdge;
+            layers.guides.push(guideLine(P0, add(P0, mul(edgeRay, rayLen(rDev)))));
+            if (flip || !o.showWave) layers.guides.push(guideLine(P0, add(P0, mul(kHat, flip ? -rayLen(rDev) : rayLen(rDev)))));
+            drawArc(edgeRay, flip ? mul(kHat, -1) : kHat, rDev, st.symbols.dev, P0);
+        }
     }
 
     if (pDir) {
         // in-plane angle to k (or to the 0° edge); a tilted field gets its shadow on the surface
         if (showElev && !isTop) {
-            const foot = mul(shadowDir, FIELD_LEN * Math.cos(elevDeg * DEG));
-            layers.guides.push(guideLine(origin, foot));
-            if (down) layers.guides.push(guideLine(origin, mul(pDir, rayLen(R_PHI)))); // ray for the in-plane angle
-            drawArc(shadowDir, outerDir, R_ELEV, st.symbols.theta);
+            layers.guides.push(guideLine(foot, add(foot, mul(shadowDir, FIELD_LEN * Math.cos(elevDeg * DEG)))));
+            if (down) layers.guides.push(guideLine(foot, add(foot, mul(pDir, rayLen(rPhi))))); // ray for the in-plane angle
+            drawArc(shadowDir, outerDir, R_ELEV, st.symbols.theta, foot);
         }
-        drawArc(refDir, pDir, R_PHI, st.symbols.phi);
+        drawArc(refDir, pDir, rPhi, st.symbols.phi, foot);
     } else if (!isTop) {
-        drawArc(refDir, outerDir, R_ELEV, st.symbols.theta); // field along the normal
+        drawArc(refDir, outerDir, R_ELEV, st.symbols.theta, foot); // field along the normal
     }
 
-    // ---- arrows: field first, k and m on top (k lies on B when the field runs along it)
+    // ---- arrows: k first (it is long), the field and m on top
+    if (o.showWave) {
+        const a = mul(kHat, kFrom);
+        const b = mul(kHat, kTo);
+        layers.arrows.push(arrow(a, b, C.wave, L.wave));
+        wantLabel(5, arrowLabelCands(a, b, symbolWidth(st.symbols.wave)), vectorText(st.symbols.wave), C.wave, symbolWidth(st.symbols.wave));
+    }
     const fieldLabel = vectorText(st.symbols.field);
     if (isTop && !pDir) {
         // Top view cannot show the tilt: the field along the normal becomes ⊙ / ⊗
-        const [cx, cy] = toSvg(origin);
-        const r = fs * 0.75;
+        const [cx, cy] = toSvg(foot);
+        const r = fs * 0.62;
         const q = r * 0.6;
         const mark = down
             ? `<path d="M${n2(cx - q)},${n2(cy - q)}L${n2(cx + q)},${n2(cy + q)}M${n2(cx - q)},${n2(cy + q)}L${n2(cx + q)},${n2(cy - q)}" stroke="${C.field}" stroke-width="${n2(L.field * 0.8)}"/>`
             : `<circle cx="${n2(cx)}" cy="${n2(cy)}" r="${n2(L.field * 1.3)}" fill="${C.field}"/>`;
-        layers.arrows.push(`<circle cx="${n2(cx)}" cy="${n2(cy)}" r="${n2(r)}" fill="none" stroke="${C.field}" stroke-width="${n2(L.field * 0.8)}"/>`, mark);
-        addLine(Array.from({ length: 13 }, (_, i) => [cx + r * Math.cos((i * 30) * DEG), cy + r * Math.sin((i * 30) * DEG)]), W_LINE);
-        wantLabel(1, around(cx + r * 0.7, cy - r * 0.7, 0.7, -0.7, fs * 0.3, [0, 90, -90, 180]), fieldLabel, C.field, symbolWidth(st.symbols.field));
+        layers.arrows.push(`<circle cx="${n2(cx)}" cy="${n2(cy)}" r="${n2(r)}" fill="${C.sample}" stroke="${C.field}" stroke-width="${n2(L.field * 0.8)}"/>`, mark);
+        addLine(Array.from({ length: 13 }, (_, i) => [cx + r * Math.cos(i * 30 * DEG), cy + r * Math.sin(i * 30 * DEG)]), W_LINE);
+        const w = symbolWidth(st.symbols.field);
+        const cands = [[0.71, -0.71], [-0.71, -0.71], [0.71, 0.71], [-0.71, 0.71], [1, 0], [-1, 0]].map(([ux, uy], i) => beyond(cx, cy, ux, uy, w, r + fs * 0.15, i * 0.3));
+        wantLabel(4, cands, fieldLabel, C.field, w);
     } else {
         layers.arrows.push(arrow(fTail, fHead, C.field, L.field));
-        const p = toSvg(fOuter);
-        const [dx, dy] = screenDir(origin, outerDir);
         // top view: the tilt goes into the label
         const tiltMode = o.angleLabels === 'value' ? 'both' : o.angleLabels;
         const tilt = isTop && showElev ? `, ${angleText(st.symbols.theta, elevDeg, tiltMode)}` : '';
         const w = symbolWidth(st.symbols.field) + (tilt ? textWidth(', ') + angleWidth(st.symbols.theta, elevDeg, tiltMode) : 0);
-        // beyond the outer end, or beside the shaft when that end is crowded
-        const o0 = toSvg(origin);
-        const beside = [];
-        for (const f of [0.75, 0.5, 0.3, 0.1]) {
-            const sx = o0[0] + (p[0] - o0[0]) * f;
-            const sy = o0[1] + (p[1] - o0[1]) * f;
-            beside.push({ sx, sy, dx: -dy, dy: dx, gap: fs * 0.55 }, { sx, sy, dx: dy, dy: -dx, gap: fs * 0.55 });
-        }
-        wantLabel(1, [...around(p[0], p[1], dx, dy, fs * 0.5, [0, 40, -40, 80, -80, 130, -130]), ...beside], fieldLabel + tilt, C.field, w);
+        wantLabel(4, arrowLabelCands(foot, fOuter, w), fieldLabel + tilt, C.field, w);
     }
     if (o.showMoment && !state.metrics.isEasyPlaneSingular) {
         const mHat = unit(v.mHat.Sub);
         const mDown = dot(mHat, nrm) < -1e-6;
-        const mFrom = mDown ? mul(mHat, -MOMENT_LEN) : origin;
-        const mTo = mDown ? origin : mul(mHat, MOMENT_LEN);
-        layers.arrows.push(arrow(mFrom, mTo, C.moment, L.wave));
-        const [dx, dy] = screenDir(origin, mDown ? mul(mHat, -1) : mHat);
-        const p = toSvg(mDown ? mFrom : mTo);
-        wantLabel(3, around(p[0], p[1], dx, dy, fs * 0.5, [0, 40, -40, 80, -80, 130, -130]), vectorText(st.symbols.moment), C.moment, symbolWidth(st.symbols.moment));
-    }
-    if (o.showWave) {
-        layers.arrows.push(arrow(origin, mul(kHat, waveLen), C.wave, L.wave));
-        const tip = toSvg(mul(kHat, waveLen));
-        const [dx, dy] = screenDir(origin, kHat);
-        const cands = [];
-        for (const gap of [fs * 0.45, fs * 1.1]) cands.push(...around(tip[0], tip[1], dx, dy, gap, [0, 50, -50, 90, -90, 135, -135]));
-        wantLabel(2, cands, vectorText(st.symbols.wave), C.wave, symbolWidth(st.symbols.wave));
+        const mOuter = add(foot, mul(mHat, mDown ? -MOMENT_LEN : MOMENT_LEN));
+        layers.arrows.push(mDown ? arrow(mOuter, foot, C.moment, L.wave) : arrow(foot, mOuter, C.moment, L.wave));
+        const w = symbolWidth(st.symbols.moment);
+        wantLabel(6, arrowLabelCands(foot, mOuter, w), vectorText(st.symbols.moment), C.moment, w);
     }
 
-    // ---- triad: sample edges and normal with Miller-Bravais indices, in the free corner bottom left
+    // ---- crystal directions of the sample edges and the normal, in a free corner
     let core = boundsOf(ink);
     if (o.showAxes) {
         const mb = state.millerBravais;
-        const axLen = fs * 2.4;
-        const o0 = cam.proj(origin);
-        const screenOf = (d) => {
-            const p = cam.proj(d);
-            const dx = p[0] - o0[0];
-            const dy = -(p[1] - o0[1]);
-            return { ux: dx / (Math.hypot(dx, dy) || 1), uy: dy / (Math.hypot(dx, dy) || 1), d: Math.hypot(dx, dy) };
-        };
+        const axLen = fs * 3;
+        const gap = fs * 0.25;
+        const ring = fs * 0.36;
         const axes = [
-            { d: nrm, ...millerLabel(mb.zsPlane.label, mb.zsPlane.latex) },
+            { d: nrm, ...millerLabel(mb.zsDir.label, mb.zsDir.latex) },
             { d: xEdge, ...millerLabel(mb.xs.label, mb.xs.latex) },
             { d: [0, 1, 0], ...millerLabel(mb.ys.label, mb.ys.latex) }
         ];
@@ -763,21 +828,56 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
             const up = dot(cHat, nrm) >= 0;
             axes.push({ d: up ? cHat : mul(cHat, -1), ...millerLabel(up ? '[0001]' : `[0001${OVERLINE}]`, up ? '[0001]' : '[000\\bar{1}]'), dashed: true });
         }
+        const o0 = cam.proj(origin);
         axes.forEach((a) => {
-            const s = screenOf(a.d);
-            a.toward = s.d < 0.15; // axis towards the viewer (top view): dot in a circle
-            a.ux = s.ux;
-            a.uy = s.uy;
-            a.ex = s.ux * axLen * Math.min(1, s.d);
-            a.ey = s.uy * axLen * Math.min(1, s.d);
-            a.cand0 = a.toward ? { sx: -fs * 0.2, sy: fs * 0.2, dx: -0.75, dy: 0.66, gap: fs * 0.45 } : { sx: a.ex, sy: a.ey, dx: s.ux, dy: s.uy, gap: fs * 0.35 };
+            const p = cam.proj(a.d);
+            const dx = p[0] - o0[0];
+            const dy = -(p[1] - o0[1]);
+            const d = Math.hypot(dx, dy);
+            a.toward = d < 0.15; // axis towards the viewer (top view): dot in a ring
+            a.u = d ? [dx / d, dy / d] : [0, 0];
+            a.ex = a.u[0] * axLen * Math.min(1, d);
+            a.ey = a.u[1] * axLen * Math.min(1, d);
+            // label on the extension of its axis; the ring's label down left
+            a.cands = (ox, oy) =>
+                a.toward
+                    ? [[-0.71, 0.71], [0, 1], [-1, 0], [0.71, 0.71]].map(([ux, uy], i) => beyond(ox, oy, ux, uy, a.width, ring + fs * 0.3, i))
+                    : [[0, 0], [30, 1], [-30, 1], [60, 2], [-60, 2], [90, 3], [-90, 3], [120, 4], [-120, 4]].map(([deg, pen]) => {
+                          const [ux, uy] = turn(a.u, deg);
+                          return beyond(ox + a.ex, oy + a.ey, ux, uy, a.width, gap, pen);
+                      });
         });
 
-        // Footprint relative to the triad origin: axes plus each label at its first spot
-        let box = { l: -fs * 0.5, r: fs * 0.5, t: -fs * 0.5, b: fs * 0.5 };
-        axes.forEach((a) => {
+        // Label spots chosen together (axes close in direction would push each other aside one by
+        // one): no two labels touching, none on an axis, each as close to its own axis end as possible
+        const axSegs = axes.filter((a) => !a.toward).map((a) => [[0, 0], [a.ex, a.ey]]);
+        const opts = axes.map((a) => a.cands(0, 0).map((cand) => ({ cand, box: labelBox(cand, a.width) })));
+        let pick = opts.map(() => 0);
+        let pickCost = Infinity;
+        const choose = (i, sel, cost) => {
+            if (cost >= pickCost) return;
+            if (i === axes.length) {
+                pickCost = cost;
+                pick = [...sel];
+                return;
+            }
+            opts[i].forEach(({ cand, box }, j) => {
+                const e = grow(box, fs * 0.15);
+                let add = cand.pen;
+                sel.forEach((k, m) => boxesTouch(e, opts[m][k].box) && (add += 100));
+                axSegs.forEach(([p, q]) => segHitsBox(p, q, e) && (add += 12));
+                sel.push(j);
+                choose(i + 1, sel, cost + add);
+                sel.pop();
+            });
+        };
+        choose(0, [], 0);
+
+        // Footprint relative to the triad origin: axes plus the chosen labels
+        let box = { l: -ring, r: ring, t: -ring, b: ring };
+        axes.forEach((a, i) => {
             box = unionBox(box, { l: a.ex, r: a.ex, t: a.ey, b: a.ey });
-            box = unionBox(box, labelBox(a.cand0, a.width));
+            box = unionBox(box, opts[i][pick[i]].box);
         });
 
         // Cheapest free spot: not on the sample or any arrow, smallest overall figure, then bottom left
@@ -799,26 +899,24 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
         }
         const { ox, oy } = best || { ox: core.l - box.l, oy: core.b - box.b + fs };
 
-        axes.forEach((a) => {
-            const turns = [0, 35, -35, 70, -70, 110, -110];
+        axes.forEach((a, i) => {
             if (a.toward) {
-                layers.axes.push(`<circle cx="${n2(ox)}" cy="${n2(oy)}" r="${n2(fs * 0.38)}" fill="none" stroke="${C.axes}" stroke-width="${n2(L.axes)}"/>`);
-                layers.axes.push(`<circle cx="${n2(ox)}" cy="${n2(oy)}" r="${n2(L.axes * 1.1)}" fill="${C.axes}"/>`);
-                ink.push([ox - fs * 0.4, oy - fs * 0.4], [ox + fs * 0.4, oy + fs * 0.4]);
-                wantLabel(0, around(ox + a.cand0.sx, oy + a.cand0.sy, a.cand0.dx, a.cand0.dy, a.cand0.gap, [0, 40, -40]), a.content, C.text, a.width);
-                return;
+                layers.axes.push(`<circle cx="${n2(ox)}" cy="${n2(oy)}" r="${n2(ring)}" fill="none" stroke="${C.axes}" stroke-width="${n2(L.axes)}"/>`);
+                layers.axes.push(`<circle cx="${n2(ox)}" cy="${n2(oy)}" r="${n2(L.axes * 1.2)}" fill="${C.axes}"/>`);
+                ink.push([ox - ring, oy - ring], [ox + ring, oy + ring]);
+            } else {
+                const ex = ox + a.ex;
+                const ey = oy + a.ey;
+                const [ux, uy] = a.u;
+                const hl = fs * 0.6;
+                addLine([[ox, oy], [ex, ey]], W_LINE);
+                layers.axes.push(
+                    `<path d="M${n2(ox)},${n2(oy)}L${n2(ex - ux * hl * 0.7)},${n2(ey - uy * hl * 0.7)}" stroke="${C.axes}" stroke-width="${n2(L.axes)}" fill="none"${a.dashed ? ` stroke-dasharray="${n2(L.axes * 3)},${n2(L.axes * 2)}"` : ''}/>`,
+                    headPath([ex, ey], ux, uy, hl, C.axes)
+                );
             }
-            const ex = ox + a.ex;
-            const ey = oy + a.ey;
-            const hl = fs * 0.55;
-            const { ux, uy } = a;
-            addLine([[ox, oy], [ex, ey]], W_LINE);
-            layers.axes.push(
-                `<path d="M${n2(ox)},${n2(oy)}L${n2(ex - ux * hl * 0.8)},${n2(ey - uy * hl * 0.8)}" stroke="${C.axes}" stroke-width="${n2(L.axes)}" fill="none"${a.dashed ? ` stroke-dasharray="${n2(L.axes * 3)},${n2(L.axes * 2)}"` : ''}/>`,
-                `<path d="M${n2(ex)},${n2(ey)}L${n2(ex - ux * hl - uy * hl * 0.36)},${n2(ey - uy * hl + ux * hl * 0.36)}L${n2(ex - ux * hl + uy * hl * 0.36)},${n2(ey - uy * hl - ux * hl * 0.36)}Z" fill="${C.axes}"/>`
-            );
-            // Beyond the tip; turned aside if it would cover another one (c axis close to an edge)
-            wantLabel(0, [...around(ex, ey, ux, uy, fs * 0.35, turns), ...around(ex, ey, ux, uy, fs * 1.3, turns)], a.content, C.text, a.width);
+            const cands = a.cands(ox, oy);
+            wantLabel(0, [{ ...cands[pick[i]], pen: 0 }, ...cands.map((q) => ({ ...q, pen: q.pen + 5 }))], a.content, C.text, a.width);
         });
         core = boundsOf(ink);
     }
