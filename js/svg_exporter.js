@@ -16,11 +16,11 @@
 const DEG = Math.PI / 180;
 const PT_PER_MM = 72 / 25.4;
 
-// Camera in F_Sub. Oblique: tilted about the front edge only, so that edge lies level; the depth
-// then projects onto the normal, so the direction triad shears it aside (triadShear). Corner: low
-// view onto the front-left corner; top: looking down the normal.
+// Camera in F_Sub. Oblique: tilted about the front edge only, so that edge lies level, and the depth
+// sheared to the right (cabinet projection) so the slab reads as 3D. Corner: low view onto the
+// front-left corner; top: looking down the normal.
 const VIEWS = {
-    oblique: { azDeg: -90, elDeg: 30, triadShear: 0.45 },
+    oblique: { azDeg: -90, elDeg: 34, shear: 0.32 },
     corner: { azDeg: -66, elDeg: 28 },
     top: { azDeg: -90, elDeg: 90 }
 };
@@ -111,7 +111,7 @@ export const BUILTIN_FIGURE_STYLES = {
 };
 
 export const DEFAULT_FIGURE_OPTIONS = {
-    view: 'oblique', // 'oblique' (tilted, front edge level) | 'corner' | 'top'
+    view: 'oblique', // 'oblique' (front edge level, depth sheared) | 'corner' | 'top'
     angleRef: 'wave', // in-plane field angle measured from k ('wave') or from the 0° edge ('edge')
     angleLabels: 'value', // 'value' | 'symbol' | 'both'
     showAntenna: true,
@@ -258,14 +258,19 @@ function symbolSpans(str, fs, vectorStyle) {
 // ---------------------------------------------------------------------------
 
 function makeCamera(view) {
-    const { azDeg, elDeg, triadShear = 0 } = VIEWS[view] || VIEWS.oblique;
+    const { azDeg, elDeg, shear = 0 } = VIEWS[view] || VIEWS.oblique;
     const az = azDeg * DEG;
     const el = elDeg * DEG;
     const right = [-Math.sin(az), Math.cos(az), 0];
     const up = [-Math.sin(el) * Math.cos(az), -Math.sin(el) * Math.sin(az), Math.cos(el)];
-    const toViewer = [Math.cos(el) * Math.cos(az), Math.cos(el) * Math.sin(az), Math.sin(el)];
-    const proj = (p) => [dot(p, right), dot(p, up)];
-    return { right, up, toViewer, proj, triadProj: (p) => [proj(p)[0] + triadShear * p[1], proj(p)[1]] };
+    // shear: depth y moves right on screen; toViewer is the matching (oblique) projection direction
+    const v0 = [Math.cos(el) * Math.cos(az), Math.cos(el) * Math.sin(az), Math.sin(el)];
+    const a = (-shear * v0[1]) / (1 + shear * right[1]);
+    const vv = [v0[0] + a * right[0], v0[1] + a * right[1], v0[2]];
+    const vl = Math.hypot(...vv);
+    const toViewer = vv.map((c) => c / vl);
+    const proj = (p) => [dot(p, right) + shear * p[1], dot(p, up)];
+    return { right, up, toViewer, proj };
 }
 
 /** Convex hull of 2D points (monotone chain). */
@@ -1066,9 +1071,9 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
             const up = dot(cHat, nrm) >= 0;
             axes.push({ d: up ? cHat : mul(cHat, -1), ...millerLabel(up ? '[0001]' : `[0001${OVERLINE}]`, up ? '[0001]' : '[000\\bar{1}]'), dashed: true });
         }
-        const o0 = cam.triadProj(origin);
+        const o0 = cam.proj(origin);
         axes.forEach((a) => {
-            const p = cam.triadProj(a.d);
+            const p = cam.proj(a.d);
             const dx = p[0] - o0[0];
             const dy = -(p[1] - o0[1]);
             const d = Math.hypot(dx, dy);
