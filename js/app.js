@@ -1821,6 +1821,28 @@ function bindFigureControls() {
         })
     );
 
+    // Mouse wheel over a sweep field steps it (5° or 10 mT, Alt: 1) and redraws at once; an empty
+    // field starts from what it shows, a turn stays within ±360°
+    ['figSweepFrom', 'figSweepTo', 'figSweepSpan'].forEach((fid) => {
+        const el = document.getElementById(fid);
+        el.addEventListener(
+            'wheel',
+            (e) => {
+                const d = e.deltaY || e.deltaX;
+                if (!d) return;
+                e.preventDefault();
+                const field = figure.options.sweep === 'field' && fid !== 'figSweepSpan';
+                const step = e.altKey ? 1 : field ? 10 : 5;
+                const cur = Number(el.value !== '' ? el.value : el.placeholder) || 0;
+                let next = Math.round((cur - Math.sign(d) * step) / step) * step;
+                if (fid === 'figSweepSpan') next = Math.max(-360, Math.min(360, next));
+                el.value = String(next);
+                setOption(el.dataset.fopt, el.value);
+            },
+            { passive: false }
+        );
+    });
+
     // Any edit turns the style into an unsaved one; the dropdown then shows "(geändert)"
     const edited = () => {
         figure.styleName = '';

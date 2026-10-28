@@ -684,7 +684,7 @@
             </div>
 
             <!-- Tab: SVG -->
-            <div class="modal-body svg-modal-grid export-panel" data-epanel="svg">
+            <div class="modal-body svg-modal-grid fig-modal-grid export-panel" data-epanel="svg">
                 <div class="svg-options-col">
                     <p class="export-intro">Probe und Feld immer aus derselben Sicht und im selben Maßstab.</p>
                     <details class="more-details fig-more">
@@ -723,10 +723,10 @@
                             <button type="button" class="seg-btn" data-val="field" title="Feldstärke über einen Bereich">B₀</button>
                         </div>
                         <label class="field-label fig-sweep-row" for="figSweepFrom" id="figSweepLabel">Start / Drehung</label>
-                        <div class="fig-range fig-sweep-row">
+                        <div class="fig-range fig-sweep-row" title="Mausrad: 5° bzw. 10 mT, mit Alt fein">
                             <div class="num-unit"><input type="number" id="figSweepFrom" step="any" data-fopt="sweepFrom" /><span class="fig-sweep-unit">°</span></div>
                             <div class="num-unit fig-sweep-field"><input type="number" id="figSweepTo" step="any" data-fopt="sweepTo" aria-label="bis" /><span>mT</span></div>
-                            <div class="num-unit fig-sweep-angle" title="Drehwinkel ab dem Start, negativ = andersherum"><input type="number" id="figSweepSpan" step="any" min="-360" max="360" data-fopt="sweepSpan" aria-label="Drehung" /><span>°</span></div>
+                            <div class="num-unit fig-sweep-angle" title="Drehwinkel ab dem Start, negativ = andersherum; Mausrad: 5°, mit Alt fein"><input type="number" id="figSweepSpan" step="any" min="-360" max="360" data-fopt="sweepSpan" aria-label="Drehung" /><span>°</span></div>
                         </div>
                         <label class="field-label fig-sweep-angle" for="figSweepStep">Zwischen­pfeile</label>
                         <select id="figSweepStep" class="select-input fig-sweep-angle" data-fopt="sweepStep">

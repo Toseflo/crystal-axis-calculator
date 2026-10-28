@@ -1671,10 +1671,11 @@ body.theme-light .canvas-pill-btn {
 .seg-xs.fig-seg {
     display: grid;
     grid-auto-columns: 1fr;
-    gap: 3px;
+    gap: 5px;
 }
 .seg-xs.fig-seg .seg-btn {
-    padding: 5px 6px;
+    padding: 7px 8px;
+    font-size: 12px;
     white-space: nowrap;
 }
 .fig-range {
@@ -1696,6 +1697,47 @@ body.theme-light .canvas-pill-btn {
 }
 .fig-style-editor {
     margin: 8px 0 14px;
+}
+/* SVG tab: a wider, roomier options column */
+.fig-modal-grid {
+    grid-template-columns: 360px 1fr;
+    gap: 22px;
+}
+@media (max-width: 860px) {
+    .fig-modal-grid { grid-template-columns: 1fr; }
+}
+.fig-modal-grid .export-intro {
+    margin-bottom: 6px;
+}
+.fig-modal-grid .fig-more {
+    margin-bottom: 16px;
+}
+.fig-modal-grid .fig-grid {
+    gap: 10px 16px;
+}
+.fig-modal-grid .fig-grid .select-input,
+.fig-modal-grid .fig-grid .input-text {
+    padding-top: 7px;
+    padding-bottom: 7px;
+}
+.fig-modal-grid .fig-range {
+    gap: 8px;
+}
+.fig-modal-grid .fig-range .num-unit {
+    padding: 6px 10px;
+}
+.fig-modal-grid .fig-chk {
+    gap: 10px 16px;
+    margin: 20px 0 20px;
+}
+.fig-modal-grid .preset-dropdown-row {
+    margin-top: 6px;
+}
+.fig-modal-grid .fig-style-editor {
+    margin: 12px 0 20px;
+}
+.fig-modal-grid .modal-actions-stack {
+    gap: 10px;
 }
 .fig-style-body {
     display: flex;
