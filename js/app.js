@@ -1776,7 +1776,7 @@ function updateSweepControls(setup) {
     const phi = (((Number(setup.phiMDeg) || 0) % 360) + 360) % 360;
     document.getElementById('figSweepFrom').placeholder = mode === 'field' ? '0' : `${Number(phi.toFixed(1))}`;
     document.getElementById('figSweepTo').placeholder = `${Number(((Number(setup.b0Tesla) || 0) * 1000).toFixed(1))}`;
-    document.getElementById('figSweepSpan').placeholder = '360';
+    document.getElementById('figSweepSpan').placeholder = 'z. B. 90';
 }
 
 function refreshSvgPreview() {
@@ -1810,6 +1810,8 @@ function bindFigureControls() {
         syncFigureControls();
         saveFigureSettings();
         refreshSvgPreview();
+        // No turn is preset: the arc appears once one is typed in
+        if (key === 'sweep' && value === 'angle') document.getElementById('figSweepSpan').focus();
     };
     document.querySelectorAll('[data-fopt]').forEach((el) =>
         el.addEventListener('change', () => setOption(el.dataset.fopt, el.type === 'checkbox' ? el.checked : el.value))

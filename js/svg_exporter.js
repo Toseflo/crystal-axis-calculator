@@ -121,7 +121,7 @@ export const DEFAULT_FIGURE_OPTIONS = {
     sweep: 'none', // 'none' | 'angle' (magnet turns the field) | 'field' (B0 over a range)
     sweepFrom: '', // phi_M in ° or B0 in mT; empty: the current value (angle) or 0 (field)
     sweepTo: '', // B0 sweep end in mT; empty: the current B0
-    sweepSpan: '', // angle sweep: turn in ° from the start, negative = other sense; empty: 360
+    sweepSpan: '', // angle sweep: turn in ° from the start, negative = other sense; empty: none yet
     sweepStep: '0', // faint field arrows every … ° along the turn; 0: none
     panel: '' // sub-figure letter in the top left corner, e.g. '(a)'; empty: none
 };
@@ -399,7 +399,7 @@ function fieldSetup(state, o) {
         const e2 = state.matrices.vectorInAllFrames([0, 1, 0], 'Lab').Sub;
         bAt = (phi) => unit(add(mul(e1, Math.cos(phi * DEG)), mul(e2, Math.sin(phi * DEG))));
         swFrom = num(o.sweepFrom, Number(state.setup.phiMDeg) || 0);
-        swSpan = Math.max(-360, Math.min(360, num(o.sweepSpan, 360)));
+        swSpan = Math.max(-360, Math.min(360, num(o.sweepSpan, 0)));
     }
     const sweepAngle = Math.abs(swSpan) > TINY_DEG;
     const b0mT = (Number(state.setup.b0Tesla) || 0) * 1000;
