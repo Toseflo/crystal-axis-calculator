@@ -1695,8 +1695,11 @@ function loadFigureSettings() {
         figure.options = { ...DEFAULT_FIGURE_OPTIONS, ...(s.options || {}) };
         FIGURE_PER_FIGURE_OPTIONS.forEach((k) => (figure.options[k] = DEFAULT_FIGURE_OPTIONS[k]));
         figure.saved = s.saved && typeof s.saved === 'object' ? s.saved : {};
-        figure.style = completeFigureStyle(s.style);
-        figure.styleName = s.styleName || '';
+        const styleAliases = { Klassisch: 'Standard', 'Hämatit': 'Farbig (Flat)' };
+        const rawName = styleAliases[s.styleName] || s.styleName || '';
+        figure.styleName = rawName;
+        const presetStyle = figure.styleName && BUILTIN_FIGURE_STYLES[figure.styleName];
+        figure.style = completeFigureStyle(presetStyle || s.style);
     } catch (_) {
         // Keep the defaults
     }
@@ -1755,7 +1758,8 @@ function syncFigureControls() {
     );
     document.querySelectorAll('[data-fs]').forEach((el) => {
         const v = getFigStyleValue(el.dataset.fs);
-        if (el.type === 'color') el.value = /^#[0-9a-f]{6}$/i.test(v) ? v : '#ffffff';
+        if (el.type === 'checkbox') el.checked = !!v;
+        else if (el.type === 'color') el.value = /^#[0-9a-f]{6}$/i.test(v) ? v : '#ffffff';
         else el.value = v;
     });
     const bgNone = getFigStyleValue('colors.background') === 'none';
@@ -1853,8 +1857,10 @@ function bindFigureControls() {
         refreshSvgPreview();
     };
     document.querySelectorAll('[data-fs]').forEach((el) =>
-        el.addEventListener('input', () => {
-            if (el.type === 'number') {
+        el.addEventListener(el.type === 'checkbox' ? 'change' : 'input', () => {
+            if (el.type === 'checkbox') {
+                setFigStyleValue(el.dataset.fs, el.checked);
+            } else if (el.type === 'number') {
                 if (el.value === '' || !Number.isFinite(Number(el.value))) return;
                 setFigStyleValue(el.dataset.fs, Number(el.value));
             } else {

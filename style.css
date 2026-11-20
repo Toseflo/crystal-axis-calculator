@@ -1755,15 +1755,18 @@ body.theme-light .canvas-pill-btn {
     color: var(--text-muted);
 }
 .fig-color-grid,
+.fig-effects-grid,
 .fig-num-grid,
 .fig-sym-grid {
     display: grid;
     gap: 5px 8px;
 }
-.fig-color-grid {
+.fig-color-grid,
+.fig-effects-grid {
     grid-template-columns: 1fr 1fr;
 }
-.fig-color-grid label {
+.fig-color-grid label,
+.fig-effects-grid label {
     display: flex;
     align-items: center;
     gap: 6px;

@@ -38,75 +38,124 @@ const R_DEV = 0.36; // arc radii: antenna angle, in-plane field angle, elevation
 const R_PHI = 0.48;
 const R_ELEV = 0.6;
 const TINY_DEG = 0.05;
+const LIGHT_DIR = [(-0.55) / Math.hypot(-0.55, -0.45, 0.7), (-0.45) / Math.hypot(-0.55, -0.45, 0.7), 0.7 / Math.hypot(-0.55, -0.45, 0.7)];
 
 // ---------------------------------------------------------------------------
 // Styles: everything that should look the same in every figure of a thesis
 // ---------------------------------------------------------------------------
 
-const SYMBOLS = { field: 'B', wave: 'k', moment: 'm', phi: 'φ', theta: 'θ', dev: 'α', sweep: 'Δφ' };
+const SYMBOLS = { field: 'B', wave: 'k', moment: 'm', phi: 'φ', theta: 'θ', dev: 'α', sweep: '' };
+const DEFAULT_EFFECTS = { extrude: false, angleFill: false, waveLine: false };
 
 export const BUILTIN_FIGURE_STYLES = {
     Standard: {
         widthMm: 65,
-        fontFamily: 'Arial, Helvetica, sans-serif',
+        fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
         fontSizePt: 9,
         vectorStyle: 'bold',
-        sampleThickness: 0.08,
+        sampleThickness: 0.1,
         arrowHeadPt: 6,
         colors: {
-            sample: '#6cb8b4',
-            antenna: '#d9a82e',
-            field: '#111111',
-            wave: '#c2410c',
-            angle: '#1f2937',
-            axes: '#374151',
+            sample: '#f8fafc',
+            antenna: '#e6a825',
+            field: '#2563a8',
+            wave: '#c43728',
+            angle: '#1e7a46',
+            axes: '#1e293b',
+            moment: '#7c3aed',
+            text: '#111827',
+            background: 'none'
+        },
+        lines: { outline: 0.72, field: 1.5, wave: 1.2, arc: 0.8, guide: 0.55, axes: 0.8 },
+        effects: { ...DEFAULT_EFFECTS },
+        symbols: { ...SYMBOLS }
+    },
+    'Paper (Serif)': {
+        widthMm: 65,
+        fontFamily: "Georgia, 'Times New Roman', Times, serif",
+        fontSizePt: 9.5,
+        vectorStyle: 'bold',
+        sampleThickness: 0.1,
+        arrowHeadPt: 6.2,
+        colors: {
+            sample: '#ffffff',
+            antenna: '#e2a422',
+            field: '#2563a8',
+            wave: '#be3126',
+            angle: '#1e7a46',
+            axes: '#111111',
             moment: '#7c3aed',
             text: '#111111',
             background: 'none'
         },
-        lines: { outline: 0.5, field: 1.4, wave: 1.1, arc: 0.7, guide: 0.6, axes: 0.8 },
+        lines: { outline: 0.8, field: 1.5, wave: 1.2, arc: 0.85, guide: 0.55, axes: 0.85 },
+        effects: { ...DEFAULT_EFFECTS },
+        symbols: { ...SYMBOLS }
+    },
+    'Farbig (Flat)': {
+        widthMm: 65,
+        fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
+        fontSizePt: 9,
+        vectorStyle: 'bold',
+        sampleThickness: 0.11,
+        arrowHeadPt: 6,
+        colors: {
+            sample: '#c6e0e7',
+            antenna: '#eab12a',
+            field: '#19325c',
+            wave: '#d13b27',
+            angle: '#334155',
+            axes: '#334155',
+            moment: '#7c3aed',
+            text: '#0f172a',
+            background: 'none'
+        },
+        lines: { outline: 0.55, field: 1.5, wave: 1.15, arc: 0.75, guide: 0.55, axes: 0.75 },
+        effects: { extrude: true, angleFill: true, waveLine: false },
         symbols: { ...SYMBOLS }
     },
     'Schwarz-Weiß': {
         widthMm: 65,
-        fontFamily: 'Times New Roman, Times, serif',
-        fontSizePt: 10,
+        fontFamily: "Georgia, 'Times New Roman', Times, serif",
+        fontSizePt: 9.5,
         vectorStyle: 'bold',
-        sampleThickness: 0.08,
+        sampleThickness: 0.1,
         arrowHeadPt: 6,
         colors: {
-            sample: '#d4d4d4',
-            antenna: '#7a7a7a',
-            field: '#000000',
-            wave: '#000000',
-            angle: '#000000',
-            axes: '#000000',
-            moment: '#555555',
+            sample: '#ffffff',
+            antenna: '#9ca3af',
+            field: '#111111',
+            wave: '#111111',
+            angle: '#374151',
+            axes: '#111111',
+            moment: '#52525b',
             text: '#000000',
             background: 'none'
         },
-        lines: { outline: 0.5, field: 1.3, wave: 0.9, arc: 0.6, guide: 0.5, axes: 0.7 },
+        lines: { outline: 0.75, field: 1.45, wave: 1.05, arc: 0.75, guide: 0.5, axes: 0.75 },
+        effects: { ...DEFAULT_EFFECTS },
         symbols: { ...SYMBOLS }
     },
     Folie: {
         widthMm: 90,
-        fontFamily: 'Arial, Helvetica, sans-serif',
+        fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
         fontSizePt: 14,
         vectorStyle: 'bold',
-        sampleThickness: 0.1,
+        sampleThickness: 0.11,
         arrowHeadPt: 10,
         colors: {
-            sample: '#4fa3a5',
-            antenna: '#e0a526',
-            field: '#1d3a8a',
-            wave: '#d9480f',
-            angle: '#111827',
-            axes: '#374151',
+            sample: '#e2eef3',
+            antenna: '#eca924',
+            field: '#1d4ed8',
+            wave: '#dc2626',
+            angle: '#15803d',
+            axes: '#1e293b',
             moment: '#7c3aed',
-            text: '#111827',
+            text: '#0f172a',
             background: '#ffffff'
         },
-        lines: { outline: 0.8, field: 2.6, wave: 2, arc: 1.2, guide: 1, axes: 1.3 },
+        lines: { outline: 0.9, field: 2.5, wave: 2.0, arc: 1.2, guide: 0.9, axes: 1.2 },
+        effects: { extrude: false, angleFill: true, waveLine: false },
         symbols: { ...SYMBOLS }
     }
 };
@@ -139,6 +188,7 @@ export function completeFigureStyle(style) {
         ...s,
         colors: { ...base.colors, ...(s.colors || {}) },
         lines: { ...base.lines, ...(s.lines || {}) },
+        effects: { ...base.effects, ...(s.effects || {}) },
         symbols: { ...base.symbols, ...(s.symbols || {}) }
     };
 }
@@ -191,16 +241,25 @@ const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const mul = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const len = (a) => Math.hypot(a[0], a[1], a[2]);
 const unit = (a) => mul(a, 1 / (len(a) || 1));
-const angleDeg = (a, b) => Math.acos(Math.max(-1, Math.min(1, dot(unit(a), unit(b))))) / DEG;
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const angleDeg = (a, b) => Math.acos(clamp(dot(unit(a), unit(b)), -1, 1)) / DEG;
 
 function shade(hex, f) {
     const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
     if (!m) return hex;
     const n = parseInt(m[1], 16);
-    const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => Math.round(f < 0 ? c * (1 + f) : c + (255 - c) * f));
+    const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => Math.round(clamp(f < 0 ? c * (1 + f) : c + (255 - c) * f, 0, 255)));
     return '#' + ch.map((c) => c.toString(16).padStart(2, '0')).join('');
+}
+
+function hexLum(hex) {
+    const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+    if (!m) return 0.5;
+    const n = parseInt(m[1], 16);
+    return (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
 }
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -209,8 +268,8 @@ const fmtAngle = (deg) => `${Number(deg.toFixed(1))}°`;
 const OVERLINE = '̅';
 
 // Advance widths in em (Arial / Times metrics), good enough to place labels and draw index bars
-const EM_SANS = { digit: 0.556, other: 0.56, '[': 0.278, ']': 0.278, '(': 0.333, ')': 0.333, '°': 0.4, '.': 0.278, ',': 0.278, ' ': 0.278, '=': 0.584, '-': 0.333, '−': 0.584 };
-const EM_SERIF = { digit: 0.5, other: 0.5, '[': 0.333, ']': 0.333, '(': 0.333, ')': 0.333, '°': 0.4, '.': 0.25, ',': 0.25, ' ': 0.25, '=': 0.564, '-': 0.333, '−': 0.564 };
+const EM_SANS = { digit: 0.556, other: 0.56, '[': 0.278, ']': 0.278, '(': 0.333, ')': 0.333, '°': 0.4, '.': 0.278, ',': 0.278, ' ': 0.278, '=': 0.584, '-': 0.333, '−': 0.584, Δ: 0.68 };
+const EM_SERIF = { digit: 0.5, other: 0.5, '[': 0.333, ']': 0.333, '(': 0.333, ')': 0.333, '°': 0.4, '.': 0.25, ',': 0.25, ' ': 0.25, '=': 0.564, '-': 0.333, '−': 0.564, Δ: 0.64 };
 const isSerif = (family) => /serif|times|georgia|palatino|garamond|cmu|computer modern|latin modern/i.test(family) && !/sans/i.test(family);
 
 // ---------------------------------------------------------------------------
@@ -242,11 +301,19 @@ function symbolTex(str, vectorStyle) {
 
 const VECTOR_MARK = { hat: '̂', arrow: '⃗' };
 
-/** SVG tspans for a symbol; vectorStyle only for vectors (B, k, m), plain italic otherwise. */
+/** SVG tspans for a symbol; bold vectors render upright (like LaTeX \mathbf), Δ/∇ stay upright. */
 function symbolSpans(str, fs, vectorStyle) {
     const { main, sub: s } = parseSymbol(str);
-    const weight = vectorStyle === 'bold' ? ' font-weight="bold"' : '';
-    let out = `<tspan font-style="italic"${weight}>${esc(main + (VECTOR_MARK[vectorStyle] || ''))}</tspan>`;
+    const m = /^([Δ∇]+)(.*)$/.exec(main);
+    const prefix = m ? m[1] : '';
+    const varName = m ? m[2] : main;
+    const bold = vectorStyle === 'bold';
+    const varAttr = bold ? ' font-style="normal" font-weight="bold"' : ' font-style="italic"';
+    let out = '';
+    if (prefix) out += `<tspan font-style="normal">${esc(prefix)}</tspan>`;
+    if (varName || !prefix) {
+        out += `<tspan${varAttr}>${esc(varName + (VECTOR_MARK[vectorStyle] || ''))}</tspan>`;
+    }
     if (s) {
         const italic = s.length === 1 ? ' font-style="italic"' : '';
         out += `<tspan dy="${n2(fs * 0.28)}" font-size="${n2(fs * 0.72)}"${italic}>${esc(s)}</tspan><tspan dy="${n2(-fs * 0.28)}">​</tspan>`;
@@ -398,16 +465,26 @@ function boundsOf(pts) {
  */
 const num = (x, fallback) => (x === '' || x == null || !Number.isFinite(Number(x)) ? fallback : Number(x));
 
+function resolveSweepSymbol(st, isOopSweep) {
+    const custom = String(st.symbols?.sweep || '').trim();
+    if (custom && custom !== 'Δφ' && custom !== 'Δθ') return custom;
+    const base = isOopSweep ? st.symbols?.theta || 'θ' : st.symbols?.phi || 'φ';
+    return `Δ${base}`;
+}
+
 // Sweep and drawn field, the same for the figure and its caption: the magnet turns the field in the
 // lab xy plane, and the drawn field is where the turn starts
 function fieldSetup(state, o) {
     let bAt = null;
     let swFrom = 0;
     let swSpan = 0;
+    let isOopSweep = state.setup?.mountMode === 'OOP';
     if (o.sweep === 'angle' && state.matrices) {
         const e1 = state.matrices.vectorInAllFrames([1, 0, 0], 'Lab').Sub;
         const e2 = state.matrices.vectorInAllFrames([0, 1, 0], 'Lab').Sub;
         bAt = (phi) => unit(add(mul(e1, Math.cos(phi * DEG)), mul(e2, Math.sin(phi * DEG))));
+        const nRot = cross(e1, e2);
+        isOopSweep = Math.abs(nRot[2]) < 0.5;
         swFrom = num(o.sweepFrom, Number(state.setup.phiMDeg) || 0);
         swSpan = Math.max(-360, Math.min(360, num(o.sweepSpan, 0)));
     }
@@ -415,7 +492,7 @@ function fieldSetup(state, o) {
     const b0mT = (Number(state.setup.b0Tesla) || 0) * 1000;
     const fieldRange = o.sweep === 'field' ? [num(o.sweepFrom, 0), num(o.sweepTo, b0mT)] : null;
     const bHat = sweepAngle ? bAt(swFrom) : unit(state.vectors.bHat.Sub);
-    return { bAt, swFrom, swSpan, sweepAngle, b0mT, fieldRange, bHat };
+    return { bAt, swFrom, swSpan, sweepAngle, isOopSweep, b0mT, fieldRange, bHat };
 }
 
 export function generateFigureSVG(state, options = {}, styleIn = null) {
@@ -423,6 +500,7 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
     const st = completeFigureStyle(styleIn);
     const C = st.colors;
     const L = st.lines;
+    const E = st.effects;
     const fs = Number(st.fontSizePt) || 9;
     const latex = !!o.latex;
     const cam = makeCamera(o.view);
@@ -435,7 +513,8 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
     const tHat = v.tHat.Sub;
 
     // ---- sweep: the magnet turns the field in the lab xy plane; the drawn field is where it starts
-    const { bAt, swFrom, swSpan, sweepAngle, fieldRange, bHat } = fieldSetup(state, o);
+    const { bAt, swFrom, swSpan, sweepAngle, isOopSweep, fieldRange, bHat } = fieldSetup(state, o);
+    const sweepSym = resolveSweepSymbol(st, isOopSweep);
     const xEdge = [1, 0, 0];
     const nrm = [0, 0, 1];
     const origin = [0, 0, 0];
@@ -504,11 +583,11 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
                 const w = charW(c);
                 const cx = x + w / 2;
                 spans += `<tspan x="${n2(cx)}">${esc(c)}</tspan>`;
-                if (bar) bars += `M${n2(cx - fs * 0.2)},${n2(y - fs * 0.84)}H${n2(cx + fs * 0.2)}`;
+                if (bar) bars += `M${n2(cx - fs * 0.18)},${n2(y - fs * 0.79)}H${n2(cx + fs * 0.18)}`;
                 x += w;
             });
             const text = `<text y="${n2(y)}" text-anchor="middle" fill="${C.text}" font-size="${fs}">${spans}</text>`;
-            return bars ? `<g>${text}<path d="${bars}" stroke="${C.text}" stroke-width="${n2(fs * 0.065)}" stroke-linecap="butt" fill="none"/></g>` : text;
+            return bars ? `<g>${text}<path d="${bars}" stroke="${C.text}" stroke-width="${n2(fs * 0.06)}" stroke-linecap="butt" fill="none"/></g>` : text;
         };
         return { content, width };
     };
@@ -623,11 +702,11 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
 
     // Slim arrowhead with a swept-back base; the shaft ends inside it
     const headPath = (tip, ux, uy, hl, color) => {
-        const hw = hl * 0.36;
+        const hw = hl * 0.29;
         const bx = tip[0] - ux * hl;
         const by = tip[1] - uy * hl;
-        const nx = tip[0] - ux * hl * 0.76;
-        const ny = tip[1] - uy * hl * 0.76;
+        const nx = tip[0] - ux * hl * 0.78;
+        const ny = tip[1] - uy * hl * 0.78;
         return `<path d="M${n2(tip[0])},${n2(tip[1])}L${n2(bx - uy * hw)},${n2(by + ux * hw)}L${n2(nx)},${n2(ny)}L${n2(bx + uy * hw)},${n2(by - ux * hw)}Z" fill="${color}"/>`;
     };
 
@@ -642,7 +721,7 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
         const ux = dx / d;
         const uy = dy / d;
         const hl = Math.min(st.arrowHeadPt * (0.7 + width / 3.5), d * 0.6);
-        const hw = hl * 0.36;
+        const hw = hl * 0.29;
         addLine([a, b], w);
         addLine([b, [b[0] - ux * hl - uy * hw, b[1] - uy * hl + ux * hw], [b[0] - ux * hl + uy * hw, b[1] - uy * hl - ux * hw]], w, true);
         const dash = dashed ? ` stroke-dasharray="${n2(width * 1.6)},${n2(width * 1.4)}" stroke-linecap="butt"` : '';
@@ -693,7 +772,11 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
         const scr = A.pts.map(toSvg);
         const id = addLine(scr, W_GUIDE);
         marks.push({ id, pts: scr, angle: true });
-        const below = A.pts.some((p) => p[2] < -1e-6) ? ` stroke-dasharray="${n2(L.arc * 2.5)},${n2(L.arc * 2)}"` : '';
+        const isBelow = A.pts.some((p) => p[2] < -1e-6);
+        if (E.angleFill) {
+            layers.arcs.push(`<path d="${pathOf([c, ...A.pts], true)}" fill="${color}" fill-opacity="${isBelow ? 0.04 : 0.09}" stroke="none"/>`);
+        }
+        const below = isBelow ? ` stroke-dasharray="${n2(L.arc * 2.5)},${n2(L.arc * 2)}"` : '';
         layers.arcs.push(`<path d="${pathOf(A.pts)}" stroke="${color}" stroke-width="${n2(L.arc)}"${below} fill="none"/>`);
         const w = angleWidth(symbol, A.ang);
         const cands = [];
@@ -709,25 +792,36 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
         cands.push({ sx: ix, sy: iy, center: true, pen: 0.6 });
         // flat wedges leave no room inside: then beside an end of the arc, outside the wedge
         const [mx, my] = toSvg(add(c, mul(A.mid, r)));
-        for (const f of [0, 1]) {
+        const awayRays = [0, 1].map((f) => {
             const [sx, sy] = toSvg(add(c, mul(A.dirAt(f), r)));
             const [rx, ry] = screenDir(c, add(c, A.dirAt(f)));
             const s = (mx - sx) * -ry + (my - sy) * rx > 0 ? -1 : 1; // normal of the ray, away from the arc
-            cands.push(
-                { ...beyond(sx, sy, -ry * s, rx * s, w, fs * 0.25, 1.2), from: [sx, sy] },
-                { ...beyond(sx, sy, ...turn([-ry * s, rx * s], s * -35), w, fs * 0.25, 1.4), from: [sx, sy] }
-            );
+            return { sx, sy, nx: -ry * s, ny: rx * s, s };
+        });
+        for (const { sx, sy, nx, ny, s } of awayRays) {
+            for (const [g, pen] of [[0.25, 1.2], [0.7, 1.65]]) {
+                cands.push(
+                    { ...beyond(sx, sy, nx, ny, w, fs * g, pen), from: [sx, sy] },
+                    { ...beyond(sx, sy, ...turn([nx, ny], s * -35), w, fs * g, pen + 0.2), from: [sx, sy] }
+                );
+            }
         }
-        // crowded: further out, with a line to the arc
-        for (const [gap, pen] of [[1.8, 2], [2.8, 3]]) {
+        // crowded: further out, with a line to the arc (radially outward or away from wedge ends)
+        for (const [gap, pen] of [[1.6, 2.2], [2.5, 3]]) {
             for (const f of [0.5, 0.3, 0.7]) {
                 const d = A.dirAt(f);
                 const [sx, sy] = toSvg(add(c, mul(d, r)));
                 const [ux, uy] = screenDir(c, add(c, d));
                 cands.push({ ...beyond(sx, sy, ux, uy, w, gap * fs, pen + Math.abs(f - 0.5) * 1.5), from: [sx, sy], leader: true });
             }
+            for (const { sx, sy, nx, ny, s } of awayRays) {
+                cands.push(
+                    { ...beyond(sx, sy, nx, ny, w, gap * fs, pen + 0.4), from: [sx, sy], leader: true },
+                    { ...beyond(sx, sy, ...turn([nx, ny], s * -30), w, gap * fs, pen + 0.6), from: [sx, sy], leader: true }
+                );
+            }
         }
-        wantLabel(1 + arcCount++ * 0.1, cands, angleText(symbol, A.ang), C.text, w, { id, pts: scr, anchor: [mx, my], angle: true });
+        wantLabel(1 + arcCount++ * 0.1, cands, angleText(symbol, A.ang), color, w, { id, pts: scr, anchor: [mx, my], angle: true });
     };
 
     // Label at the free end of an arrow, or beside its shaft
@@ -748,9 +842,10 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
         return cands;
     };
 
-    // ---- sample slab: visible side faces (auto-shaded), then the top face
+    // ---- sample slab: crisp pure-flat planes with light-aware ink outlines
     const top = corners(0);
-    const sampleStroke = shade(C.sample, -0.45);
+    const lightSample = hexLum(C.sample) > 0.88;
+    const sampleStroke = lightSample ? C.axes : shade(C.sample, -0.48);
     if (thick > 0) {
         const bot = corners(-thick);
         const sides = [
@@ -759,11 +854,14 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
             { n: [0, 1, 0], q: [top[2], top[3], bot[3], bot[2]] },
             { n: [-1, 0, 0], q: [top[3], top[0], bot[0], bot[3]] }
         ];
-        sides.forEach((f, i) => {
-            if (dot(f.n, cam.toViewer) <= 1e-6) return;
-            addLine(f.q.map(toSvg), W_EDGE, true);
-            layers.sample.push(`<path d="${pathOf(f.q, true)}" fill="${shade(C.sample, i % 2 ? -0.28 : -0.16)}" stroke="${sampleStroke}" stroke-width="${n2(L.outline)}" stroke-linejoin="round"/>`);
-        });
+        sides
+            .filter((f) => dot(f.n, cam.toViewer) > 1e-6)
+            .forEach((f) => {
+                addLine(f.q.map(toSvg), W_EDGE, true);
+                const lit = dot(f.n, LIGHT_DIR) > 0;
+                const fill = shade(C.sample, lightSample ? (lit ? -0.07 : -0.15) : lit ? -0.16 : -0.28);
+                layers.sample.push(`<path d="${pathOf(f.q, true)}" fill="${fill}" stroke="${sampleStroke}" stroke-width="${n2(L.outline)}" stroke-linejoin="round"/>`);
+            });
     }
     addLine(top.map(toSvg), W_EDGE, true);
     layers.sample.push(`<path d="${pathOf(top, true)}" fill="${C.sample}" stroke="${sampleStroke}" stroke-width="${n2(L.outline)}" stroke-linejoin="round"/>`);
@@ -799,17 +897,54 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
         devDist = best.dist;
         devScale = best.s;
     }
+    const hDev = E.extrude && !isTop && thick > 0 ? Math.min(thick * 0.2, 0.018) : 0;
     const devPolys = [];
+    const devTopPolys = [];
     shapes.forEach((polys, i) => {
         const pts3 = polys.map((poly) => poly.map(devPoint(i, devDist, devScale)));
-        const screen = pts3.flat().map(toSvg);
+        const lifted = hDev > 0 ? pts3.map((poly) => poly.map((p) => [p[0], p[1], hDev])) : pts3;
+        const screen = lifted.flat().map(toSvg);
         ink.push(...screen);
         areas.push([convexHull(screen), W_ANTENNA]);
         devPolys.push(...pts3);
+        devTopPolys.push(...lifted);
     });
     if (devPolys.length) {
+        if (hDev > 0) {
+            const walls = [];
+            devPolys.forEach((poly) => {
+                let area2 = 0;
+                for (let j = 0; j < poly.length; j++) {
+                    const a = poly[j];
+                    const b = poly[(j + 1) % poly.length];
+                    area2 += a[0] * b[1] - b[0] * a[1];
+                }
+                const ccw = area2 >= 0 ? 1 : -1;
+                for (let j = 0; j < poly.length; j++) {
+                    const p = poly[j];
+                    const q = poly[(j + 1) % poly.length];
+                    const dx = q[0] - p[0];
+                    const dy = q[1] - p[1];
+                    const edgeLen = Math.hypot(dx, dy);
+                    if (edgeLen < 1e-9) continue;
+                    const n = [ccw * (dy / edgeLen), -ccw * (dx / edgeLen), 0];
+                    if (dot(n, cam.toViewer) <= 1e-6) continue;
+                    const cen = [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2, hDev / 2];
+                    const quad = [[p[0], p[1], hDev], [q[0], q[1], hDev], [q[0], q[1], 0], [p[0], p[1], 0]];
+                    const fill = shade(C.antenna, dot(n, LIGHT_DIR) > 0 ? -0.18 : -0.34);
+                    walls.push({ depth: dot(cen, cam.toViewer), quad, fill });
+                }
+            });
+            walls.sort((a, b) => a.depth - b.depth);
+            const wallSw = n2(Math.max(0.15, L.outline * 0.35));
+            walls.forEach((w) => {
+                layers.antenna.push(`<path d="${pathOf(w.quad, true)}" fill="${w.fill}" stroke="${w.fill}" stroke-width="${wallSw}" stroke-linejoin="round"/>`);
+            });
+        }
+        const antStroke = shade(C.antenna, -0.42);
+        const antSw = n2(Math.max(0.35, L.outline * 0.65));
         layers.antenna.push(
-            `<path d="${devPolys.map((q) => pathOf(q, true)).join('')}" fill="${C.antenna}" stroke="${shade(C.antenna, -0.4)}" stroke-width="${n2(L.outline * 0.5)}" stroke-linejoin="round"/>`
+            `<path d="${devTopPolys.map((q) => pathOf(q, true)).join('')}" fill="${C.antenna}" stroke="${antStroke}" stroke-width="${antSw}" stroke-linejoin="round"/>`
         );
     }
 
@@ -817,6 +952,20 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
     const kLim = Math.min(HX / Math.max(Math.abs(kHat[0]), 1e-9), HY / Math.max(Math.abs(kHat[1]), 1e-9)) - 0.2;
     const kFrom = shapes.length ? -devDist + halfLength(devTypes[0]) * devScale + K_GAP : -Math.min(0.8, kLim);
     const kTo = shapes.length > 1 ? devDist - halfLength(devTypes[1]) * devScale - K_GAP : shapes.length ? devDist : Math.min(0.8, kLim);
+
+    // Optional clean flat vector sine wave on the surface along k
+    if (E.waveLine && o.showWave) {
+        const wk0 = shapes.length ? -devDist + halfLength(devTypes[0]) * devScale + 0.03 : kFrom;
+        const wk1 = shapes.length > 1 ? devDist - halfLength(devTypes[1]) * devScale - 0.03 : kTo;
+        if (wk1 - wk0 > 0.25) {
+            const amp = Math.min(0.11 * devScale, 0.11);
+            const pts = Array.from({ length: 73 }, (_, i) => {
+                const u = i / 72;
+                return wave(wk0 + (wk1 - wk0) * u, amp * Math.sin(Math.PI * u) * Math.sin(2 * Math.PI * 4.5 * u));
+            });
+            layers.sample.push(`<path d="${pathOf(pts)}" stroke="${C.wave}" stroke-opacity="0.42" stroke-width="${n2(L.arc)}" fill="none"/>`);
+        }
+    }
     const P0 = mul(kHat, (kFrom + kTo) / 2);
     const rs = Math.max(0.55, Math.min(1, (kTo - kFrom) / 2 / 0.75)); // in-plane arcs shrink with a short k
     const rDev = R_DEV * rs;
@@ -891,9 +1040,13 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
     }
 
     if (pDir) {
-        // in-plane angle to k (or to the 0° edge); a tilted field gets its shadow on the surface
+        // in-plane angle to k (or to the 0° edge); a tilted field gets its surface projection and vertical drop-line
         if (showElev && !isTop) {
-            layers.guides.push(guideLine(foot, add(foot, mul(shadowDir, fl * Math.cos(elevDeg * DEG)))));
+            const projPt = add(foot, mul(shadowDir, fl * Math.cos(elevDeg * DEG)));
+            const [ppx, ppy] = toSvg(projPt);
+            layers.guides.push(guideLine(foot, projPt, C.angle));
+            layers.guides.push(guideLine(fOuter, projPt, C.angle));
+            layers.guides.push(`<circle cx="${n2(ppx)}" cy="${n2(ppy)}" r="${n2(Math.max(1.0, L.guide * 1.7))}" fill="${C.angle}"/>`);
             if (down) layers.guides.push(guideLine(foot, add(foot, mul(pDir, rayLen(rPhi))))); // ray for the in-plane angle
             drawArc(shadowDir, outerDir, rElev, st.symbols.theta, foot);
         }
@@ -926,8 +1079,8 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
         const flat = Math.abs((ax[0] - o2[0]) * (ay[1] - o2[1]) - (ax[1] - o2[1]) * (ay[0] - o2[0])) < 0.12;
         if (flat) {
             const mode = o.angleLabels === 'value' ? 'both' : o.angleLabels;
-            sweepNote = `, ${angleText(st.symbols.sweep, span, mode)}`;
-            sweepNoteW = textWidth(', ') + angleWidth(st.symbols.sweep, span, mode);
+            sweepNote = `, ${angleText(sweepSym, span, mode)}`;
+            sweepNoteW = textWidth(', ') + angleWidth(sweepSym, span, mode);
         } else {
             const ghosts = [];
             if (step >= 1) for (let a = step; a < span - 1e-6; a += step) ghosts.push(a);
@@ -939,23 +1092,34 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
             const n = Math.max(12, Math.ceil(span / 3));
             const at = (deg) => add(foot, mul(bAt(swFrom + sgn * deg), rSweep));
             const below = (p) => p[2] < -1e-6;
-            // runs of points above / below the surface
+            // runs of points above / below the surface, interpolated cleanly across z = 0
             const runsOf = (path) => {
                 const runs = [];
+                let curBelow = below(path[0]);
                 let run = [path[0]];
                 for (let i = 1; i < path.length; i++) {
-                    if (below(path[i]) !== below(path[i - 1])) {
-                        runs.push({ pts: run, below: below(path[i - 1]) });
-                        run = [path[i - 1]];
+                    const b = below(path[i]);
+                    if (b !== curBelow) {
+                        const p = path[i - 1];
+                        const q = path[i];
+                        const dz = q[2] - p[2];
+                        const t = Math.abs(dz) > 1e-9 ? clamp(-p[2] / dz, 0, 1) : 0.5;
+                        const crossPt = add(p, mul(sub(q, p), t));
+                        run.push(crossPt);
+                        runs.push({ pts: run, below: curBelow });
+                        run = [crossPt, q];
+                        curBelow = b;
+                    } else {
+                        run.push(path[i]);
                     }
-                    run.push(path[i]);
                 }
-                runs.push({ pts: run, below: below(path[path.length - 1]) });
+                runs.push({ pts: run, below: curBelow });
                 return runs;
             };
             const wedge = Array.from({ length: n + 1 }, (_, i) => at((span * i) / n));
+            const [cx, cy] = toSvg(foot);
             runsOf(wedge).forEach((r) =>
-                layers.sweep.push(`<path d="${pathOf([foot, ...r.pts], true)}" fill="${shade(C.field, 0.85)}" fill-opacity="${r.below ? 0.25 : 0.5}" stroke="none"/>`)
+                layers.sweep.push(`<path d="${pathOf([foot, ...r.pts], true)}" fill="${C.field}" fill-opacity="${r.below ? 0.035 : 0.08}" stroke="none"/>`)
             );
             // the rim starts on the shaft; a full turn stops short of it, so its head reads
             const end = full ? span - 16 : span;
@@ -964,19 +1128,47 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
             const id = addLine(scr, W_LINE); // text on the rim would hide where the turn runs
             marks.push({ id, pts: scr });
             thin.add(id);
-            const sw = L.arc * 1.1;
-            runsOf(rim).forEach((r) =>
-                layers.sweep.push(
-                    `<path d="${pathOf(r.pts)}" stroke="${C.field}" stroke-width="${n2(sw)}"${r.below ? ` stroke-dasharray="${n2(sw * 2.5)},${n2(sw * 2)}"` : ''} fill="none"/>`
-                )
-            );
+            const sw = L.arc * 1.05;
+            const hlRim = st.arrowHeadPt * 0.72;
+            const trimEnd2D = (pts, trimDist) => {
+                if (trimDist <= 0 || pts.length < 2) return pts;
+                const out = pts.map((p) => [...p]);
+                let rem = trimDist;
+                while (out.length >= 2 && rem > 1e-6) {
+                    const a = out[out.length - 2];
+                    const b = out[out.length - 1];
+                    const d = Math.hypot(b[0] - a[0], b[1] - a[1]);
+                    if (d > rem + 1e-6) {
+                        const f = (d - rem) / d;
+                        out[out.length - 1] = [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+                        rem = 0;
+                    } else {
+                        rem -= d;
+                        out.pop();
+                    }
+                }
+                return out;
+            };
+            const rimRuns = runsOf(rim);
             const tip = scr[scr.length - 1];
             const prev = scr[Math.max(0, scr.length - 3)];
             const dd = Math.hypot(tip[0] - prev[0], tip[1] - prev[1]) || 1;
-            layers.sweep.push(headPath(tip, (tip[0] - prev[0]) / dd, (tip[1] - prev[1]) / dd, st.arrowHeadPt * 0.8, C.field));
+            const ux = (tip[0] - prev[0]) / dd;
+            const uy = (tip[1] - prev[1]) / dd;
+            const tipTrim = full ? 0 : Math.min(0.6, dd * 0.35);
+            const adjTip = [tip[0] - ux * tipTrim, tip[1] - uy * tipTrim];
+            rimRuns.forEach((r, idx) => {
+                let sPts = r.pts.map(toSvg);
+                if (idx === rimRuns.length - 1) sPts = trimEnd2D(sPts, tipTrim + hlRim * 0.65);
+                if (sPts.length >= 2) {
+                    layers.sweep.push(
+                        `<path d="M${sPts.map((p) => p.map(n2).join(',')).join('L')}" stroke="${C.field}" stroke-width="${n2(sw)}"${r.below ? ` stroke-dasharray="${n2(sw * 2.5)},${n2(sw * 2)}"` : ''} fill="none"/>`
+                    );
+                }
+            });
+            layers.sweep.push(headPath(adjTip, ux, uy, hlRim, C.field));
             // the turn just outside the middle of the rim, or further out with a line to it
-            const w = angleWidth(st.symbols.sweep, span);
-            const [cx, cy] = toSvg(foot);
+            const w = angleWidth(sweepSym, span);
             const cands = [];
             for (const f of [0.5, 0.35, 0.65, 0.2, 0.8]) {
                 const p = scr[Math.round(f * n)];
@@ -992,7 +1184,7 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
                     cands.push({ ...beyond(p[0], p[1], (-(q[1] - r[1]) / t) * sd, ((q[0] - r[0]) / t) * sd, w, 0.3 * fs, 1 + Math.abs(f - 0.5) * 1.5), from: p });
                 }
             }
-            wantLabel(3, cands, angleText(st.symbols.sweep, span), C.field, w, { id, pts: scr, anchor: scr[Math.round(n / 2)] });
+            wantLabel(3, cands, angleText(sweepSym, span), C.field, w, { id, pts: scr, anchor: scr[Math.round(n / 2)] });
         }
     }
 
@@ -1035,6 +1227,10 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
         wantLabel(4, cands, fieldLabel + sweepNote, C.field, w);
     } else {
         layers.arrows.push(arrow(fTail, fHead, C.field, L.field, { dashed: !down && bn < -1e-6 }));
+        if (!down) {
+            const [fx, fy] = toSvg(foot);
+            layers.arrows.push(`<circle cx="${n2(fx)}" cy="${n2(fy)}" r="${n2(Math.max(1.15, L.field * 0.9))}" fill="${C.field}" stroke="${C.sample}" stroke-width="0.6"/>`);
+        }
         // top view: the tilt goes into the label
         const tiltMode = o.angleLabels === 'value' ? 'both' : o.angleLabels;
         const tilt = isTop && showElev ? `, ${angleText(st.symbols.theta, elevDeg, tiltMode)}` : '';
@@ -1158,7 +1354,7 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
                 g.push(`<circle cx="0" cy="0" r="${n2(sw * 1.2)}" fill="${C.axes}"/>`);
             } else {
                 const [ux, uy] = a.u;
-                const hl = fs * 0.6;
+                const hl = fs * 0.52;
                 addLine([at([0, 0]), at([a.ex, a.ey])], W_LINE);
                 g.push(
                     `<path d="M0,0L${n2(a.ex - ux * hl * 0.7)},${n2(a.ey - uy * hl * 0.7)}" stroke="${C.axes}" stroke-width="${n2(sw)}" fill="none"${a.dashed ? ` stroke-dasharray="${n2(sw * 3)},${n2(sw * 2)}"` : ''}/>`,
@@ -1168,6 +1364,7 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
             const b = opts[i][pick[i]].box;
             g.push(typeof a.content === 'function' ? a.content(b.l, b.y) : `<text x="${n2(b.x)}" y="${n2(b.y)}" text-anchor="${b.anchor}" fill="${C.text}" font-size="${fs}">${a.content}</text>`);
         });
+        if (axes.some((a) => !a.toward)) g.push(`<circle cx="0" cy="0" r="${n2(sw * 1.05)}" fill="${C.axes}"/>`);
         layers.axes.push(`<g transform="translate(${n2(ox)},${n2(oy)}) scale(${n2(k)})">${g.join('')}</g>`);
         triadBox = { l: ox + box.l, r: ox + box.r, t: oy + box.t, b: oy + box.b };
         ink.push([triadBox.l, triadBox.t], [triadBox.r, triadBox.b]);
@@ -1197,7 +1394,7 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
 
     const s = state.setup;
     const sweepDesc = sweepAngle
-        ? ` · Sweep φ_M=${fmtAngle(swFrom)}…${fmtAngle(swFrom + swSpan)}`
+        ? ` · Sweep ${sweepSym} (φ_M=${fmtAngle(swFrom)}…${fmtAngle(swFrom + swSpan)})`
         : fieldRange
           ? ` · Sweep B_0=${fieldRange.join('…')} mT`
           : '';
@@ -1238,7 +1435,8 @@ export function figureCaption(state, options = {}, styleIn = null) {
     const mT = (x) => `${Number(x.toFixed(1))}\\,\\mathrm{mT}`;
     const s = state.setup;
     const kHat = state.vectors.kHat.Sub;
-    const { swSpan, sweepAngle, b0mT, fieldRange, bHat } = fieldSetup(state, o);
+    const { swSpan, sweepAngle, isOopSweep, b0mT, fieldRange, bHat } = fieldSetup(state, o);
+    const sweepTex = symbolTex(resolveSweepSymbol(st, isOopSweep), 'none');
     const xEdge = [1, 0, 0];
     const edge = `$${state.millerBravais.xs.latex}$`;
     const parts = [];
@@ -1285,7 +1483,7 @@ export function figureCaption(state, options = {}, styleIn = null) {
         parts.push(
             span >= 360 - 1e-6
                 ? `Der Bogen zeigt eine volle Drehung des Feldes in der Drehebene des Magneten, die Pfeilspitze den Drehsinn.`
-                : `Der Bogen zeigt, wie sich das Feld in der Drehebene des Magneten um $${sym('sweep')} = ${deg(span)}$ dreht; die Pfeilspitze zeigt den Drehsinn.`
+                : `Der Bogen zeigt, wie sich das Feld in der Drehebene des Magneten um $${sweepTex} = ${deg(span)}$ dreht; die Pfeilspitze zeigt den Drehsinn.`
         );
     } else if (fieldRange && Math.min(...fieldRange) < 0 && Math.max(...fieldRange) > 0) {
         parts.push('Der blasse Pfeil zeigt die umgekehrte Feldrichtung.');
