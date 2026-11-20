@@ -72,7 +72,7 @@ export const BUILTIN_FIGURE_STYLES = {
     },
     'Paper (Serif)': {
         widthMm: 65,
-        fontFamily: "Georgia, 'Times New Roman', Times, serif",
+        fontFamily: "Cambria, 'STIX Two Text', 'Times New Roman', Times, serif",
         fontSizePt: 9.5,
         vectorStyle: 'bold',
         sampleThickness: 0.1,
@@ -116,7 +116,7 @@ export const BUILTIN_FIGURE_STYLES = {
     },
     'Schwarz-Weiß': {
         widthMm: 65,
-        fontFamily: "Georgia, 'Times New Roman', Times, serif",
+        fontFamily: "Cambria, 'STIX Two Text', 'Times New Roman', Times, serif",
         fontSizePt: 9.5,
         vectorStyle: 'bold',
         sampleThickness: 0.1,
@@ -270,7 +270,7 @@ const OVERLINE = '̅';
 // Advance widths in em (Arial / Times metrics), good enough to place labels and draw index bars
 const EM_SANS = { digit: 0.556, other: 0.56, '[': 0.278, ']': 0.278, '(': 0.333, ')': 0.333, '°': 0.4, '.': 0.278, ',': 0.278, ' ': 0.278, '=': 0.584, '-': 0.333, '−': 0.584, Δ: 0.68 };
 const EM_SERIF = { digit: 0.5, other: 0.5, '[': 0.333, ']': 0.333, '(': 0.333, ')': 0.333, '°': 0.4, '.': 0.25, ',': 0.25, ' ': 0.25, '=': 0.564, '-': 0.333, '−': 0.564, Δ: 0.64 };
-const isSerif = (family) => /serif|times|georgia|palatino|garamond|cmu|computer modern|latin modern/i.test(family) && !/sans/i.test(family);
+const isSerif = (family) => /serif|times|cambria|stix|georgia|palatino|garamond|cmu|computer modern|latin modern/i.test(family) && !/sans/i.test(family);
 
 // ---------------------------------------------------------------------------
 // Labels: "φ_B", "θ_{dev}" -> italic symbol + subscript; optional LaTeX output
@@ -506,7 +506,8 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
     const cam = makeCamera(o.view);
     const isTop = o.view === 'top';
     const thick = isTop ? 0 : Math.max(0, Number(st.sampleThickness) || 0);
-    const EM = isSerif(st.fontFamily) ? EM_SERIF : EM_SANS;
+    const serif = isSerif(st.fontFamily);
+    const EM = serif ? EM_SERIF : EM_SANS;
 
     const v = state.vectors;
     const kHat = v.kHat.Sub;
@@ -579,15 +580,20 @@ export function generateFigureSVG(state, options = {}, styleIn = null) {
             let x = left;
             let spans = '';
             let bars = '';
+            const barY = y - fs * (serif ? 0.82 : 0.87);
             chars.forEach(({ c, bar }) => {
                 const w = charW(c);
                 const cx = x + w / 2;
                 spans += `<tspan x="${n2(cx)}">${esc(c)}</tspan>`;
-                if (bar) bars += `M${n2(cx - fs * 0.18)},${n2(y - fs * 0.79)}H${n2(cx + fs * 0.18)}`;
+                if (bar) {
+                    const hw = fs * (c === '1' ? 0.19 : 0.22);
+                    const bx = cx + (!serif && c === '1' ? fs * 0.025 : 0);
+                    bars += `M${n2(bx - hw)},${n2(barY)}H${n2(bx + hw)}`;
+                }
                 x += w;
             });
             const text = `<text y="${n2(y)}" text-anchor="middle" fill="${C.text}" font-size="${fs}">${spans}</text>`;
-            return bars ? `<g>${text}<path d="${bars}" stroke="${C.text}" stroke-width="${n2(fs * 0.06)}" stroke-linecap="butt" fill="none"/></g>` : text;
+            return bars ? `<g>${text}<path d="${bars}" stroke="${C.text}" stroke-width="${n2(fs * 0.062)}" stroke-linecap="butt" fill="none"/></g>` : text;
         };
         return { content, width };
     };
